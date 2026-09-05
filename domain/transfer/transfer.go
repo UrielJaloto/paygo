@@ -17,6 +17,11 @@ const (
 	KindWithdrawal Kind = "withdrawal"
 	KindReversal   Kind = "reversal"
 
+	KindCharge           Kind = "charge"
+	KindPayout           Kind = "payout"
+	KindPayoutCompletion Kind = "payout_completion"
+	KindPayoutFailure    Kind = "payout_failure"
+
 	StatusCompleted Status = "completed"
 	StatusReversed  Status = "reversed"
 )
@@ -72,6 +77,33 @@ func NewMoney(id ID, request Request, createdAt time.Time) (Transfer, error) {
 		return Transfer{}, fmt.Errorf("%w: %s", ErrSameAccount, request.From)
 	}
 	return Restore(Snapshot{ID: id, Request: request, Status: StatusCompleted, CreatedAt: createdAt}), nil
+}
+
+type Movement struct {
+	OwnerID apikey.OwnerID
+	From    account.ID
+	To      account.ID
+	Amount  money.Money
+}
+
+func (m Movement) toRequest(kind Kind) Request {
+	return Request{OwnerID: m.OwnerID, Kind: kind, From: m.From, To: m.To, Amount: m.Amount}
+}
+
+func NewCharge(id ID, movement Movement, createdAt time.Time) (Transfer, error) {
+	return NewMoney(id, movement.toRequest(KindCharge), createdAt)
+}
+
+func NewPayout(id ID, movement Movement, createdAt time.Time) (Transfer, error) {
+	return NewMoney(id, movement.toRequest(KindPayout), createdAt)
+}
+
+func NewPayoutCompletion(id ID, movement Movement, createdAt time.Time) (Transfer, error) {
+	return NewMoney(id, movement.toRequest(KindPayoutCompletion), createdAt)
+}
+
+func NewPayoutFailure(id ID, movement Movement, createdAt time.Time) (Transfer, error) {
+	return NewMoney(id, movement.toRequest(KindPayoutFailure), createdAt)
 }
 
 func Restore(snapshot Snapshot) Transfer {

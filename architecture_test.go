@@ -30,8 +30,9 @@ var contextOrder = map[string]map[string]int{
 		"account":  1,
 		"ledger":   2,
 		"transfer": 3,
-		"event":    4,
-		"webhook":  5,
+		"payment":  4,
+		"event":    5,
+		"webhook":  6,
 	},
 	"services": {
 		"account": 0, "transfer": 0, "apikey": 0, "webhook": 0, "dispatch": 0,
