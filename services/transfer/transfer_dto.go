@@ -19,6 +19,29 @@ type FundingInput struct {
 	Currency       string
 }
 
+type ReverseInput struct {
+	OwnerID        string
+	IdempotencyKey string
+	TransferID     string
+}
+
+type TransferQuery struct {
+	OwnerID    string
+	TransferID string
+}
+
+type ListInput struct {
+	OwnerID   string
+	AccountID string
+	Cursor    string
+	Limit     string
+}
+
+type TransferPage struct {
+	Items      []TransferOutput
+	NextCursor string
+}
+
 type TransferOutput struct {
 	ID            string
 	Kind          string

@@ -88,6 +88,17 @@ func (f *fakeStore) FindByIdempotencyKey(context.Context, apikey.OwnerID, transf
 	return f.existing.transfer, f.existing.fingerprint, nil
 }
 
+func (f *fakeStore) FindByIDForUpdate(_ context.Context, id transfer.ID) (transfer.Transfer, error) {
+	if err := f.record("original"); err != nil {
+		return transfer.Transfer{}, err
+	}
+	found, ok := f.originals[id]
+	if !ok {
+		return transfer.Transfer{}, transfer.ErrTransferNotFound
+	}
+	return found, nil
+}
+
 func (f *fakeStore) Save(_ context.Context, t transfer.Transfer, fingerprint transfer.Fingerprint) error {
 	f.saved = append(f.saved, savedTransfer{transfer: t, fingerprint: fingerprint})
 	return f.record("save")
