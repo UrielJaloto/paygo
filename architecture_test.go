@@ -35,7 +35,7 @@ var contextOrder = map[string]map[string]int{
 		"webhook":  6,
 	},
 	"services": {
-		"account": 0, "transfer": 0, "apikey": 0, "webhook": 0, "dispatch": 0,
+		"account": 0, "transfer": 0, "apikey": 0, "webhook": 0, "dispatch": 0, "ledgercheck": 0, "payment": 0,
 	},
 	"infrastructure": {
 		"config": 0, "clock": 0, "identifier": 0, "secret": 0, "randomness": 0, "ratelimit": 0,
