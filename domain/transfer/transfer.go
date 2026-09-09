@@ -81,13 +81,14 @@ func NewMoney(id ID, request Request, createdAt time.Time) (Transfer, error) {
 
 type Movement struct {
 	OwnerID apikey.OwnerID
+	Key     IdempotencyKey
 	From    account.ID
 	To      account.ID
 	Amount  money.Money
 }
 
 func (m Movement) toRequest(kind Kind) Request {
-	return Request{OwnerID: m.OwnerID, Kind: kind, From: m.From, To: m.To, Amount: m.Amount}
+	return Request{OwnerID: m.OwnerID, Key: m.Key, Kind: kind, From: m.From, To: m.To, Amount: m.Amount}
 }
 
 func NewCharge(id ID, movement Movement, createdAt time.Time) (Transfer, error) {
