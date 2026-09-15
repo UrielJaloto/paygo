@@ -30,12 +30,14 @@ func (s *spyOutbox) MarkPublished(_ context.Context, ids []event.ID) error {
 }
 
 type spyEndpoints struct {
+	owners    []apikey.OwnerID
 	endpoints []webhook.Endpoint
 	calls     int
 	err       error
 }
 
-func (s *spyEndpoints) ListActiveByOwners(context.Context, []apikey.OwnerID) ([]webhook.Endpoint, error) {
+func (s *spyEndpoints) ListActiveByOwners(_ context.Context, owners []apikey.OwnerID) ([]webhook.Endpoint, error) {
+	s.owners = owners
 	s.calls++
 	return s.endpoints, s.err
 }

@@ -3,6 +3,7 @@ package dispatch_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -223,5 +224,18 @@ func TestDeliverDue_RejectedTransition_ReturnsDomainError(t *testing.T) {
 				t.Fatalf("err %v, updates %d", err, len(queue.updated))
 			}
 		})
+	}
+}
+
+func TestFanOut_OwnerInSeveralEvents_QueriesEndpointsOnce(t *testing.T) {
+	fixture := newFanOutFixture()
+	fixture.outbox.events = []event.Event{occurred("e1", ownerOne, ownerTwo), occurred("e2", ownerOne)}
+	want := []apikey.OwnerID{ownerOne, ownerTwo}
+	slices.Sort(want)
+	if _, err := fixture.svc.FanOut(context.Background(), 100); err != nil {
+		t.Fatalf("FanOut: %v", err)
+	}
+	if !slices.Equal(fixture.endpoints.owners, want) {
+		t.Fatalf("owners = %v, want %v", fixture.endpoints.owners, want)
 	}
 }
