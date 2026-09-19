@@ -33,16 +33,16 @@ func NewMoney(interval time.Duration, reporter ErrorReporter) *Poller {
 func (p *Poller) Run(ctx context.Context, name string, task Task, drain time.Duration) error {
 	ticker := time.NewTicker(p.interval)
 	defer ticker.Stop()
-	for {
+	for ctx.Err() == nil {
 		if err := p.runOnce(ctx, run{name: name, task: task, drain: drain}); err != nil {
 			return err
 		}
 		select {
 		case <-ctx.Done():
-			return nil
 		case <-ticker.C:
 		}
 	}
+	return nil
 }
 
 func (p *Poller) runOnce(ctx context.Context, current run) error {
