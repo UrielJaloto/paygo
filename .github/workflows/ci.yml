@@ -40,3 +40,29 @@ jobs:
           go-version-file: go.mod
       - name: Test
         run: go test -race ./...
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: paygo
+          POSTGRES_PASSWORD: paygo
+          POSTGRES_DB: paygo
+        options: >-
+          --health-cmd "pg_isready -U paygo"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 15
+        ports:
+          - 5432:5432
+    env:
+      PAYGO_TEST_DATABASE_URL: postgres://paygo:paygo@localhost:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: go test -race -tags integration ./...
