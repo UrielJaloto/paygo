@@ -19,6 +19,7 @@ type querier interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, arguments ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, arguments ...any) pgx.Row
+	SendBatch(ctx context.Context, batch *pgx.Batch) pgx.BatchResults
 }
 
 func runInTransaction(ctx context.Context, pool *pgxpool.Pool, work func(ctx context.Context, transaction pgx.Tx) error) error {
