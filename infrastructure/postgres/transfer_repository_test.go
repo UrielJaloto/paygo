@@ -101,14 +101,26 @@ func TestPosting_BuildJournalSave_ThenFindByKey_RoundTrips(t *testing.T) {
 	if fingerprint != testFingerprint {
 		t.Fatalf("fingerprint = %q, want %q", fingerprint, testFingerprint)
 	}
-	if found.ID() != saved.ID() || found.OwnerID() != testOwner || found.IdempotencyKey() != "key-1" || found.Kind() != transfer.KindTransfer {
-		t.Fatalf("found = %+v, want %+v", found, saved)
-	}
-	if found.From() != fixture.from || found.To() != fixture.to || found.Amount() != saved.Amount() {
-		t.Fatalf("found = %+v, want %+v", found, saved)
-	}
-	if found.Status() != transfer.StatusCompleted || found.ReversalOf() != "" || !found.CreatedAt().Equal(testTime) {
-		t.Fatalf("found = %+v, want %+v", found, saved)
+	assertChecks(t, map[string]bool{
+		"id":          found.ID() == saved.ID(),
+		"owner":       found.OwnerID() == testOwner,
+		"key":         found.IdempotencyKey() == "key-1",
+		"kind":        found.Kind() == transfer.KindTransfer,
+		"from":        found.From() == fixture.from,
+		"to":          found.To() == fixture.to,
+		"amount":      found.Amount() == saved.Amount(),
+		"status":      found.Status() == transfer.StatusCompleted,
+		"reversal of": found.ReversalOf() == "",
+		"created at":  found.CreatedAt().Equal(testTime),
+	})
+}
+
+func assertChecks(t *testing.T, checks map[string]bool) {
+	t.Helper()
+	for name, passed := range checks {
+		if !passed {
+			t.Errorf("%s does not match", name)
+		}
 	}
 }
 

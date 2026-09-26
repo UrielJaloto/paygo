@@ -316,6 +316,7 @@ func TestSource_HasNoComments(t *testing.T) {
 	}{
 		{name: "line comment", source: "package x\n// note\n", want: []string{"x.go:2 has a comment"}},
 		{name: "build tag", source: "//go:build integration\n\npackage x\n"},
+		{name: "embed directive", source: "package x\n//go:embed x.sql\nvar y string\n"},
 		{name: "block comment", source: "package x\n/* note */\n", want: []string{"x.go:2 has a comment"}},
 	}
 	for _, testCase := range tests {
@@ -445,7 +446,7 @@ func commentViolations(files []sourceFile) []string {
 func groupViolations(file sourceFile, group *ast.CommentGroup) []string {
 	var violations []string
 	for _, comment := range group.List {
-		if !strings.HasPrefix(comment.Text, "//go:build") {
+		if !strings.HasPrefix(comment.Text, "//go:build") && !strings.HasPrefix(comment.Text, "//go:embed") {
 			line := file.fset.Position(comment.Pos()).Line
 			violations = append(violations, fmt.Sprintf("%s:%d has a comment", file.path, line))
 		}
