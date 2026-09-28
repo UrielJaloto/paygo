@@ -42,6 +42,10 @@ func (s *Service) moveFunds(ctx context.Context, store Store, request transfer.R
 	if err != nil {
 		return TransferOutput{}, err
 	}
+	replayed, found, err := findReplay(ctx, store, request)
+	if err != nil || found {
+		return replayed, err
+	}
 	if err := validateAccounts(request, from, to); err != nil {
 		return TransferOutput{}, err
 	}

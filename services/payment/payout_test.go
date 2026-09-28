@@ -537,3 +537,36 @@ func TestSync_ChargePaidAfterListing_ReturnsInvalidTransition(t *testing.T) {
 		t.Errorf("Sync() error = %v, want %v", err, payment.ErrInvalidTransition)
 	}
 }
+
+func TestCreatePayout_SameKeyCommittedWhileWaitingForLock_Replays(t *testing.T) {
+	store := fundedStore(t)
+	provider := &spyProvider{payoutResult: service.PayoutResult{ProviderID: providerReference}}
+	svc := newService(store, provider)
+	first, err := svc.CreatePayout(context.Background(), payoutInput())
+	if err != nil {
+		t.Fatalf("CreatePayout() error = %v", err)
+	}
+	store.payouts.hasKey = false
+	store.onLock = func() { store.payouts.hasKey = true }
+
+	second, err := svc.CreatePayout(context.Background(), payoutInput())
+	if err != nil {
+		t.Fatalf("second CreatePayout() error = %v", err)
+	}
+
+	if second.ID != first.ID || !second.IsReplay || len(store.payouts.items) != 1 || len(provider.payoutRequests) != 1 {
+		t.Errorf("replay = %+v, payouts = %d, provider calls = %d", second, len(store.payouts.items), len(provider.payoutRequests))
+	}
+}
+
+func TestCreatePayout_ReplayLookupFailsAfterLock_ReturnsError(t *testing.T) {
+	store := fundedStore(t)
+	store.onLock = func() { store.failures["payout.byKey"] = errBoom }
+	svc := newService(store, &spyProvider{payoutResult: service.PayoutResult{ProviderID: providerReference}})
+
+	_, err := svc.CreatePayout(context.Background(), payoutInput())
+
+	if !errors.Is(err, errBoom) || len(store.payouts.items) != 0 {
+		t.Errorf("err = %v, payouts = %d", err, len(store.payouts.items))
+	}
+}

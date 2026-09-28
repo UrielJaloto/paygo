@@ -122,6 +122,17 @@ func (s *Service) openPayout(ctx context.Context, opening payoutOpening) (Payout
 		if err != nil || found {
 			return err
 		}
+		customer, err := lockPayoutCustomer(ctx, store, opening.payout)
+		if err != nil {
+			return err
+		}
+		replayed, found, err = findPayoutReplay(ctx, store, opening)
+		if err != nil || found {
+			return err
+		}
+		if err := validatePayoutFunds(ctx, store, opening.payout, customer); err != nil {
+			return err
+		}
 		return s.holdFunds(ctx, store, opening)
 	})
 	if err != nil {
@@ -149,9 +160,6 @@ func findPayoutReplay(ctx context.Context, store Store, opening payoutOpening) (
 func (s *Service) holdFunds(ctx context.Context, store Store, opening payoutOpening) error {
 	created := opening.payout
 	hold := holdAccountFor(created.Amount().Currency())
-	if err := validatePayoutFunds(ctx, store, created, hold); err != nil {
-		return err
-	}
 	err := s.recordPosting(ctx, store, posting{id: created.Transfers().Hold, build: transfer.NewPayout, movement: transfer.Movement{
 		OwnerID: created.OwnerID(),
 		Key:     transfer.IdempotencyKey("payout-" + string(created.ID())),
@@ -165,15 +173,19 @@ func (s *Service) holdFunds(ctx context.Context, store Store, opening payoutOpen
 	return store.Payouts.Save(ctx, created, opening.key, opening.fingerprint)
 }
 
-func validatePayoutFunds(ctx context.Context, store Store, created payment.Payout, hold account.ID) error {
+func lockPayoutCustomer(ctx context.Context, store Store, created payment.Payout) (account.Account, error) {
 	id := created.AccountID()
-	ids := []account.ID{id, hold}
+	ids := []account.ID{id, holdAccountFor(created.Amount().Currency())}
 	slices.Sort(ids)
 	locked, err := store.Accounts.LockByIDs(ctx, ids)
 	if err != nil {
-		return fmt.Errorf("locking accounts: %w", err)
+		return account.Account{}, fmt.Errorf("locking accounts: %w", err)
 	}
-	customer := locked[slices.IndexFunc(locked, func(a account.Account) bool { return a.ID() == id })]
+	return locked[slices.IndexFunc(locked, func(a account.Account) bool { return a.ID() == id })], nil
+}
+
+func validatePayoutFunds(ctx context.Context, store Store, created payment.Payout, customer account.Account) error {
+	id := created.AccountID()
 	if customer.Kind() != account.KindCustomer || !customer.IsOwnedBy(created.OwnerID()) || customer.Currency() != created.Amount().Currency() {
 		return fmt.Errorf("%w: %s", account.ErrAccountNotFound, id)
 	}

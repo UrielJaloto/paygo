@@ -3,6 +3,7 @@ package transfer_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -333,11 +334,11 @@ func TestPosting_BuildJournal_UnitOfWorkFails_WrapsError(t *testing.T) {
 }
 
 func TestPosting_BuildJournal_StoreCallFails_StopsLaterCalls(t *testing.T) {
-	order := []string{"find", "lock", "balance", "append", "save", "outbox"}
+	order := []string{"find", "lock", "find", "balance", "append", "save", "outbox"}
 	for i, failing := range order {
-		t.Run(failing, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d_%s", i, failing), func(t *testing.T) {
 			store := standardStore()
-			store.failures[failing] = errBoom
+			store.failOnCall = i + 1
 			svc, _ := newService(store)
 			if _, err := svc.Transfer(context.Background(), validTransfer()); !errors.Is(err, errBoom) {
 				t.Fatalf("error = %v", err)
@@ -346,5 +347,20 @@ func TestPosting_BuildJournal_StoreCallFails_StopsLaterCalls(t *testing.T) {
 				t.Fatalf("calls = %v, want %v", store.calls, order[:i+1])
 			}
 		})
+	}
+}
+
+func TestPosting_BuildJournal_SameKeyCommittedWhileWaitingForLock_ReturnsReplay(t *testing.T) {
+	request := transfer.Request{Kind: transfer.KindTransfer, From: lowID, To: highID, Amount: money.NewMoney(100, money.BRL)}
+	original := transfer.Restore(transfer.Snapshot{ID: "t1", Request: request, Status: transfer.StatusCompleted, CreatedAt: now})
+	store := standardStore()
+	store.existingAfterLock = &savedTransfer{transfer: original, fingerprint: request.CalculateFingerprint()}
+	svc, _ := newService(store)
+	got, err := svc.Transfer(context.Background(), validTransfer())
+	if err != nil {
+		t.Fatalf("Transfer: %v", err)
+	}
+	if !got.IsReplay || got.ID != "t1" || !slices.Equal(store.calls, []string{"find", "lock", "find"}) {
+		t.Fatalf("got %+v, calls = %v", got, store.calls)
 	}
 }

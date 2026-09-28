@@ -21,6 +21,7 @@ import (
 var errBoom = errors.New("boom")
 
 type fakeStore struct {
+	onLock    func()
 	accounts  map[account.ID]account.Account
 	balances  map[account.ID]money.Money
 	journals  []ledger.JournalTransaction
@@ -60,6 +61,9 @@ func (f *fakeStore) wasCalled(call string) bool {
 func (f *fakeStore) LockByIDs(_ context.Context, ids []account.ID) ([]account.Account, error) {
 	if err := f.record("lock"); err != nil {
 		return nil, err
+	}
+	if f.onLock != nil {
+		f.onLock()
 	}
 	locked := make([]account.Account, 0, len(ids))
 	for _, id := range ids {

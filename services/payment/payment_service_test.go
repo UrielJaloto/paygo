@@ -467,3 +467,36 @@ func TestHandleWebhook_ChargeCannotPost_ReturnsDomainError(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateCharge_SameKeyCommittedWhileWaitingForLock_Replays(t *testing.T) {
+	store := paymentStore()
+	provider := &spyProvider{chargeResult: service.ChargeResult{ProviderID: providerReference}}
+	svc := newService(store, provider)
+	first, err := svc.CreateCharge(context.Background(), chargeInput())
+	if err != nil {
+		t.Fatalf("first CreateCharge() error = %v", err)
+	}
+	store.charges.hasKey = false
+	store.onLock = func() { store.charges.hasKey = true }
+
+	second, err := svc.CreateCharge(context.Background(), chargeInput())
+	if err != nil {
+		t.Fatalf("second CreateCharge() error = %v", err)
+	}
+
+	if second.ID != first.ID || !second.IsReplay || len(store.charges.items) != 1 || len(provider.chargeRequests) != 1 {
+		t.Errorf("replay = %+v, charges = %d, provider calls = %d", second, len(store.charges.items), len(provider.chargeRequests))
+	}
+}
+
+func TestCreateCharge_ReplayLookupFailsAfterLock_ReturnsError(t *testing.T) {
+	store := paymentStore()
+	store.onLock = func() { store.failures["charge.byKey"] = errBoom }
+	svc := newService(store, &spyProvider{chargeResult: service.ChargeResult{ProviderID: providerReference}})
+
+	_, err := svc.CreateCharge(context.Background(), chargeInput())
+
+	if !errors.Is(err, errBoom) || len(store.charges.items) != 0 {
+		t.Errorf("err = %v, charges = %d", err, len(store.charges.items))
+	}
+}
