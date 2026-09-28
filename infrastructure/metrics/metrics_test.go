@@ -40,7 +40,7 @@ func assertSeries(t *testing.T, body string, series ...string) {
 
 func TestRegistry_ObserveRequest_CountsAndObservesDuration(t *testing.T) {
 	registry := metrics.NewRegistry()
-	registry.ObserveRequest("GET", "/v1/accounts/:id", 200, 2*time.Second)
+	registry.ObserveRequest("GET", "/v1/accounts/:id")(200, 2*time.Second)
 	assertSeries(t, scrape(t, registry),
 		`paygo_http_requests_total{method="GET",route="/v1/accounts/:id",status="200"} 1`,
 		`paygo_http_request_duration_seconds_count{method="GET",route="/v1/accounts/:id"} 1`,
@@ -112,18 +112,23 @@ func TestPosting_BuildJournalServiceMetrics_Movements_CountByKindAndResult(t *te
 	for kind, call := range calls {
 		for _, testCase := range results {
 			t.Run(kind+"/"+testCase.result, func(t *testing.T) {
-				registry := metrics.NewRegistry()
-				output, err := call(metrics.NewTransferServiceMetrics(testCase.next, registry))
-				if !errors.Is(err, testCase.next.err) {
-					t.Fatalf("err = %v, want %v", err, testCase.next.err)
-				}
-				if !reflect.DeepEqual(output, testCase.next.output) {
-					t.Errorf("output = %+v, want %+v", output, testCase.next.output)
-				}
-				assertSeries(t, scrape(t, registry), fmt.Sprintf(`paygo_transfers_total{kind="%s",result="%s"} 1`, kind, testCase.result))
+				assertMovement(t, testCase.next, call, fmt.Sprintf(`paygo_transfers_total{kind="%s",result="%s"} 1`, kind, testCase.result))
 			})
 		}
 	}
+}
+
+func assertMovement(t *testing.T, next stubTransfers, call func(*metrics.TransferServiceMetrics) (transfer.TransferOutput, error), series string) {
+	t.Helper()
+	registry := metrics.NewRegistry()
+	output, err := call(metrics.NewTransferServiceMetrics(next, registry))
+	if !errors.Is(err, next.err) {
+		t.Fatalf("err = %v, want %v", err, next.err)
+	}
+	if !reflect.DeepEqual(output, next.output) {
+		t.Errorf("output = %+v, want %+v", output, next.output)
+	}
+	assertSeries(t, scrape(t, registry), series)
 }
 
 func TestPosting_BuildJournalServiceMetrics_Queries_PassThroughWithoutCounting(t *testing.T) {
