@@ -7,11 +7,25 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type Observability struct {
+	Logger   RequestLogger
+	Observer RequestObserver
+	Spans    SpanStarter
+	Clock    Clock
+}
+
 type Middleware struct {
 	IDs            IDGenerator
 	RequestContext RequestContextualizer
 	Panics         PanicReporter
 	RequestTimeout time.Duration
+	Observability  Observability
+}
+
+type Access struct {
+	Authenticator Authenticator
+	Limiter       Limiter
+	Admin         AdminChecker
 }
 
 type Controllers struct {
@@ -26,8 +40,12 @@ type Dependencies struct {
 func NewRouter(dependencies Dependencies) *gin.Engine {
 	engine := gin.New()
 	engine.HandleMethodNotAllowed = false
+	observability := dependencies.Middleware.Observability
 	engine.Use(
 		NewRequestIDMiddleware(dependencies.Middleware.IDs, dependencies.Middleware.RequestContext),
+		NewTracingMiddleware(observability.Spans),
+		NewAccessLogMiddleware(observability.Logger, observability.Clock),
+		NewMetricsMiddleware(observability.Observer, observability.Clock),
 		NewRecoveryMiddleware(dependencies.Middleware.Panics),
 		NewTimeoutMiddleware(dependencies.Middleware.RequestTimeout),
 	)
@@ -36,4 +54,12 @@ func NewRouter(dependencies Dependencies) *gin.Engine {
 	})
 	registerHealthRoutes(engine, dependencies.Controllers.Health)
 	return engine
+}
+
+func newOwnerGroup(engine *gin.Engine, access Access) *gin.RouterGroup {
+	return engine.Group("/v1", NewAuthMiddleware(access.Authenticator), NewRateLimitMiddleware(access.Limiter))
+}
+
+func newAdminGroup(engine *gin.Engine, access Access) *gin.RouterGroup {
+	return engine.Group("/admin/v1", NewAdminAuthMiddleware(access.Admin))
 }

@@ -59,6 +59,10 @@ func TestMain(m *testing.M) {
 }
 
 func newRouter(panics *spyPanics, ready bool) *gin.Engine {
+	return routerObservedBy(newSpyObservability().observability(), panics, ready)
+}
+
+func routerObservedBy(observability rest.Observability, panics *spyPanics, ready bool) *gin.Engine {
 	metrics := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, "metrics body")
 	})
@@ -68,6 +72,7 @@ func newRouter(panics *spyPanics, ready bool) *gin.Engine {
 			RequestContext: contextualizer{},
 			Panics:         panics,
 			RequestTimeout: time.Minute,
+			Observability:  observability,
 		},
 		Controllers: rest.Controllers{Health: rest.NewHealthController(stubReadiness(ready), metrics)},
 	})
