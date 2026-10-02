@@ -138,7 +138,7 @@ func (g *guarded) get(path, authorization string) *httptest.ResponseRecorder {
 
 func routeReturning404(spies spyObservability) *gin.Engine {
 	router := routerObservedBy(spies.observability(), &spyPanics{}, true)
-	router.GET("/v1/accounts/:id", func(c *gin.Context) {
+	router.GET("/probes/:id", func(c *gin.Context) {
 		spies.spans.spanInCtx = c.Request.Context().Value(spanKey{}) == true
 		c.Status(http.StatusNotFound)
 	})
@@ -147,7 +147,7 @@ func routeReturning404(spies spyObservability) *gin.Engine {
 
 func assertObservation(t *testing.T, got observation, wantDuration time.Duration) {
 	t.Helper()
-	want := observation{method: http.MethodGet, route: "/v1/accounts/:id", status: http.StatusNotFound, duration: wantDuration}
+	want := observation{method: http.MethodGet, route: "/probes/:id", status: http.StatusNotFound, duration: wantDuration}
 	if got != want {
 		t.Fatalf("observation = %+v, want %+v", got, want)
 	}
@@ -155,7 +155,7 @@ func assertObservation(t *testing.T, got observation, wantDuration time.Duration
 
 func TestAccessLog_MatchedRoute_LogsTemplateStatusAndDuration(t *testing.T) {
 	spies := newSpyObservability()
-	get(routeReturning404(spies), "/v1/accounts/42")
+	get(routeReturning404(spies), "/probes/42")
 	assertObservation(t, spies.logger.observation, clockStep*3)
 	if spies.logger.requestID != generatedRequestID {
 		t.Fatalf("request id = %v", spies.logger.requestID)
@@ -164,13 +164,13 @@ func TestAccessLog_MatchedRoute_LogsTemplateStatusAndDuration(t *testing.T) {
 
 func TestMetrics_MatchedRoute_ObservesSameLabels(t *testing.T) {
 	spies := newSpyObservability()
-	get(routeReturning404(spies), "/v1/accounts/42")
+	get(routeReturning404(spies), "/probes/42")
 	assertObservation(t, spies.observer.observation, clockStep)
 }
 
 func TestTracing_MatchedRoute_EndsSpanWithStatus(t *testing.T) {
 	spies := newSpyObservability()
-	get(routeReturning404(spies), "/v1/accounts/42")
+	get(routeReturning404(spies), "/probes/42")
 	assertObservation(t, spies.spans.observation, 0)
 	if !spies.spans.spanInCtx || spies.spans.header == nil {
 		t.Fatalf("span in context = %v, header = %v", spies.spans.spanInCtx, spies.spans.header)
