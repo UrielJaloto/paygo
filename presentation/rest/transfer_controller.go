@@ -67,7 +67,7 @@ func (t *TransferController) Create(c *gin.Context) {
 		Amount:         request.Amount,
 		Currency:       request.Currency,
 	})
-	t.presentMoneyMovement(c, output, err)
+	t.presenter.moneyMovement(c, output, err)
 }
 
 func (t *TransferController) Reverse(c *gin.Context) {
@@ -81,7 +81,7 @@ func (t *TransferController) Reverse(c *gin.Context) {
 		IdempotencyKey: key,
 		TransferID:     c.Param("id"),
 	})
-	t.presentMoneyMovement(c, output, err)
+	t.presenter.moneyMovement(c, output, err)
 }
 
 func (t *TransferController) Get(c *gin.Context) {
@@ -106,19 +106,6 @@ func (t *TransferController) List(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, t.presenter.transferPage(page))
-}
-
-func (t *TransferController) presentMoneyMovement(c *gin.Context, output transferservice.TransferOutput, err error) {
-	if err != nil {
-		PresentError(c, err)
-		return
-	}
-	status := http.StatusCreated
-	if output.IsReplay {
-		status = http.StatusOK
-		c.Header(idempotentReplayedHeader, idempotentReplayedPresent)
-	}
-	c.JSON(status, t.presenter.transfer(output))
 }
 
 func idempotencyKeyFrom(c *gin.Context) (string, error) {
