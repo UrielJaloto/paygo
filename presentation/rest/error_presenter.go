@@ -64,6 +64,7 @@ func listErrorMappings() []errorMapping {
 		buildMappings(problemKind{http.StatusRequestEntityTooLarge, "payload-too-large", "Payload too large"}, errPayloadTooLarge),
 		buildMappings(problemKind{http.StatusUnsupportedMediaType, "unsupported-media-type", "Unsupported media type"}, errUnsupportedMediaType),
 		buildMappings(problemKind{http.StatusBadRequest, "invalid-request", "Invalid request"}, listInvalidRequestErrors()...),
+		buildMappings(problemKind{http.StatusBadRequest, "idempotency-key-required", "Idempotency key required"}, errIdempotencyKeyRequired),
 		buildMappings(problemKind{http.StatusUnauthorized, "unauthenticated", "Unauthenticated"}, apikeyservice.ErrUnauthenticated),
 		buildMappings(problemKind{http.StatusNotFound, "not-found", "Not found"}, listNotFoundErrors()...),
 		buildMappings(problemKind{http.StatusConflict, "conflict", "Conflict"}, listConflictErrors()...),
