@@ -33,6 +33,7 @@ type Controllers struct {
 	Account  *AccountController
 	Transfer *TransferController
 	Admin    *AdminController
+	Webhook  *WebhookController
 }
 
 type Dependencies struct {
@@ -60,6 +61,7 @@ func NewRouter(dependencies Dependencies) *gin.Engine {
 	owner := newOwnerGroup(engine, dependencies.Access)
 	registerAccountRoutes(owner, dependencies.Controllers.Account)
 	registerTransferRoutes(owner, dependencies.Controllers.Transfer)
+	registerWebhookRoutes(owner, dependencies.Controllers.Webhook)
 	registerAdminRoutes(newAdminGroup(engine, dependencies.Access), dependencies.Controllers.Admin)
 	return engine
 }
