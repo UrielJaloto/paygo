@@ -12,4 +12,5 @@ var (
 	ErrUnsupportedProvider = errors.New("unsupported provider")
 	ErrProviderRejected    = errors.New("provider rejected")
 	ErrProviderUnavailable = errors.New("provider unavailable")
+	ErrWebhookUnauthorized = errors.New("webhook unauthorized")
 )

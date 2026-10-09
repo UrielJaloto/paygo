@@ -9,6 +9,7 @@ import (
 	"github.com/UrielJaloto/paygo/domain/apikey"
 	"github.com/UrielJaloto/paygo/domain/money"
 	"github.com/UrielJaloto/paygo/domain/page"
+	"github.com/UrielJaloto/paygo/domain/payment"
 	"github.com/UrielJaloto/paygo/domain/transfer"
 	"github.com/UrielJaloto/paygo/domain/webhook"
 	apikeyservice "github.com/UrielJaloto/paygo/services/apikey"
@@ -65,12 +66,14 @@ func listErrorMappings() []errorMapping {
 		buildMappings(problemKind{http.StatusUnsupportedMediaType, "unsupported-media-type", "Unsupported media type"}, errUnsupportedMediaType),
 		buildMappings(problemKind{http.StatusBadRequest, "invalid-request", "Invalid request"}, listInvalidRequestErrors()...),
 		buildMappings(problemKind{http.StatusBadRequest, "idempotency-key-required", "Idempotency key required"}, errIdempotencyKeyRequired),
-		buildMappings(problemKind{http.StatusUnauthorized, "unauthenticated", "Unauthenticated"}, apikeyservice.ErrUnauthenticated),
+		buildMappings(problemKind{http.StatusUnauthorized, "unauthenticated", "Unauthenticated"}, apikeyservice.ErrUnauthenticated, payment.ErrWebhookUnauthorized),
 		buildMappings(problemKind{http.StatusNotFound, "not-found", "Not found"}, listNotFoundErrors()...),
 		buildMappings(problemKind{http.StatusConflict, "conflict", "Conflict"}, listConflictErrors()...),
 		buildMappings(problemKind{http.StatusConflict, "idempotency-conflict", "Idempotency conflict"}, transfer.ErrIdempotencyConflict),
 		buildMappings(problemKind{http.StatusUnprocessableEntity, "insufficient-funds", "Insufficient funds"}, transfer.ErrInsufficientFunds),
 		buildMappings(problemKind{http.StatusUnprocessableEntity, "amount-too-large", "Amount too large"}, money.ErrAmountTooLarge),
+		buildMappings(problemKind{http.StatusUnprocessableEntity, "provider-rejected", "Provider rejected"}, payment.ErrProviderRejected),
+		buildMappings(problemKind{http.StatusBadGateway, "provider-unavailable", "Provider unavailable"}, payment.ErrProviderUnavailable),
 		buildMappings(problemKind{http.StatusTooManyRequests, "rate-limited", "Rate limited"}, errRateLimited),
 	)
 }
@@ -93,6 +96,10 @@ func listInvalidRequestErrors() []error {
 		webhook.ErrInvalidEndpointURL,
 		webhook.ErrInvalidSecret,
 		webhookservice.ErrInvalidDeliveryStatus,
+		payment.ErrInvalidPixKey,
+		payment.ErrInvalidDocument,
+		payment.ErrUnsupportedProvider,
+		payment.ErrInvalidPayerName,
 		account.ErrInvalidAccountID,
 		apikey.ErrInvalidOwner,
 		transfer.ErrSameAccount,
@@ -105,6 +112,8 @@ func listNotFoundErrors() []error {
 		transfer.ErrTransferNotFound,
 		webhook.ErrEndpointNotFound,
 		webhook.ErrDeliveryNotFound,
+		payment.ErrChargeNotFound,
+		payment.ErrPayoutNotFound,
 		apikey.ErrAPIKeyNotFound,
 	}
 }
