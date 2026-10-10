@@ -13,6 +13,17 @@ import (
 const (
 	minimumTokenLength = 32
 	postgresScheme = "postgres://"
+
+	StorageMemory   = "memory"
+	StoragePostgres = "postgres"
+	ProviderFake    = "fake"
+	ProviderAsaas   = "asaas"
+
+	asaasProduction     = "production"
+	asaasSandbox        = "sandbox"
+	asaasProductionURL  = "https://api.asaas.com/v3"
+	asaasSandboxURL     = "https://api-sandbox.asaas.com/v3"
+	allowProductionName = "PAYGO_ASAAS_ALLOW_PRODUCTION"
 )
 
 var ErrInvalidConfig = errors.New("invalid configuration")
@@ -44,21 +55,40 @@ type Telemetry struct {
 	OTLPEndpoint string
 }
 
+type Asaas struct {
+	Env             string
+	AllowProduction bool
+	APIKey          string
+	WebhookToken    string
+	BaseURL         string
+}
+
+type Payments struct {
+	Storage             string
+	Provider            string
+	FakeWebhookToken    string
+	Asaas               Asaas
+	PaymentSyncInterval time.Duration
+}
+
 type APISettings struct {
 	Database
 	HTTP
 	Telemetry
+	Payments
 }
 
 type WorkerSettings struct {
 	Database
 	Worker
 	Telemetry
+	Payments
 }
 
 func ReadAPI(lookup func(string) (string, bool)) (APISettings, error) {
 	r := reader{lookup: lookup}
-	settings := APISettings{Database: r.database(), HTTP: r.http(), Telemetry: r.telemetry()}
+	payments := r.payments()
+	settings := APISettings{Database: r.apiDatabase(payments.Storage), HTTP: r.http(), Telemetry: r.telemetry(), Payments: payments}
 	if err := r.err(); err != nil {
 		return APISettings{}, err
 	}
@@ -67,7 +97,7 @@ func ReadAPI(lookup func(string) (string, bool)) (APISettings, error) {
 
 func ReadWorker(lookup func(string) (string, bool)) (WorkerSettings, error) {
 	r := reader{lookup: lookup}
-	settings := WorkerSettings{Database: r.database(), Worker: r.worker(), Telemetry: r.telemetry()}
+	settings := WorkerSettings{Database: r.database(), Worker: r.worker(), Telemetry: r.telemetry(), Payments: r.payments()}
 	if err := r.err(); err != nil {
 		return WorkerSettings{}, err
 	}
@@ -125,6 +155,13 @@ func (r *reader) database() Database {
 	}
 }
 
+func (r *reader) apiDatabase(serviceSet string) Database {
+	if serviceSet == StorageMemory {
+		return Database{}
+	}
+	return r.database()
+}
+
 func (r *reader) databaseURL() string {
 	const name = "PAYGO_DATABASE_URL"
 	url := r.text(name, "")
@@ -154,12 +191,71 @@ func (r *reader) http() HTTP {
 }
 
 func (r *reader) adminToken() string {
-	const name = "PAYGO_ADMIN_TOKEN"
+	return r.token("PAYGO_ADMIN_TOKEN")
+}
+
+func (r *reader) token(name string) string {
 	token := r.text(name, "")
 	if len(token) < minimumTokenLength {
 		r.recordFailure(name, fmt.Sprintf("must have at least %d characters", minimumTokenLength))
 	}
 	return token
+}
+
+func (r *reader) payments() Payments {
+	settings := Payments{
+		Storage:             r.choice("PAYGO_STORAGE", StoragePostgres, StorageMemory),
+		Provider:            r.choice("PAYGO_PROVIDER", ProviderFake, ProviderAsaas),
+		Asaas:               r.asaasSettings(),
+		PaymentSyncInterval: r.duration(durationRule{name: "PAYGO_PAYMENT_SYNC_INTERVAL", fallback: 30 * time.Second, min: time.Second, max: 10 * time.Minute}),
+	}
+	switch settings.Provider {
+	case ProviderFake:
+		settings.FakeWebhookToken = r.token("PAYGO_FAKE_WEBHOOK_TOKEN")
+	case ProviderAsaas:
+		settings.Asaas = r.requireAsaas(settings.Asaas)
+	}
+	return settings
+}
+
+func (r *reader) asaasSettings() Asaas {
+	settings := Asaas{
+		Env:             r.choice("PAYGO_ASAAS_ENV", asaasSandbox, asaasProduction),
+		AllowProduction: r.boolean(allowProductionName),
+		APIKey:          r.text("PAYGO_ASAAS_API_KEY", ""),
+		BaseURL:         asaasSandboxURL,
+	}
+	if settings.Env == asaasProduction {
+		settings.BaseURL = asaasProductionURL
+	}
+	return settings
+}
+
+func (r *reader) requireAsaas(settings Asaas) Asaas {
+	if settings.APIKey == "" {
+		r.recordFailure("PAYGO_ASAAS_API_KEY", "required")
+	}
+	if settings.Env == asaasProduction && !settings.AllowProduction {
+		r.recordFailure(allowProductionName, "must be true when PAYGO_ASAAS_ENV is production")
+	}
+	settings.WebhookToken = r.token("PAYGO_ASAAS_WEBHOOK_TOKEN")
+	return settings
+}
+
+func (r *reader) choice(name, fallback, other string) string {
+	value := r.text(name, fallback)
+	if value != fallback && value != other {
+		r.recordFailure(name, fmt.Sprintf("must be one of %s, %s", fallback, other))
+	}
+	return value
+}
+
+func (r *reader) boolean(name string) bool {
+	value, err := strconv.ParseBool(r.text(name, "false"))
+	if err != nil {
+		r.recordFailure(name, "must be true or false")
+	}
+	return value
 }
 
 func (r *reader) worker() Worker {

@@ -14,6 +14,7 @@ import (
 const (
 	databaseURL = "postgres://paygo:paygo@localhost:5432/paygo"
 	adminToken  = "0123456789abcdef0123456789abcdef"
+	fakeToken   = "fedcba9876543210fedcba9876543210"
 )
 
 func buildLookup(env map[string]string) func(string) (string, bool) {
@@ -23,8 +24,16 @@ func buildLookup(env map[string]string) func(string) (string, bool) {
 	}
 }
 
+func defaultPayments() config.Payments {
+	return config.Payments{
+		Storage: config.StoragePostgres, Provider: config.ProviderFake, FakeWebhookToken: fakeToken,
+		Asaas:               config.Asaas{Env: "sandbox", BaseURL: "https://api-sandbox.asaas.com/v3"},
+		PaymentSyncInterval: 30 * time.Second,
+	}
+}
+
 func validEnvironment(overrides map[string]string) func(string) (string, bool) {
-	env := map[string]string{"PAYGO_DATABASE_URL": databaseURL, "PAYGO_ADMIN_TOKEN": adminToken}
+	env := map[string]string{"PAYGO_DATABASE_URL": databaseURL, "PAYGO_ADMIN_TOKEN": adminToken, "PAYGO_FAKE_WEBHOOK_TOKEN": fakeToken}
 	maps.Copy(env, overrides)
 	return buildLookup(env)
 }
@@ -53,6 +62,7 @@ func TestReadAPI_OnlyRequired_AppliesDefaults(t *testing.T) {
 			AdminToken: adminToken, RateLimitPerSecond: 50, RateLimitBurst: 100,
 		},
 		Telemetry: config.Telemetry{LogLevel: slog.LevelInfo},
+		Payments:  defaultPayments(),
 	}
 	if settings != want {
 		t.Fatalf("cfg = %+v, want %+v", settings, want)
@@ -60,7 +70,7 @@ func TestReadAPI_OnlyRequired_AppliesDefaults(t *testing.T) {
 }
 
 func TestReadWorker_OnlyDatabase_AppliesDefaultsWithoutAdminToken(t *testing.T) {
-	settings, err := config.ReadWorker(buildLookup(map[string]string{"PAYGO_DATABASE_URL": databaseURL}))
+	settings, err := config.ReadWorker(buildLookup(map[string]string{"PAYGO_DATABASE_URL": databaseURL, "PAYGO_FAKE_WEBHOOK_TOKEN": fakeToken}))
 	if err != nil {
 		t.Fatalf("LoadWorker: %v", err)
 	}
@@ -71,6 +81,7 @@ func TestReadWorker_OnlyDatabase_AppliesDefaultsWithoutAdminToken(t *testing.T) 
 			WebhookMaximumAttempts: 8, ShutdownTimeout: 15 * time.Second,
 		},
 		Telemetry: config.Telemetry{LogLevel: slog.LevelInfo},
+		Payments:  defaultPayments(),
 	}
 	if settings != want {
 		t.Fatalf("cfg = %+v, want %+v", settings, want)
@@ -78,7 +89,7 @@ func TestReadWorker_OnlyDatabase_AppliesDefaultsWithoutAdminToken(t *testing.T) 
 }
 
 func TestReadWorker_InvalidVariable_ReturnsError(t *testing.T) {
-	_, err := config.ReadWorker(buildLookup(map[string]string{"PAYGO_DATABASE_URL": databaseURL, "PAYGO_WORKER_CONCURRENCY": "65"}))
+	_, err := config.ReadWorker(buildLookup(map[string]string{"PAYGO_DATABASE_URL": databaseURL, "PAYGO_FAKE_WEBHOOK_TOKEN": fakeToken, "PAYGO_WORKER_CONCURRENCY": "65"}))
 	assertInvalid(t, err, "PAYGO_WORKER_CONCURRENCY")
 }
 
@@ -223,5 +234,61 @@ func TestReadAPI_InvalidToken_DoesNotLeakValue(t *testing.T) {
 	_, err := config.ReadAPI(validEnvironment(map[string]string{"PAYGO_ADMIN_TOKEN": "leaked-secret"}))
 	if strings.Contains(err.Error(), "leaked-secret") {
 		t.Fatalf("err = %q exposes the token", err)
+	}
+}
+
+func asaasEnvironment(overrides map[string]string) func(string) (string, bool) {
+	env := map[string]string{"PAYGO_PROVIDER": "asaas", "PAYGO_ASAAS_API_KEY": "key", "PAYGO_ASAAS_WEBHOOK_TOKEN": fakeToken}
+	maps.Copy(env, overrides)
+	return validEnvironment(env)
+}
+
+func TestReadAPI_InvalidPayments_NamesVariable(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{"production not allowed", map[string]string{"PAYGO_ASAAS_ENV": "production"}, "PAYGO_ASAAS_ALLOW_PRODUCTION"},
+		{"allow not boolean", map[string]string{"PAYGO_ASAAS_ALLOW_PRODUCTION": "maybe"}, "PAYGO_ASAAS_ALLOW_PRODUCTION must be true or false"},
+		{"missing key", map[string]string{"PAYGO_ASAAS_API_KEY": ""}, "PAYGO_ASAAS_API_KEY required"},
+		{"short webhook token", map[string]string{"PAYGO_ASAAS_WEBHOOK_TOKEN": fakeToken[:31]}, "PAYGO_ASAAS_WEBHOOK_TOKEN must have at least 32 characters"},
+		{"unknown env", map[string]string{"PAYGO_ASAAS_ENV": "staging"}, "PAYGO_ASAAS_ENV must be one of sandbox, production"},
+		{"unknown storage", map[string]string{"PAYGO_STORAGE": "redis"}, "PAYGO_STORAGE must be one of postgres, memory"},
+		{"unknown provider", map[string]string{"PAYGO_PROVIDER": "stripe"}, "PAYGO_PROVIDER must be one of fake, asaas"},
+		{"sync below minimum", map[string]string{"PAYGO_PAYMENT_SYNC_INTERVAL": "999ms"}, "PAYGO_PAYMENT_SYNC_INTERVAL"},
+		{"sync above maximum", map[string]string{"PAYGO_PAYMENT_SYNC_INTERVAL": "10m1s"}, "PAYGO_PAYMENT_SYNC_INTERVAL"},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := config.ReadAPI(asaasEnvironment(testCase.env))
+			assertInvalid(t, err, testCase.want)
+		})
+	}
+}
+
+func TestReadAPI_FakeProviderShortToken_ReturnsError(t *testing.T) {
+	_, err := config.ReadAPI(validEnvironment(map[string]string{"PAYGO_FAKE_WEBHOOK_TOKEN": fakeToken[:31]}))
+	assertInvalid(t, err, "PAYGO_FAKE_WEBHOOK_TOKEN must have at least 32 characters")
+}
+
+func TestReadAPI_AsaasProduction_UsesProductionURL(t *testing.T) {
+	settings, err := config.ReadAPI(asaasEnvironment(map[string]string{"PAYGO_ASAAS_ENV": "production", "PAYGO_ASAAS_ALLOW_PRODUCTION": "true"}))
+	if err != nil {
+		t.Fatalf("LoadAPI: %v", err)
+	}
+	want := config.Asaas{Env: "production", AllowProduction: true, APIKey: "key", WebhookToken: fakeToken, BaseURL: "https://api.asaas.com/v3"}
+	if settings.Asaas != want {
+		t.Fatalf("asaas = %+v, want %+v", settings.Asaas, want)
+	}
+}
+
+func TestLoadAPI_MemoryStorage_DoesNotRequireDatabase(t *testing.T) {
+	settings, err := config.ReadAPI(buildLookup(map[string]string{"PAYGO_STORAGE": "memory", "PAYGO_ADMIN_TOKEN": adminToken, "PAYGO_FAKE_WEBHOOK_TOKEN": fakeToken}))
+	if err != nil {
+		t.Fatalf("LoadAPI: %v", err)
+	}
+	if settings.Storage != config.StorageMemory || settings.Database != (config.Database{}) {
+		t.Fatalf("cfg = %+v, want memory storage without database", settings)
 	}
 }
