@@ -1,0 +1,1 @@
+{"object": "payment", "id": "pay_080225913252", "customer": "cus_000005401844", "billingType": "PIX", "value": 5.00, "status": "PENDING", "dueDate": "2026-11-02", "externalReference": "charge-1"}
