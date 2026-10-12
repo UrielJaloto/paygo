@@ -7,7 +7,6 @@ import (
 
 	"github.com/UrielJaloto/paygo/domain/account"
 	"github.com/UrielJaloto/paygo/domain/apikey"
-	"github.com/UrielJaloto/paygo/domain/event"
 	"github.com/UrielJaloto/paygo/domain/ledger"
 	"github.com/UrielJaloto/paygo/domain/money"
 	"github.com/UrielJaloto/paygo/domain/transfer"
@@ -46,7 +45,10 @@ type Store struct {
 	accounts  map[account.ID]*accountRecord
 	transfers map[transfer.ID]*transferRecord
 	keys      map[idempotencyScope]transfer.ID
-	events    []event.Event
+	events    []*outboxRecord
+	apiKeys   map[apikey.ID]apikey.APIKey
+	webhooks  webhookTables
+	payments  paymentTables
 }
 
 func NewStore(clock Clock) *Store {
@@ -55,7 +57,10 @@ func NewStore(clock Clock) *Store {
 		accounts:  map[account.ID]*accountRecord{},
 		transfers: map[transfer.ID]*transferRecord{},
 		keys:      map[idempotencyScope]transfer.ID{},
+		apiKeys:   map[apikey.ID]apikey.APIKey{},
+		webhooks:  newWebhookTables(),
 	}
+	store.payments = newPaymentTables(&store.data)
 	store.seed("01900000-0000-7000-8000-000000000001", money.BRL, account.KindSettlement)
 	store.seed("01900000-0000-7000-8000-000000000002", money.USD, account.KindSettlement)
 	store.seed("01900000-0000-7000-8000-000000000003", money.EUR, account.KindSettlement)
