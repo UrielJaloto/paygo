@@ -11,45 +11,44 @@ import (
 )
 
 type Registry struct {
-	registry     *prometheus.Registry
-	httpRequests *prometheus.CounterVec
-	httpDuration *prometheus.HistogramVec
-	transfers    *prometheus.CounterVec
-	deliveries   *prometheus.CounterVec
-	published    prometheus.Counter
+	registry         *prometheus.Registry
+	httpRequests     *prometheus.CounterVec
+	httpDuration     *prometheus.HistogramVec
+	transfers        *prometheus.CounterVec
+	deliveries       *prometheus.CounterVec
+	published        prometheus.Counter
+	payments         *prometheus.CounterVec
+	providerRequests *prometheus.CounterVec
 }
 
 func NewRegistry() *Registry {
 	r := &Registry{
-		registry: prometheus.NewRegistry(),
-		httpRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "paygo_http_requests_total",
-			Help: "HTTP requests served, by method, route and status.",
-		}, []string{"method", "route", "status"}),
+		registry:     prometheus.NewRegistry(),
+		httpRequests: newCounter("paygo_http_requests_total", "HTTP requests served, by method, route and status.", "method", "route", "status"),
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "paygo_http_request_duration_seconds",
 			Help:    "HTTP request duration in seconds, by method and route.",
 			Buckets: prometheus.DefBuckets,
 		}, []string{"method", "route"}),
-		transfers: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "paygo_transfers_total",
-			Help: "Money movements attempted, by kind and result.",
-		}, []string{"kind", "result"}),
-		deliveries: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "paygo_webhook_deliveries_total",
-			Help: "Webhook delivery attempts, by result.",
-		}, []string{"result"}),
+		transfers:  newCounter("paygo_transfers_total", "Money movements attempted, by kind and result.", "kind", "result"),
+		deliveries: newCounter("paygo_webhook_deliveries_total", "Webhook delivery attempts, by result.", "result"),
 		published: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "paygo_outbox_events_published_total",
 			Help: "Outbox events fanned out to webhook deliveries.",
 		}),
+		payments:         newCounter("paygo_payments_total", "Pix charges and payouts created, by kind and status.", "kind", "status"),
+		providerRequests: newCounter("paygo_provider_requests_total", "Payment provider calls, by provider, operation and result.", "provider", "operation", "result"),
 	}
 	r.registry.MustRegister(
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		r.httpRequests, r.httpDuration, r.transfers, r.deliveries, r.published,
+		r.httpRequests, r.httpDuration, r.transfers, r.deliveries, r.published, r.payments, r.providerRequests,
 	)
 	return r
+}
+
+func newCounter(name, help string, labels ...string) *prometheus.CounterVec {
+	return prometheus.NewCounterVec(prometheus.CounterOpts{Name: name, Help: help}, labels)
 }
 
 func (r *Registry) Handler() http.Handler {
