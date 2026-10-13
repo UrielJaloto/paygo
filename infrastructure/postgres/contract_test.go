@@ -18,6 +18,7 @@ func newPostgresStores(t *testing.T) storetest.Stores {
 		Ledger:    postgres.NewLedgerRepository(pool),
 		Transfers: postgres.NewTransferRepository(pool),
 		Unit:      postgres.NewTransferUnitOfWork(pool),
+		Outbox:    postgres.NewOutboxRepository(pool),
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/UrielJaloto/paygo/domain/event"
+	"github.com/UrielJaloto/paygo/domain/transfer"
 )
 
 type outboxRecord struct {
@@ -77,10 +78,8 @@ func (s *Store) currentEvent(e event.Event) event.Event {
 		TransferID: e.TransferID(),
 		OwnerIDs:   e.OwnerIDs(),
 	}
-	for id, record := range s.transfers {
-		if string(id) == e.TransferID() {
-			snapshot.Transfer = record.transfer
-		}
+	if record, found := s.transfers[transfer.ID(e.TransferID())]; found {
+		snapshot.Transfer = record.transfer
 	}
 	return event.Restore(snapshot)
 }

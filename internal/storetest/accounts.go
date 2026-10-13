@@ -44,6 +44,7 @@ type Stores struct {
 	Ledger    LedgerStore
 	Transfers TransferStore
 	Unit      transferservice.UnitOfWork
+	Outbox    OutboxStore
 }
 
 type contractCase struct {
