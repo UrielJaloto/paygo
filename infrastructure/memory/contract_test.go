@@ -2,8 +2,8 @@ package memory_test
 
 import (
 	"context"
-	"sync"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
