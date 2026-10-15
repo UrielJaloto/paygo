@@ -77,7 +77,7 @@ func TestReadWorker_OnlyDatabase_AppliesDefaultsWithoutAdminToken(t *testing.T) 
 	want := config.WorkerSettings{
 		Database: config.Database{URL: databaseURL, MaxConns: 20},
 		Worker: config.Worker{
-			PollInterval: time.Second, Concurrency: 8, WebhookTimeout: 5 * time.Second,
+			Addr: ":8080", PollInterval: time.Second, Concurrency: 8, WebhookTimeout: 5 * time.Second,
 			WebhookMaximumAttempts: 8, ShutdownTimeout: 15 * time.Second,
 		},
 		Telemetry: config.Telemetry{LogLevel: slog.LevelInfo},

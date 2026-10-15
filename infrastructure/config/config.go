@@ -43,6 +43,7 @@ type HTTP struct {
 }
 
 type Worker struct {
+	Addr               string
 	PollInterval       time.Duration
 	Concurrency        int
 	WebhookTimeout     time.Duration
@@ -88,7 +89,7 @@ type WorkerSettings struct {
 func ReadAPI(lookup func(string) (string, bool)) (APISettings, error) {
 	r := reader{lookup: lookup}
 	payments := r.payments()
-	settings := APISettings{Database: r.apiDatabase(payments.Storage), HTTP: r.http(), Telemetry: r.telemetry(), Payments: payments}
+	settings := APISettings{Database: r.storageDatabase(payments.Storage), HTTP: r.http(), Telemetry: r.telemetry(), Payments: payments}
 	if err := r.err(); err != nil {
 		return APISettings{}, err
 	}
@@ -97,7 +98,8 @@ func ReadAPI(lookup func(string) (string, bool)) (APISettings, error) {
 
 func ReadWorker(lookup func(string) (string, bool)) (WorkerSettings, error) {
 	r := reader{lookup: lookup}
-	settings := WorkerSettings{Database: r.database(), Worker: r.worker(), Telemetry: r.telemetry(), Payments: r.payments()}
+	payments := r.payments()
+	settings := WorkerSettings{Database: r.storageDatabase(payments.Storage), Worker: r.worker(), Telemetry: r.telemetry(), Payments: payments}
 	if err := r.err(); err != nil {
 		return WorkerSettings{}, err
 	}
@@ -155,7 +157,7 @@ func (r *reader) database() Database {
 	}
 }
 
-func (r *reader) apiDatabase(serviceSet string) Database {
+func (r *reader) storageDatabase(serviceSet string) Database {
 	if serviceSet == StorageMemory {
 		return Database{}
 	}
@@ -260,6 +262,7 @@ func (r *reader) boolean(name string) bool {
 
 func (r *reader) worker() Worker {
 	return Worker{
+		Addr:               r.address("PAYGO_HTTP_ADDR", ":8080"),
 		PollInterval:       r.duration(durationRule{name: "PAYGO_WORKER_POLL_INTERVAL", fallback: time.Second, min: 100 * time.Millisecond, max: time.Minute}),
 		Concurrency:        r.integer(integerRule{name: "PAYGO_WORKER_CONCURRENCY", fallback: 8, min: 1, max: 64}),
 		WebhookTimeout:     r.duration(durationRule{name: "PAYGO_WEBHOOK_TIMEOUT", fallback: 5 * time.Second, min: time.Second, max: 30 * time.Second}),
