@@ -49,7 +49,13 @@ type stack struct {
 	worker      string
 	databaseURL string
 	coverageDirectory    string
-	process     *exec.Cmd
+	process     *process
+}
+
+type process struct {
+	command *exec.Cmd
+	done    chan struct{}
+	err     error
 }
 
 func buildBinaries(directory string) (binaries, error) {
@@ -200,7 +206,7 @@ func withAddress(shared map[string]string, address string) map[string]string {
 	return env
 }
 
-func startProcess(t *testing.T, path string, env map[string]string) *exec.Cmd {
+func startProcess(t *testing.T, path string, env map[string]string) *process {
 	t.Helper()
 	var output bytes.Buffer
 	command := exec.Command(path)
@@ -209,27 +215,30 @@ func startProcess(t *testing.T, path string, env map[string]string) *exec.Cmd {
 	if err := command.Start(); err != nil {
 		t.Fatalf("starting %s: %v", path, err)
 	}
-	finished := make(chan error, 1)
-	go func() { finished <- command.Wait() }()
+	started := &process{command: command, done: make(chan struct{})}
+	go func() {
+		started.err = command.Wait()
+		close(started.done)
+	}()
 	t.Cleanup(func() {
-		stopProcess(t, command, finished)
+		started.stop(t)
 		if t.Failed() {
 			t.Logf("%s output:\n%s", filepath.Base(path), output.String())
 		}
 	})
-	return command
+	return started
 }
 
-func stopProcess(t *testing.T, command *exec.Cmd, finished <-chan error) {
+func (p *process) stop(t *testing.T) {
 	t.Helper()
-	if err := command.Process.Signal(os.Interrupt); err != nil {
-		_ = command.Process.Kill()
+	if err := p.command.Process.Signal(os.Interrupt); err != nil {
+		_ = p.command.Process.Kill()
 	}
 	select {
-	case <-finished:
+	case <-p.done:
 	case <-time.After(stopTimeout):
-		_ = command.Process.Kill()
-		t.Errorf("%s did not stop within %s", command.Path, stopTimeout)
+		_ = p.command.Process.Kill()
+		t.Errorf("%s did not stop within %s", p.command.Path, stopTimeout)
 	}
 }
 
@@ -362,11 +371,12 @@ func (s stack) openAccount(t *testing.T, token string) string {
 	return text(t, body, "id")
 }
 
-func (s stack) deposit(t *testing.T, account, amount string) {
+func (s stack) deposit(t *testing.T, account, amount string) string {
 	t.Helper()
 	input := map[string]string{"account_id": account, "amount": amount, "currency": "BRL"}
 	response, body := doJSON(t, http.MethodPost, s.api+"/admin/v1/deposits", adminToken, randomHex(t), input)
 	expectStatus(t, response, body, http.StatusCreated)
+	return text(t, body, "id")
 }
 
 func (s stack) transfer(t *testing.T, token string, accounts [2]string, amount string) string {
