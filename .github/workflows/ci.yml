@@ -59,10 +59,16 @@ jobs:
           - 5432:5432
     env:
       PAYGO_TEST_DATABASE_URL: postgres://paygo:paygo@localhost:5432/postgres?sslmode=disable
+      PAYGO_E2E_COVERDIR: ${{ github.workspace }}/cover
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - name: Test
-        run: go test -race -tags integration ./...
+      - name: Coverage gate
+        run: |
+          mkdir -p cover
+          go test -race -tags integration -cover -coverpkg=./... ./... -args -test.gocoverdir="$PWD/cover"
+          go tool covdata textfmt -i=cover -o cover.out
+          go tool cover -func=cover.out
+          go tool cover -func=cover.out | tail -n 1 | grep -q '100.0%'
