@@ -47,6 +47,7 @@ type pollerPlan struct {
 type serviceSet struct {
 	dispatch *dispatch.Service
 	payments *payment.Service
+	provider payment.PaymentProvider
 	close    func()
 }
 
@@ -75,6 +76,7 @@ func openServices(ctx context.Context, settings config.WorkerSettings, kit toolk
 	return serviceSet{
 		dispatch: dispatch.NewMoney(postgres.NewDispatchUnitOfWork(pool, kit.ids), postgres.NewDeliveryRepository(pool), newSender(settings.Worker, kit), kit.clock, newJitter()),
 		payments: payment.NewMoney(postgres.NewPaymentUnitOfWork(pool), provider, kit.clock, kit.ids),
+		provider: provider,
 		close:    pool.Close,
 	}, nil
 }
@@ -85,6 +87,7 @@ func newMemoryStorage(settings config.WorkerSettings, kit toolkit) serviceSet {
 	return serviceSet{
 		dispatch: dispatch.NewMoney(memory.NewDispatchUnitOfWork(store, kit.ids), memory.NewDeliveryRepository(store), newSender(settings.Worker, kit), kit.clock, newJitter()),
 		payments: payment.NewMoney(memory.NewPaymentUnitOfWork(store), provider, kit.clock, kit.ids),
+		provider: provider,
 		close:    func() {},
 	}
 }

@@ -155,7 +155,7 @@ func (c *contractClient) walkPayments(t *testing.T, source string) {
 func (c *contractClient) providerEvent(t *testing.T, event map[string]any) {
 	t.Helper()
 	const route = "POST /provider/v1/webhooks/{provider}"
-	response, body := postProviderEvent(t, c.running, fakeToken, event)
+	response, body := postProviderEvent(t, c.running.api, fakeToken, event)
 	c.expectFields(t, route, c.documented(t, route, response.StatusCode), body)
 }
 
@@ -193,13 +193,13 @@ func expectEveryOperationVisited(t *testing.T, client *contractClient) {
 	}
 }
 
-func postProviderEvent(t *testing.T, running stack, token string, event map[string]any) (*http.Response, map[string]any) {
+func postProviderEvent(t *testing.T, base, token string, event map[string]any) (*http.Response, map[string]any) {
 	t.Helper()
 	encoded, err := json.Marshal(event)
 	if err != nil {
 		t.Fatalf("encoding event: %v", err)
 	}
-	request, err := http.NewRequest(http.MethodPost, running.api+"/provider/v1/webhooks/fake", strings.NewReader(string(encoded)))
+	request, err := http.NewRequest(http.MethodPost, base+"/provider/v1/webhooks/fake", strings.NewReader(string(encoded)))
 	if err != nil {
 		t.Fatalf("building request: %v", err)
 	}
