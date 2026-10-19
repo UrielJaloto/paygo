@@ -72,3 +72,10 @@ jobs:
           go tool covdata textfmt -i=cover -o cover.out
           go tool cover -func=cover.out
           go tool cover -func=cover.out | tail -n 1 | grep -q '100.0%'
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build
+        run: docker build .
