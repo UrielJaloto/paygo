@@ -227,7 +227,7 @@ func readPackages(t *testing.T) []sourcePackage {
 
 func skipUnlessSource(path string, entry fs.DirEntry) error {
 	name := entry.Name()
-	if path != "." && (strings.HasPrefix(name, ".") || name == "testdata" || name == "docs") {
+	if path != "." && (strings.HasPrefix(name, ".") || name == "testdata" || name == "docs" || name == "bench") {
 		return filepath.SkipDir
 	}
 	return nil
