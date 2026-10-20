@@ -1,3 +1,162 @@
 # paygo
 
-Production-grade digital wallet and double-entry payments ledger in Go.
+[![CI](https://github.com/UrielJaloto/paygo/actions/workflows/ci.yml/badge.svg)](https://github.com/UrielJaloto/paygo/actions/workflows/ci.yml)
+
+paygo is a digital wallet and double-entry payments ledger written in Go. It exposes a REST API for accounts, transfers and PIX payments, keeps every balance provable against an append-only journal, and delivers signed webhooks through a transactional outbox. Its architecture rules are enforced by tests, with 100% coverage across unit, integration and end-to-end suites.
+
+## Features
+
+- Double-entry journal with materialized balances and an on-demand consistency check
+- Accounts with statements, freeze and unfreeze
+- Idempotent transfers and reversals, plus admin deposits and withdrawals
+- PIX charges and payouts through a provider port (fake or Asaas)
+- Signed webhooks with retries, a delivery log and replay
+- API keys scoped by owner, rate limiting and an OpenAPI contract
+- JSON logs, Prometheus metrics and OpenTelemetry traces
+- PostgreSQL storage, or an in-memory engine behind the same ports
+
+## Architecture
+
+```mermaid
+flowchart TD
+    cmd["cmd: wiring only"] --> presentation["presentation/rest: Gin controllers"]
+    cmd --> infrastructure["infrastructure: postgres, provider, logging, metrics, tracing"]
+    presentation --> services["services: use cases, declare their own ports"]
+    infrastructure --> services
+    services --> domain["domain: entities and rules, standard library only"]
+```
+
+**Dependency rule.** Imports point inward. `domain` knows nothing about the outside, `services` declare the interfaces they consume, and `presentation` and `infrastructure` never import each other. [architecture_test.go](architecture_test.go) parses the source and fails the build when a rule is broken.
+
+**How a transfer flows.** The controller validates the request and calls the transfer service. In one database transaction the service checks the idempotency key, locks both accounts in ascending id order, checks funds, appends the balanced journal entries, updates the balances and writes the event to the outbox. The worker later fans the event out to webhook deliveries.
+
+**Why decorators.** Logging, metrics and tracing wrap each service as decorators in `infrastructure`, and `main` composes them. Services stay free of observability code, and each concern is tested alone.
+
+## Domain rules
+
+- **Double entry.** Every journal transaction balances: debits equal credits, in one currency.
+- **Idempotency.** Money-moving requests carry an `Idempotency-Key`. Replaying it returns the original result, and reusing it with a different payload is a conflict.
+- **Locking order.** Accounts in one operation are locked in ascending id order, which rules out deadlocks between opposite transfers.
+- **Outbox.** Events are committed with the money movement, so neither can exist without the other.
+- **Webhooks.** Delivery is at least once. Each request is signed with `Paygo-Signature: v1=<HMAC-SHA256>` over the timestamp and body, and receivers dedupe by `Paygo-Event-Id`.
+- **PIX.** Charges and payouts post to the journal through clearing and hold accounts, driven by provider events.
+
+## Quickstart
+
+Requires Docker, `curl` and `jq`.
+
+```bash
+docker compose up -d --build
+```
+
+If host port 8080 or 5432 is taken, set `PAYGO_API_PORT` or `PAYGO_POSTGRES_PORT` before starting, and adjust `API` below.
+
+```bash
+API=http://localhost:8080
+ADMIN="Authorization: Bearer local-admin-token-change-me-0123456789"
+FAKE="Paygo-Fake-Token: local-webhook-token-change-me-0123456789"
+OWNER=01890000-0000-7000-8000-000000000001
+JSON="Content-Type: application/json"
+
+TOKEN=$(curl -s -X POST $API/admin/v1/owners/$OWNER/api-keys -H "$ADMIN" | jq -r .token)
+AUTH="Authorization: Bearer $TOKEN"
+
+ALICE=$(curl -s -X POST $API/v1/accounts -H "$AUTH" -H "$JSON" -d '{"currency":"BRL"}' | jq -r .id)
+BOB=$(curl -s -X POST $API/v1/accounts -H "$AUTH" -H "$JSON" -d '{"currency":"BRL"}' | jq -r .id)
+
+curl -s -X POST $API/admin/v1/deposits -H "$ADMIN" -H "$JSON" -H "Idempotency-Key: deposit-1" \
+  -d "{\"account_id\":\"$ALICE\",\"amount\":\"100.00\",\"currency\":\"BRL\"}"
+
+curl -s -X POST $API/v1/transfers -H "$AUTH" -H "$JSON" -H "Idempotency-Key: transfer-1" \
+  -d "{\"from_account_id\":\"$ALICE\",\"to_account_id\":\"$BOB\",\"amount\":\"30.00\",\"currency\":\"BRL\"}"
+
+curl -s $API/v1/accounts/$ALICE/balance -H "$AUTH"
+
+curl -s -X POST $API/v1/webhook-endpoints -H "$AUTH" -H "$JSON" -d '{"url":"https://example.com/paygo"}'
+
+PROVIDER_ID=$(curl -s -X POST $API/v1/charges -H "$AUTH" -H "$JSON" -H "Idempotency-Key: charge-1" \
+  -d "{\"account_id\":\"$BOB\",\"amount\":\"50.00\",\"currency\":\"BRL\",\"payer\":{\"name\":\"Ana Lima\",\"document\":\"52998224725\"}}" \
+  | jq -r .pix_copy_paste | sed 's/^00020126fake//')
+
+curl -s -X POST $API/provider/v1/webhooks/fake -H "$FAKE" -H "$JSON" \
+  -d "{\"event_id\":\"paid-1\",\"type\":\"charge.paid\",\"provider_id\":\"$PROVIDER_ID\"}"
+
+curl -s $API/v1/accounts/$BOB/balance -H "$AUTH"
+
+curl -s $API/admin/v1/ledger/check -H "$ADMIN"
+```
+
+Alice ends with 70.00, Bob with 80.00, and the ledger check returns `"ok":true`.
+
+## Modes
+
+| Variable | Values | Effect |
+|---|---|---|
+| `PAYGO_PROVIDER` | `fake`, `asaas` | Runs PIX against the fake provider or Asaas |
+| `PAYGO_ASAAS_ENV` | `sandbox`, `production` | Production also requires `PAYGO_ASAAS_ALLOW_PRODUCTION=true` |
+| `PAYGO_STORAGE` | `postgres`, `memory` | Selects durable storage or the in-memory engine |
+
+## API
+
+The full contract is in [api/openapi.json](api/openapi.json).
+
+| Area | Endpoints |
+|---|---|
+| Accounts | `POST /v1/accounts`, `GET /v1/accounts`, `GET /v1/accounts/{id}`, `GET /v1/accounts/{id}/balance`, `GET /v1/accounts/{id}/statement`, `POST /v1/accounts/{id}/freeze`, `POST /v1/accounts/{id}/unfreeze` |
+| Transfers | `POST /v1/transfers`, `GET /v1/transfers`, `GET /v1/transfers/{id}`, `POST /v1/transfers/{id}/reversal` |
+| Payments | `POST /v1/charges`, `GET /v1/charges/{id}`, `POST /v1/payouts`, `GET /v1/payouts/{id}`, `POST /provider/v1/webhooks/{provider}` |
+| Webhooks | `POST /v1/webhook-endpoints`, `GET /v1/webhook-endpoints`, `DELETE /v1/webhook-endpoints/{id}`, `GET /v1/webhook-deliveries`, `POST /v1/webhook-deliveries/{id}/replay` |
+| Admin | `POST /admin/v1/owners/{owner_id}/api-keys`, `DELETE /admin/v1/api-keys/{id}`, `POST /admin/v1/deposits`, `POST /admin/v1/withdrawals`, `GET /admin/v1/ledger/check` |
+| Operations | `GET /healthz`, `GET /readyz`, `GET /metrics` |
+
+## Testing
+
+Unit tests:
+
+```bash
+go test -race ./...
+```
+
+Unit, integration and end-to-end tests, using PostgreSQL at `PAYGO_TEST_DATABASE_URL`:
+
+```bash
+docker compose up -d postgres
+```
+
+```bash
+go test -race -tags integration ./...
+```
+
+CI runs formatting, vet, govulncheck, race tests on Linux, Windows and macOS, the integration and end-to-end suites, a 100% coverage gate and the image build.
+
+## Observability
+
+- Jaeger traces: <http://localhost:16686>
+- Prometheus: <http://localhost:9090>
+- Example metrics: `paygo_transfers_total`, `paygo_http_request_duration_seconds`, `paygo_webhook_deliveries_total`, `paygo_outbox_events_published_total`
+
+## Design decisions
+
+- **Polling outbox instead of a broker.** PostgreSQL is the only moving part, at the cost of some delivery latency and polling load.
+- **Materialized balances checked against the journal.** Balance reads do not scan entries, and `GET /admin/v1/ledger/check` proves they match.
+- **Gin confined to the edge.** The framework stays in `presentation/rest` and `cmd`, so services and domain never see it.
+- **Hand-written doubles.** Tests use small stubs and fakes of the interfaces each unit declares, with no mock generator.
+- **No ORM.** SQL is explicit, which keeps locks and query plans visible.
+
+## Project layout
+
+```text
+api/             OpenAPI contract
+bench/           Load generator
+cmd/             paygo-api, paygo-migrate and paygo-worker
+deploy/          Prometheus configuration
+domain/          Entities and business rules
+infrastructure/  Adapters and observability decorators
+internal/        Shared store contract tests
+presentation/    REST controllers
+services/        Use cases
+```
+
+## License
+
+[Apache License 2.0](LICENSE)
