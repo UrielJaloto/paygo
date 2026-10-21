@@ -395,7 +395,7 @@ func TestHandleWebhook_UnknownProviderID_ReturnsChargeNotFound(t *testing.T) {
 	}
 }
 
-func TestHandleWebhook_InvalidTransition_ReturnsError(t *testing.T) {
+func TestHandleWebhook_StaleTransition_AcknowledgesWithoutChanges(t *testing.T) {
 	tests := []struct {
 		name   string
 		kind   payment.EventKind
@@ -403,14 +403,21 @@ func TestHandleWebhook_InvalidTransition_ReturnsError(t *testing.T) {
 	}{
 		{name: "paid after expired", kind: payment.EventChargePaid, status: payment.ChargeExpired},
 		{name: "expired after paid", kind: payment.EventChargeExpired, status: payment.ChargePaid},
+		{name: "expired after failed", kind: payment.EventChargeExpired, status: payment.ChargeFailed},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
 			store := paymentStore()
 			seedCharge(t, store, testCase.status)
 			err := newService(store, webhookFor(testCase.kind, "evt-1")).HandleWebhook(context.Background(), service.WebhookInput{Provider: "fake"})
-			if !errors.Is(err, payment.ErrInvalidTransition) {
-				t.Fatalf("HandleWebhook() error = %v, want %v", err, payment.ErrInvalidTransition)
+			if err != nil {
+				t.Fatalf("HandleWebhook() error = %v, want nil", err)
+			}
+			if got := store.charges.items[0].Status(); got != testCase.status {
+				t.Errorf("status = %s, want %s", got, testCase.status)
+			}
+			if len(store.transfers) != 0 || len(store.events) != 0 || store.wasCalled("charge.update") {
+				t.Errorf("transfers = %d, events = %d, calls = %v, want nothing applied", len(store.transfers), len(store.events), store.calls)
 			}
 		})
 	}
