@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"io"
-	"log/slog"
 	mathrand "math/rand/v2"
 	"net/http"
 	"time"
@@ -15,7 +14,6 @@ import (
 	"github.com/UrielJaloto/paygo/infrastructure/config"
 	"github.com/UrielJaloto/paygo/infrastructure/identifier"
 	"github.com/UrielJaloto/paygo/infrastructure/logging"
-	"github.com/UrielJaloto/paygo/infrastructure/memory"
 	"github.com/UrielJaloto/paygo/infrastructure/metrics"
 	"github.com/UrielJaloto/paygo/infrastructure/poller"
 	"github.com/UrielJaloto/paygo/infrastructure/postgres"
@@ -32,7 +30,6 @@ import (
 type toolkit struct {
 	clock    clock.SystemClock
 	ids      *identifier.UUIDv7Generator
-	logger   *slog.Logger
 	requests logging.RequestLogger
 	tracer   trace.Tracer
 	registry *metrics.Registry
@@ -57,7 +54,6 @@ func newToolkit(telemetry config.Telemetry, stdout io.Writer, traces *tracing.Pr
 	return toolkit{
 		clock:    systemClock,
 		ids:      identifier.NewMoney(systemClock, rand.Reader),
-		logger:   logger,
 		requests: logging.NewRequestLogger(logger),
 		tracer:   traces.Tracer(),
 		registry: metrics.NewRegistry(),
@@ -65,10 +61,7 @@ func newToolkit(telemetry config.Telemetry, stdout io.Writer, traces *tracing.Pr
 }
 
 func openServices(ctx context.Context, settings config.WorkerSettings, kit toolkit) (serviceSet, error) {
-	if settings.Payments.Storage == config.StorageMemory {
-		return newMemoryStorage(settings, kit), nil
-	}
-	pool, err := postgres.NewPool(ctx, settings.Database.URL, settings.Database.MaxConns)
+	pool, err := postgres.NewTracedPool(ctx, settings.Database.URL, settings.Database.MaxConns, tracing.NewQuerySpanStarter(kit.tracer))
 	if err != nil {
 		return serviceSet{}, err
 	}
@@ -79,17 +72,6 @@ func openServices(ctx context.Context, settings config.WorkerSettings, kit toolk
 		provider: provider,
 		close:    pool.Close,
 	}, nil
-}
-
-func newMemoryStorage(settings config.WorkerSettings, kit toolkit) serviceSet {
-	store := memory.NewStore(kit.clock)
-	provider := newProvider(settings.Payments, memory.NewProviderCustomerCache(), kit)
-	return serviceSet{
-		dispatch: dispatch.NewMoney(memory.NewDispatchUnitOfWork(store, kit.ids), memory.NewDeliveryRepository(store), newSender(settings.Worker, kit), kit.clock, newJitter()),
-		payments: payment.NewMoney(memory.NewPaymentUnitOfWork(store), provider, kit.clock, kit.ids),
-		provider: provider,
-		close:    func() {},
-	}
 }
 
 func newJitter() *randomness.Jitter {
@@ -110,8 +92,8 @@ func newProvider(settings config.Payments, customers asaas.CustomerCache, kit to
 }
 
 func newPollers(plan pollerPlan, services serviceSet, kit toolkit) []func(context.Context) error {
-	dispatcher := logging.NewDispatchServiceLogger(metrics.NewDispatchServiceMetrics(tracing.NewDispatchServiceTracer(services.dispatch, kit.tracer), kit.registry), kit.logger)
-	payments := logging.NewPaymentServiceLogger(metrics.NewPaymentServiceMetrics(tracing.NewPaymentServiceTracer(services.payments, kit.tracer), kit.registry), kit.logger)
+	dispatcher := metrics.NewDispatchServiceMetrics(services.dispatch, kit.registry)
+	payments := metrics.NewPaymentServiceMetrics(services.payments, kit.registry)
 	drain := plan.worker.ShutdownTimeout
 	outbound := poller.NewMoney(plan.worker.PollInterval, kit.requests)
 	reconcile := poller.NewMoney(plan.syncInterval, kit.requests)

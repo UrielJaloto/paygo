@@ -38,6 +38,7 @@ type errorMapping struct {
 }
 
 func PresentError(c *gin.Context, err error) {
+	_ = c.Error(err)
 	for _, mapping := range listErrorMappings() {
 		if errors.Is(err, mapping.target) {
 			presentProblem(c, mapping.kind, problemDetail(err, mapping))

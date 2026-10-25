@@ -2,9 +2,12 @@ package tracing_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"reflect"
 	"testing"
 
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
 	domainpayment "github.com/UrielJaloto/paygo/domain/payment"
@@ -12,63 +15,48 @@ import (
 	"github.com/UrielJaloto/paygo/services/payment"
 )
 
-type stubPayments struct {
-	charge payment.ChargeOutput
-	payout payment.PayoutOutput
-	sync   payment.SyncResult
-	err    error
+var errBoom = errors.New("boom")
+
+type methodCase[D any] struct {
+	span string
+	want any
+	call func(ctx context.Context, decorator D) (any, error)
 }
 
-func (s stubPayments) CreateCharge(context.Context, payment.ChargeInput) (payment.ChargeOutput, error) {
-	return s.charge, s.err
+func runSuite[D any](t *testing.T, build func(err error, tracer trace.Tracer) D, cases []methodCase[D]) {
+	t.Helper()
+	for _, method := range cases {
+		t.Run(method.span+"/success", func(t *testing.T) { assertSpanOnSuccess(t, build, method) })
+		t.Run(method.span+"/error", func(t *testing.T) { assertSpanOnError(t, build, method) })
+	}
 }
 
-func (s stubPayments) GetCharge(context.Context, payment.ChargeQuery) (payment.ChargeOutput, error) {
-	return s.charge, s.err
+func assertSpanOnSuccess[D any](t *testing.T, build func(err error, tracer trace.Tracer) D, method methodCase[D]) {
+	t.Helper()
+	exporter, tracer := newRecorder(t)
+	got, err := method.call(context.Background(), build(nil, tracer))
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if !reflect.DeepEqual(got, method.want) {
+		t.Errorf("output = %+v, want %+v", got, method.want)
+	}
+	span := singleSpan(t, exporter)
+	if span.Name != method.span || span.Status.Code == codes.Error || len(span.Events) != 0 {
+		t.Errorf("span = %s, status %v, events %d", span.Name, span.Status.Code, len(span.Events))
+	}
 }
 
-func (s stubPayments) CreatePayout(context.Context, payment.PayoutInput) (payment.PayoutOutput, error) {
-	return s.payout, s.err
-}
-
-func (s stubPayments) GetPayout(context.Context, payment.PayoutQuery) (payment.PayoutOutput, error) {
-	return s.payout, s.err
-}
-
-func (s stubPayments) HandleWebhook(context.Context, payment.WebhookInput) error {
-	return s.err
-}
-
-func (s stubPayments) Sync(context.Context, int) (payment.SyncResult, error) {
-	return s.sync, s.err
-}
-
-func TestPaymentServiceTracer_EveryMethod_RecordsSpan(t *testing.T) {
-	charge := payment.ChargeOutput{ID: "charge-1"}
-	payout := payment.PayoutOutput{ID: "payout-1"}
-	synced := payment.SyncResult{Checked: 1}
-	runSuite(t, func(err error, tracer trace.Tracer) *tracing.PaymentServiceTracer {
-		return tracing.NewPaymentServiceTracer(stubPayments{charge: charge, payout: payout, sync: synced, err: err}, tracer)
-	}, []methodCase[*tracing.PaymentServiceTracer]{
-		{span: "payment.CreateCharge", want: charge, call: func(ctx context.Context, d *tracing.PaymentServiceTracer) (any, error) {
-			return d.CreateCharge(ctx, payment.ChargeInput{})
-		}},
-		{span: "payment.GetCharge", want: charge, call: func(ctx context.Context, d *tracing.PaymentServiceTracer) (any, error) {
-			return d.GetCharge(ctx, payment.ChargeQuery{})
-		}},
-		{span: "payment.CreatePayout", want: payout, call: func(ctx context.Context, d *tracing.PaymentServiceTracer) (any, error) {
-			return d.CreatePayout(ctx, payment.PayoutInput{})
-		}},
-		{span: "payment.GetPayout", want: payout, call: func(ctx context.Context, d *tracing.PaymentServiceTracer) (any, error) {
-			return d.GetPayout(ctx, payment.PayoutQuery{})
-		}},
-		{span: "payment.HandleWebhook", want: nil, call: func(ctx context.Context, d *tracing.PaymentServiceTracer) (any, error) {
-			return nil, d.HandleWebhook(ctx, payment.WebhookInput{})
-		}},
-		{span: "payment.Sync", want: synced, call: func(ctx context.Context, d *tracing.PaymentServiceTracer) (any, error) {
-			return d.Sync(ctx, 1)
-		}},
-	})
+func assertSpanOnError[D any](t *testing.T, build func(err error, tracer trace.Tracer) D, method methodCase[D]) {
+	t.Helper()
+	exporter, tracer := newRecorder(t)
+	if _, err := method.call(context.Background(), build(errBoom, tracer)); !errors.Is(err, errBoom) {
+		t.Fatalf("err = %v, want %v", err, errBoom)
+	}
+	span := singleSpan(t, exporter)
+	if span.Status.Code != codes.Error || len(span.Events) != 1 || span.Events[0].Name != "exception" {
+		t.Errorf("status = %v, events = %+v", span.Status.Code, span.Events)
+	}
 }
 
 type stubProvider struct {

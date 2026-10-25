@@ -145,8 +145,9 @@ func TestRequestLogger_LogRequest_WritesAccessLog(t *testing.T) {
 	var buffer bytes.Buffer
 	requests := logging.NewRequestLogger(logging.NewJSONLogger(&buffer, slog.LevelInfo))
 	ctx := requests.AttachRequestID(context.Background(), "req-1")
-	requests.LogRequest(ctx, "GET", "/v1/accounts/:id")(200, 1500*time.Millisecond)
-	assertAttributes(t, singleLine(t, &buffer), map[string]any{
+	requests.LogRequest(ctx, "GET", "/v1/accounts/:id")(200, 1500*time.Millisecond, nil)
+	line := singleLine(t, &buffer)
+	assertAttributes(t, line, map[string]any{
 		"level":       "INFO",
 		"method":      "GET",
 		"route":       "/v1/accounts/:id",
@@ -154,6 +155,27 @@ func TestRequestLogger_LogRequest_WritesAccessLog(t *testing.T) {
 		"duration_ms": float64(1500),
 		"request_id":  "req-1",
 	})
+	if _, ok := line["error"]; ok {
+		t.Errorf("error attribute present on success: %v", line)
+	}
+}
+
+func TestRequestLogger_LogRequest_FailureLevelFollowsStatus(t *testing.T) {
+	cases := []struct {
+		status int
+		level  string
+	}{
+		{status: 422, level: "WARN"},
+		{status: 500, level: "ERROR"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.level, func(t *testing.T) {
+			var buffer bytes.Buffer
+			requests := logging.NewRequestLogger(logging.NewJSONLogger(&buffer, slog.LevelInfo))
+			requests.LogRequest(context.Background(), "POST", "/v1/transfers")(testCase.status, time.Millisecond, errBoom)
+			assertAttributes(t, singleLine(t, &buffer), map[string]any{"level": testCase.level, "status": float64(testCase.status), "error": "boom"})
+		})
+	}
 }
 
 func TestRequestLogger_ReportPanic_WritesErrorWithStack(t *testing.T) {

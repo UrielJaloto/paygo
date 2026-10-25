@@ -15,13 +15,29 @@ func NewRequestLogger(logger *slog.Logger) RequestLogger {
 	return RequestLogger{logger: logger}
 }
 
-func (l RequestLogger) LogRequest(ctx context.Context, method, route string) func(status int, duration time.Duration) {
-	return func(status int, duration time.Duration) {
-		l.logger.InfoContext(ctx, "http.request",
+func (l RequestLogger) LogRequest(ctx context.Context, method, route string) func(status int, duration time.Duration, err error) {
+	return func(status int, duration time.Duration, err error) {
+		attributes := []slog.Attr{
 			slog.String("method", method),
 			slog.String("route", route),
 			slog.Int("status", status),
-			slog.Int64("duration_ms", duration.Milliseconds()))
+			slog.Int64("duration_ms", duration.Milliseconds()),
+		}
+		if err != nil {
+			attributes = append(attributes, slog.String("error", err.Error()))
+		}
+		l.logger.LogAttrs(ctx, statusLevel(status), "http.request", attributes...)
+	}
+}
+
+func statusLevel(status int) slog.Level {
+	switch {
+	case status >= 500:
+		return slog.LevelError
+	case status >= 400:
+		return slog.LevelWarn
+	default:
+		return slog.LevelInfo
 	}
 }
 

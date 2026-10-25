@@ -125,12 +125,12 @@ func TestHTTPSpanStarter_Status_MarksOnlyServerErrors(t *testing.T) {
 	}
 }
 
-func TestServiceTracer_InsideServerSpan_IsChildOfServerSpan(t *testing.T) {
+func TestProviderTracer_InsideServerSpan_IsChildOfServerSpan(t *testing.T) {
 	exporter, tracer := newRecorder(t)
 	ctx, end := tracing.NewHTTPSpanStarter(tracer).StartServerSpan(context.Background(), "GET", "/health", http.Header{})
-	decorator := tracing.NewDispatchServiceTracer(stubDispatch{}, tracer)
-	if _, err := decorator.FanOut(ctx, 1); err != nil {
-		t.Fatalf("FanOut: %v", err)
+	decorator := tracing.NewProviderTracer(stubProvider{}, tracer)
+	if _, err := decorator.GetCharge(ctx, "id"); err != nil {
+		t.Fatalf("GetCharge: %v", err)
 	}
 	end(http.StatusOK)
 	spans := exporter.GetSpans()

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"io"
-	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -14,7 +13,6 @@ import (
 	"github.com/UrielJaloto/paygo/infrastructure/config"
 	"github.com/UrielJaloto/paygo/infrastructure/identifier"
 	"github.com/UrielJaloto/paygo/infrastructure/logging"
-	"github.com/UrielJaloto/paygo/infrastructure/memory"
 	"github.com/UrielJaloto/paygo/infrastructure/metrics"
 	"github.com/UrielJaloto/paygo/infrastructure/postgres"
 	"github.com/UrielJaloto/paygo/infrastructure/provider/asaas"
@@ -34,7 +32,6 @@ import (
 type toolkit struct {
 	clock    clock.SystemClock
 	ids      *identifier.UUIDv7Generator
-	logger   *slog.Logger
 	requests logging.RequestLogger
 	tracer   trace.Tracer
 	registry *metrics.Registry
@@ -51,19 +48,12 @@ type serviceSet struct {
 	close     func()
 }
 
-type alwaysReady struct{}
-
-func (alwaysReady) IsReady(context.Context) bool {
-	return true
-}
-
 func newToolkit(telemetry config.Telemetry, stdout io.Writer, traces *tracing.Provider) toolkit {
 	systemClock := clock.NewMoney()
 	logger := logging.NewTracedJSONLogger(stdout, telemetry.LogLevel, traces)
 	return toolkit{
 		clock:    systemClock,
 		ids:      identifier.NewMoney(systemClock, rand.Reader),
-		logger:   logger,
 		requests: logging.NewRequestLogger(logger),
 		tracer:   traces.Tracer(),
 		registry: metrics.NewRegistry(),
@@ -71,10 +61,7 @@ func newToolkit(telemetry config.Telemetry, stdout io.Writer, traces *tracing.Pr
 }
 
 func openServices(ctx context.Context, settings config.APISettings, kit toolkit) (serviceSet, error) {
-	if settings.Payments.Storage == config.StorageMemory {
-		return newMemoryStorage(settings.Payments, kit), nil
-	}
-	pool, err := postgres.NewPool(ctx, settings.Database.URL, settings.Database.MaxConns)
+	pool, err := postgres.NewTracedPool(ctx, settings.Database.URL, settings.Database.MaxConns, tracing.NewQuerySpanStarter(kit.tracer))
 	if err != nil {
 		return serviceSet{}, err
 	}
@@ -93,23 +80,6 @@ func openServices(ctx context.Context, settings config.APISettings, kit toolkit)
 	}, nil
 }
 
-func newMemoryStorage(settings config.Payments, kit toolkit) serviceSet {
-	store := memory.NewStore(kit.clock)
-	ledger := memory.NewLedgerRepository(store)
-	tokens := secret.NewTokenGenerator(rand.Reader)
-	provider := newProvider(settings, memory.NewProviderCustomerCache(), kit)
-	return serviceSet{
-		accounts:  account.NewMoney(memory.NewAccountRepository(store), ledger, kit.clock, kit.ids),
-		keys:      apikey.NewMoney(memory.NewAPIKeyRepository(store), tokens, secret.TokenHasher{}, kit.clock, kit.ids),
-		transfers: transfer.NewMoney(memory.NewTransferUnitOfWork(store), memory.NewTransferRepository(store), kit.clock, kit.ids),
-		webhooks:  webhook.NewMoney(memory.NewWebhookUnitOfWork(store), tokens, kit.clock, kit.ids),
-		payments:  payment.NewMoney(memory.NewPaymentUnitOfWork(store), provider, kit.clock, kit.ids),
-		ledger:    ledgercheck.NewMoney(ledger),
-		readiness: alwaysReady{},
-		close:     func() {},
-	}
-}
-
 func newProvider(settings config.Payments, customers asaas.CustomerCache, kit toolkit) payment.PaymentProvider {
 	var base payment.PaymentProvider = fake.NewMoney(settings.FakeWebhookToken, kit.ids)
 	if settings.Provider == config.ProviderAsaas {
@@ -121,7 +91,6 @@ func newProvider(settings config.Payments, customers asaas.CustomerCache, kit to
 
 func newRouter(settings config.HTTP, services serviceSet, kit toolkit) http.Handler {
 	gin.SetMode(gin.ReleaseMode)
-	keys := logging.NewAPIKeyServiceLogger(tracing.NewAPIKeyServiceTracer(services.keys, kit.tracer), kit.logger)
 	return rest.NewRouter(rest.Dependencies{
 		Middleware: rest.Middleware{
 			IDs:            kit.ids,
@@ -136,19 +105,18 @@ func newRouter(settings config.HTTP, services serviceSet, kit toolkit) http.Hand
 			},
 		},
 		Access: rest.Access{
-			Authenticator: keys,
+			Authenticator: services.keys,
 			Limiter:       ratelimit.NewMoney(kit.clock, settings.RateLimitPerSecond, settings.RateLimitBurst),
 			Admin:         secret.NewAdminTokenChecker(settings.AdminToken),
 		},
-		Controllers: newControllers(services, keys, kit),
+		Controllers: newControllers(services, kit),
 	})
 }
 
-func newControllers(services serviceSet, keys *logging.APIKeyServiceLogger, kit toolkit) rest.Controllers {
-	accounts := logging.NewAccountServiceLogger(tracing.NewAccountServiceTracer(services.accounts, kit.tracer), kit.logger)
-	transfers := logging.NewTransferServiceLogger(metrics.NewTransferServiceMetrics(tracing.NewTransferServiceTracer(services.transfers, kit.tracer), kit.registry), kit.logger)
-	webhooks := logging.NewWebhookServiceLogger(tracing.NewWebhookServiceTracer(services.webhooks, kit.tracer), kit.logger)
-	payments := logging.NewPaymentServiceLogger(metrics.NewPaymentServiceMetrics(tracing.NewPaymentServiceTracer(services.payments, kit.tracer), kit.registry), kit.logger)
+func newControllers(services serviceSet, kit toolkit) rest.Controllers {
+	accounts, keys, webhooks := services.accounts, services.keys, services.webhooks
+	transfers := metrics.NewTransferServiceMetrics(services.transfers, kit.registry)
+	payments := metrics.NewPaymentServiceMetrics(services.payments, kit.registry)
 	return rest.Controllers{
 		Health:   rest.NewHealthController(services.readiness, kit.registry.Handler()),
 		Account:  rest.NewAccountController(accounts, accounts, accounts, rest.AccountPresenter{}),
@@ -162,6 +130,6 @@ func newControllers(services serviceSet, keys *logging.APIKeyServiceLogger, kit 
 			PayoutReader:  payments,
 		}, rest.PaymentPresenter{}),
 		ProviderWebhook: rest.NewProviderWebhookController(payments),
-		LedgerCheck:     rest.NewLedgerCheckController(logging.NewLedgerCheckServiceLogger(services.ledger, kit.logger)),
+		LedgerCheck:     rest.NewLedgerCheckController(services.ledger),
 	}
 }

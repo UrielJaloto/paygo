@@ -14,7 +14,7 @@ type Clock interface {
 }
 
 type RequestLogger interface {
-	LogRequest(ctx context.Context, method, route string) func(status int, duration time.Duration)
+	LogRequest(ctx context.Context, method, route string) func(status int, duration time.Duration, err error)
 }
 
 func NewAccessLogMiddleware(logger RequestLogger, clock Clock) gin.HandlerFunc {
@@ -22,8 +22,15 @@ func NewAccessLogMiddleware(logger RequestLogger, clock Clock) gin.HandlerFunc {
 		startedAt := clock.Now()
 		finish := logger.LogRequest(c.Request.Context(), c.Request.Method, readRoute(c))
 		c.Next()
-		finish(c.Writer.Status(), clock.Now().Sub(startedAt))
+		finish(c.Writer.Status(), clock.Now().Sub(startedAt), handlerError(c))
 	}
+}
+
+func handlerError(c *gin.Context) error {
+	if last := c.Errors.Last(); last != nil {
+		return last.Err
+	}
+	return nil
 }
 
 func readRoute(c *gin.Context) string {
