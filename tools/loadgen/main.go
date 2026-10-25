@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -10,24 +9,17 @@ import (
 	"os/signal"
 	"runtime"
 	"time"
-
-	"github.com/UrielJaloto/paygo/bench/targets"
-	"github.com/UrielJaloto/paygo/bench/targets/paygo"
 )
 
-var errUnknownTarget = errors.NewMoney("unknown target")
-
 type options struct {
-	target        string
-	scenario      string
-	accounts      int
-	transfers     int
-	clients       int
-	seed          uint64
-	apiURL        string
-	databaseURL   string
-	resultsDir    string
-	targetVersion string
+	scenario    string
+	accounts    int
+	transfers   int
+	clients     int
+	seed        uint64
+	apiURL      string
+	databaseURL string
+	resultsDir  string
 }
 
 func main() {
@@ -43,32 +35,27 @@ func main() {
 func parseOptions(args []string) (options, error) {
 	var chosen options
 	flags := flag.NewFlagSet("loadgen", flag.ContinueOnError)
-	flags.StringVar(&chosen.target, "target", "paygo", "target under test")
 	flags.StringVar(&chosen.scenario, "scenario", scenarioUniform, "uniform or contention")
 	flags.IntVar(&chosen.accounts, "accounts", 1000, "accounts to create")
 	flags.IntVar(&chosen.transfers, "transfers", 200000, "transfers to run")
 	flags.IntVar(&chosen.clients, "clients", 64, "concurrent clients")
 	flags.Uint64Var(&chosen.seed, "seed", 1, "random seed")
-	flags.StringVar(&chosen.apiURL, "api-url", "http://localhost:18080", "target base url")
+	flags.StringVar(&chosen.apiURL, "api-url", "http://localhost:18080", "paygo api base url")
 	flags.StringVar(&chosen.databaseURL, "database-url", "postgres://paygo:paygo@localhost:55433/paygo?sslmode=disable", "postgres url for wal measurement, empty to skip")
 	flags.StringVar(&chosen.resultsDir, "results", "results", "results directory")
-	flags.StringVar(&chosen.targetVersion, "target-version", "dev", "version of the target under test")
 	if err := flags.Parse(args); err != nil {
 		return options{}, fmt.Errorf("parsing flags: %w", err)
 	}
 	return chosen, nil
 }
 
-func newTarget(chosen options) (targets.Target, error) {
-	if chosen.target != "paygo" {
-		return nil, fmt.Errorf("%w: %q", errUnknownTarget, chosen.target)
-	}
-	return paygo.NewMoney(paygo.Config{
-		BaseURL:     chosen.apiURL,
-		AdminToken:  os.Getenv("PAYGO_ADMIN_TOKEN"),
-		FundedMinor: fundingFor(chosen.transfers),
-		Connections: chosen.clients,
-	}), nil
+func newClient(chosen options) *apiClient {
+	return newAPIClient(clientConfig{
+		baseURL:     chosen.apiURL,
+		adminToken:  os.Getenv("PAYGO_ADMIN_TOKEN"),
+		fundedMinor: fundingFor(chosen.transfers),
+		connections: chosen.clients,
+	})
 }
 
 func run(ctx context.Context, args []string, output io.Writer) error {
@@ -76,11 +63,7 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	target, err := newTarget(chosen)
-	if err != nil {
-		return err
-	}
-	measured, err := measure(ctx, target, chosen)
+	measured, err := measure(ctx, newClient(chosen), chosen)
 	if err != nil {
 		return err
 	}
@@ -92,7 +75,7 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	return err
 }
 
-func measure(ctx context.Context, target targets.Target, chosen options) (report, error) {
+func measure(ctx context.Context, target wallet, chosen options) (report, error) {
 	probe, postgres, err := openWALProbe(ctx, chosen.databaseURL)
 	if err != nil {
 		return report{}, err
@@ -100,12 +83,13 @@ func measure(ctx context.Context, target targets.Target, chosen options) (report
 	defer probe.close(ctx)
 	accounts, err := target.Setup(ctx, chosen.accounts)
 	if err != nil {
-		return report{}, fmt.Errorf("setting up target: %w", err)
+		return report{}, fmt.Errorf("setting up accounts: %w", err)
 	}
 	if err := probe.mark(ctx); err != nil {
 		return report{}, fmt.Errorf("marking wal: %w", err)
 	}
-	load := workload{chosen.scenario, accounts, chosen.transfers, chosen.clients, chosen.seed}
+	run := fmt.Sprintf("loadgen-%d", time.Now().UnixNano())
+	load := workload{chosen.scenario, accounts, chosen.transfers, chosen.clients, chosen.seed, run}
 	result, err := drive(ctx, target, load)
 	if err != nil {
 		return report{}, err
@@ -127,14 +111,13 @@ func measure(ctx context.Context, target targets.Target, chosen options) (report
 func buildReport(chosen options, result outcome, walBytes int64) report {
 	transfers := float64(chosen.transfers)
 	return report{
-		Target:           chosen.target,
 		Scenario:         chosen.scenario,
 		Accounts:         chosen.accounts,
 		Transfers:        chosen.transfers,
 		Clients:          chosen.clients,
 		Seed:             chosen.seed,
 		Hardware:         readHardware(),
-		Versions:         versions{Go: runtime.Version(), Target: chosen.targetVersion},
+		Versions:         versions{Go: runtime.Version()},
 		TransfersPerSec:  transfers / result.elapsed.Seconds(),
 		Latency:          summarize(result.samples),
 		ErrorRate:        float64(result.failures) / transfers,

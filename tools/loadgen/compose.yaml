@@ -1,4 +1,4 @@
-name: paygo-bench
+name: paygo-loadgen
 
 services:
   postgres:
@@ -25,7 +25,7 @@ services:
 
   migrate:
     build: &paygo-build
-      context: ..
+      context: ../..
       dockerfile_inline: |
         FROM golang:1.26 AS build
         WORKDIR /src

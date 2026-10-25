@@ -112,7 +112,7 @@ func TestDrive_AllAccepted_ExpectedMatchesBalances(t *testing.T) {
 		accounts[index] = "account-" + strconv.Itoa(index)
 		stub.balances[accounts[index]] = fundingFor(1000)
 	}
-	result, err := drive(context.Background(), stub, workload{scenarioContention, accounts, 1000, 8, 1})
+	result, err := drive(context.Background(), stub, workload{scenarioContention, accounts, 1000, 8, 1, "run"})
 	if err != nil {
 		t.Fatalf("drive: %v", err)
 	}
@@ -125,8 +125,8 @@ func TestDrive_AllAccepted_ExpectedMatchesBalances(t *testing.T) {
 }
 
 func TestDrive_RejectedTransfer_IsCountedAndNotApplied(t *testing.T) {
-	stub := &ledgerStub{balances: map[string]int64{"a": fundingFor(5), "b": fundingFor(5)}, failKey: "bench-1-0-3"}
-	result, err := drive(context.Background(), stub, workload{scenarioUniform, []string{"a", "b"}, 5, 1, 1})
+	stub := &ledgerStub{balances: map[string]int64{"a": fundingFor(5), "b": fundingFor(5)}, failKey: "run-0-3"}
+	result, err := drive(context.Background(), stub, workload{scenarioUniform, []string{"a", "b"}, 5, 1, 1, "run"})
 	if err != nil {
 		t.Fatalf("drive: %v", err)
 	}
@@ -152,11 +152,5 @@ func TestCorrect_Mismatches_ReturnFalse(t *testing.T) {
 				t.Errorf("correct = %t, want %t", got, testCase.want)
 			}
 		})
-	}
-}
-
-func TestNewTarget_Unknown_ReturnsError(t *testing.T) {
-	if _, err := newTarget(options{target: "other"}); !errors.Is(err, errUnknownTarget) {
-		t.Errorf("err = %v, want errUnknownTarget", err)
 	}
 }
