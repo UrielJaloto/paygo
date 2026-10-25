@@ -54,7 +54,7 @@ func TestPaymentServiceLogger_EveryMethod_LogsAndStaysTransparent(t *testing.T) 
 	payout := payment.PayoutOutput{ID: "payout-1"}
 	synced := payment.SyncResult{Checked: 1}
 	decoratorSuite[*logging.PaymentServiceLogger]{
-		business: domainpayment.ErrProviderRejected,
+		business: domainpayment.ErrWebhookUnauthorized,
 		build: func(err error, logger *slog.Logger) *logging.PaymentServiceLogger {
 			return logging.NewPaymentServiceLogger(stubPayments{charge: charge, payout: payout, sync: synced, err: err}, logger)
 		},

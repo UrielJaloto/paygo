@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	domainaccount "github.com/UrielJaloto/paygo/domain/account"
-	domainapikey "github.com/UrielJaloto/paygo/domain/apikey"
 	domaintransfer "github.com/UrielJaloto/paygo/domain/transfer"
 	domainwebhook "github.com/UrielJaloto/paygo/domain/webhook"
 	"github.com/UrielJaloto/paygo/infrastructure/logging"
@@ -242,7 +241,7 @@ func TestAPIKeyServiceLogger_EveryMethod_LogsAndStaysTransparent(t *testing.T) {
 	issued := apikey.IssuedKey{ID: "key-1", Token: issuedToken}
 	principal := apikey.Principal{OwnerID: "own-1"}
 	decoratorSuite[*logging.APIKeyServiceLogger]{
-		business: domainapikey.ErrInvalidToken,
+		business: apikey.ErrUnauthenticated,
 		build: func(err error, logger *slog.Logger) *logging.APIKeyServiceLogger {
 			return logging.NewAPIKeyServiceLogger(stubAPIKeys{issued: issued, principal: principal, err: err}, logger)
 		},

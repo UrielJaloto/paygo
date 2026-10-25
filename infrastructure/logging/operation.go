@@ -15,6 +15,7 @@ import (
 	"github.com/UrielJaloto/paygo/domain/transfer"
 	"github.com/UrielJaloto/paygo/domain/webhook"
 	"github.com/UrielJaloto/paygo/infrastructure/clock"
+	apikeyservice "github.com/UrielJaloto/paygo/services/apikey"
 )
 
 type operation struct {
@@ -50,6 +51,7 @@ func businessErrors() []error {
 	return []error{
 		account.ErrInvalidAccountID, account.ErrAccountNotFound, account.ErrAccountFrozen,
 		account.ErrAccountAlreadyFrozen, account.ErrAccountNotFrozen, account.ErrConcurrentModification,
+		apikeyservice.ErrUnauthenticated, payment.ErrWebhookUnauthorized,
 		apikey.ErrInvalidToken, apikey.ErrInvalidOwner, apikey.ErrAPIKeyAlreadyRevoked, apikey.ErrAPIKeyNotFound,
 		ledger.ErrTooFewEntries, ledger.ErrUnbalancedTransaction,
 		money.ErrUnsupportedCurrency, money.ErrInvalidAmount, money.ErrAmountTooLarge,
