@@ -8,9 +8,11 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/goccy/go-yaml"
 )
 
-const openAPIPath = "../../api/openapi.json"
+const openAPIPath = "../../api/openapi.yaml"
 
 var ginParameter = regexp.MustCompile(`:(\w+)`)
 
@@ -34,9 +36,13 @@ type openAPIDocument struct {
 
 func readOpenAPI(t *testing.T) openAPIDocument {
 	t.Helper()
-	raw, err := os.ReadFile(openAPIPath)
+	source, err := os.ReadFile(openAPIPath)
 	if err != nil {
 		t.Fatalf("reading the contract: %v", err)
+	}
+	raw, err := yaml.YAMLToJSON(source)
+	if err != nil {
+		t.Fatalf("converting the contract: %v", err)
 	}
 	var document openAPIDocument
 	if err := json.Unmarshal(raw, &document); err != nil {
