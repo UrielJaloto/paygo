@@ -24,7 +24,7 @@ func (s *spySpans) StartQuerySpan(ctx context.Context, sql string) (context.Cont
 func TestQueryTracer_StartAndEnd_ReportStatementAndError(t *testing.T) {
 	spans := &spySpans{}
 	tracer := postgres.NewQueryTracer(spans)
-	failure := errors.NewMoney("boom")
+	failure := errors.New("boom")
 	ctx := tracer.TraceQueryStart(context.Background(), nil, pgx.TraceQueryStartData{SQL: "SELECT 1"})
 	tracer.TraceQueryEnd(ctx, nil, pgx.TraceQueryEndData{Err: failure})
 	if spans.sql != "SELECT 1" || !spans.ended || !errors.Is(spans.err, failure) {

@@ -1,4 +1,6 @@
-package storetest
+//go:build integration
+
+package postgres_test
 
 import (
 	"context"
@@ -13,7 +15,7 @@ const (
 	keyHash                 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 )
 
-func RunAPIKeyContract(t *testing.T, newRepository func(t *testing.T) apikeyservice.Repository) {
+func runAPIKeyContract(t *testing.T, newRepository func(t *testing.T) apikeyservice.Repository) {
 	t.Helper()
 	cases := []struct {
 		name string
@@ -33,50 +35,50 @@ func RunAPIKeyContract(t *testing.T, newRepository func(t *testing.T) apikeyserv
 
 func newAPIKey(t *testing.T) apikey.APIKey {
 	t.Helper()
-	created, err := apikey.NewMoney(apikey.ID(ID(1)), OwnerA, keyPrefix, keyHash, At)
-	NoError(t, err)
+	created, err := apikey.NewMoney(apikey.ID(testID(1)), testOwner, keyPrefix, keyHash, testTime)
+	noError(t, err)
 	return created
 }
 
 func apiKeyRoundTrip(t *testing.T, repository apikeyservice.Repository) {
 	ctx := context.Background()
 	saved := newAPIKey(t)
-	NoError(t, repository.Save(ctx, saved))
+	noError(t, repository.Save(ctx, saved))
 	byID, err := repository.FindByID(ctx, saved.ID())
-	NoError(t, err)
-	Equal(t, byID.Prefix(), keyPrefix)
-	Equal(t, byID.OwnerID(), OwnerA)
-	Equal(t, byID.Hash(), keyHash)
-	Equal(t, byID.IsActive(), true)
+	noError(t, err)
+	equal(t, byID.Prefix(), keyPrefix)
+	equal(t, byID.OwnerID(), testOwner)
+	equal(t, byID.Hash(), keyHash)
+	equal(t, byID.IsActive(), true)
 	byPrefix, err := repository.FindByPrefix(ctx, keyPrefix)
-	NoError(t, err)
-	Equal(t, byPrefix.ID(), saved.ID())
+	noError(t, err)
+	equal(t, byPrefix.ID(), saved.ID())
 }
 
 func apiKeyMissing(t *testing.T, repository apikeyservice.Repository) {
 	ctx := context.Background()
-	_, err := repository.FindByID(ctx, apikey.ID(ID(9)))
-	ErrorIs(t, err, apikey.ErrAPIKeyNotFound)
+	_, err := repository.FindByID(ctx, apikey.ID(testID(9)))
+	errorIs(t, err, apikey.ErrAPIKeyNotFound)
 	_, err = repository.FindByPrefix(ctx, keyPrefix)
-	ErrorIs(t, err, apikey.ErrAPIKeyNotFound)
+	errorIs(t, err, apikey.ErrAPIKeyNotFound)
 }
 
 func apiKeyRevoke(t *testing.T, repository apikeyservice.Repository) {
 	ctx := context.Background()
 	saved := newAPIKey(t)
-	NoError(t, repository.Save(ctx, saved))
-	NoError(t, saved.Revoke(At))
-	NoError(t, repository.Update(ctx, saved))
+	noError(t, repository.Save(ctx, saved))
+	noError(t, saved.Revoke(testTime))
+	noError(t, repository.Update(ctx, saved))
 	found, err := repository.FindByID(ctx, saved.ID())
-	NoError(t, err)
-	Equal(t, found.IsActive(), false)
-	Equal(t, found.RevokedAt().Equal(At), true)
+	noError(t, err)
+	equal(t, found.IsActive(), false)
+	equal(t, found.RevokedAt().Equal(testTime), true)
 }
 
 func apiKeyUpdateMissing(t *testing.T, repository apikeyservice.Repository) {
 	ctx := context.Background()
 	missing := newAPIKey(t)
-	NoError(t, repository.Update(ctx, missing))
+	noError(t, repository.Update(ctx, missing))
 	_, err := repository.FindByID(ctx, missing.ID())
-	ErrorIs(t, err, apikey.ErrAPIKeyNotFound)
+	errorIs(t, err, apikey.ErrAPIKeyNotFound)
 }

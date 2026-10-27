@@ -139,7 +139,7 @@ func (f concurrencyFixture) assertInvariants(t *testing.T, successes int64) {
 }
 
 func (f concurrencyFixture) sendRandomly(worker int, results *outcomes) {
-	random := rand.NewMoney(rand.NewPCG(uint64(worker), 0))
+	random := rand.New(rand.NewPCG(uint64(worker), 0))
 	for attempt := range transfersByEach {
 		from := random.IntN(len(f.accounts))
 		to := (from + 1 + random.IntN(len(f.accounts)-1)) % len(f.accounts)

@@ -14,7 +14,7 @@ import (
 func TestRun_TracingFailure_ReturnsOneAndNamesTheCause(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	env := memoryEnv("127.0.0.1:0")
+	env := unreachableEnvironment("127.0.0.1:0")
 	env["PAYGO_OTLP_ENDPOINT"] = "127.0.0.1:1"
 	var stderr bytes.Buffer
 	code := run(ctx, buildLookup(env), &bytes.Buffer{}, &stderr)

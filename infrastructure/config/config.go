@@ -14,10 +14,8 @@ const (
 	minimumTokenLength = 32
 	postgresScheme = "postgres://"
 
-	StorageMemory   = "memory"
-	StoragePostgres = "postgres"
-	ProviderFake    = "fake"
-	ProviderAsaas   = "asaas"
+	ProviderFake  = "fake"
+	ProviderAsaas = "asaas"
 
 	asaasProduction     = "production"
 	asaasSandbox        = "sandbox"
@@ -65,7 +63,6 @@ type Asaas struct {
 }
 
 type Payments struct {
-	Storage             string
 	Provider            string
 	FakeWebhookToken    string
 	Asaas               Asaas
@@ -89,7 +86,7 @@ type WorkerSettings struct {
 func ReadAPI(lookup func(string) (string, bool)) (APISettings, error) {
 	r := reader{lookup: lookup}
 	payments := r.payments()
-	settings := APISettings{Database: r.storageDatabase(payments.Storage), HTTP: r.http(), Telemetry: r.telemetry(), Payments: payments}
+	settings := APISettings{Database: r.database(), HTTP: r.http(), Telemetry: r.telemetry(), Payments: payments}
 	if err := r.err(); err != nil {
 		return APISettings{}, err
 	}
@@ -99,7 +96,7 @@ func ReadAPI(lookup func(string) (string, bool)) (APISettings, error) {
 func ReadWorker(lookup func(string) (string, bool)) (WorkerSettings, error) {
 	r := reader{lookup: lookup}
 	payments := r.payments()
-	settings := WorkerSettings{Database: r.storageDatabase(payments.Storage), Worker: r.worker(), Telemetry: r.telemetry(), Payments: payments}
+	settings := WorkerSettings{Database: r.database(), Worker: r.worker(), Telemetry: r.telemetry(), Payments: payments}
 	if err := r.err(); err != nil {
 		return WorkerSettings{}, err
 	}
@@ -157,13 +154,6 @@ func (r *reader) database() Database {
 	}
 }
 
-func (r *reader) storageDatabase(serviceSet string) Database {
-	if serviceSet == StorageMemory {
-		return Database{}
-	}
-	return r.database()
-}
-
 func (r *reader) databaseURL() string {
 	const name = "PAYGO_DATABASE_URL"
 	url := r.text(name, "")
@@ -206,7 +196,6 @@ func (r *reader) token(name string) string {
 
 func (r *reader) payments() Payments {
 	settings := Payments{
-		Storage:             r.choice("PAYGO_STORAGE", StoragePostgres, StorageMemory),
 		Provider:            r.choice("PAYGO_PROVIDER", ProviderFake, ProviderAsaas),
 		Asaas:               r.asaasSettings(),
 		PaymentSyncInterval: r.duration(durationRule{name: "PAYGO_PAYMENT_SYNC_INTERVAL", fallback: 30 * time.Second, min: time.Second, max: 10 * time.Minute}),
