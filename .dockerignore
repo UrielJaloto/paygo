@@ -1,5 +1,6 @@
 .git
+.github
 cover
-cover.out
+*.out
 bin
-docs
+tools
