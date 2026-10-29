@@ -1,6 +1,6 @@
 //go:build integration
 
-package main_test
+package e2e_test
 
 import (
 	"crypto/hmac"
@@ -88,7 +88,7 @@ func eventTransferID(t *testing.T, body []byte) string {
 
 func (s stack) registerEndpoint(t *testing.T, token, target string) string {
 	t.Helper()
-	response, body := doJSON(t, http.MethodPost, s.api+"/v1/webhook-endpoints", token, "", map[string]string{"url": target})
+	response, body := sendJSON(t, http.MethodPost, s.api+"/v1/webhook-endpoints", token, "", map[string]string{"url": target})
 	expectStatus(t, response, body, http.StatusCreated)
 	return text(t, body, "secret")
 }
@@ -106,7 +106,7 @@ func expectSigned(t *testing.T, got receipt, secret string) {
 
 func (s stack) deliveries(t *testing.T, token, status string) []any {
 	t.Helper()
-	response, body := doJSON(t, http.MethodGet, s.api+"/v1/webhook-deliveries?status="+status, token, "", nil)
+	response, body := sendJSON(t, http.MethodGet, s.api+"/v1/webhook-deliveries?status="+status, token, "", nil)
 	expectStatus(t, response, body, http.StatusOK)
 	items, _ := body["items"].([]any)
 	return items
@@ -171,7 +171,7 @@ func TestE2E_DeadDeliveryReplay(t *testing.T) {
 	})
 	delivery, _ := dead[0].(map[string]any)
 	replay := running.api + "/v1/webhook-deliveries/" + text(t, delivery, "id") + "/replay"
-	response, body := doJSON(t, http.MethodPost, replay, token, "", nil)
+	response, body := sendJSON(t, http.MethodPost, replay, token, "", nil)
 	expectStatus(t, response, body, http.StatusOK)
 	if got := target.await(t, id); got.status != http.StatusOK {
 		t.Fatalf("replayed status = %d", got.status)

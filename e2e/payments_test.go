@@ -1,6 +1,6 @@
 //go:build integration
 
-package main_test
+package e2e_test
 
 import (
 	"fmt"
@@ -22,7 +22,7 @@ func (r *receiver) awaitType(t *testing.T, kind string) {
 func (s stack) createCharge(t *testing.T, token, account string) (string, string) {
 	t.Helper()
 	input := map[string]any{"account_id": account, "amount": "100.00", "currency": "BRL", "payer": map[string]string{"name": "Ana Lima", "document": validDocument}}
-	response, body := doJSON(t, http.MethodPost, s.api+"/v1/charges", token, randomHex(t), input)
+	response, body := sendJSON(t, http.MethodPost, s.api+"/v1/charges", token, randomHex(t), input)
 	expectStatus(t, response, body, http.StatusCreated)
 	if text(t, body, "pix_qr_png_base64") == "" {
 		t.Error("the charge has no pix qr code")
@@ -33,7 +33,7 @@ func (s stack) createCharge(t *testing.T, token, account string) (string, string
 func (s stack) createPayout(t *testing.T, token, account, amount string) (string, string) {
 	t.Helper()
 	input := map[string]string{"account_id": account, "amount": amount, "currency": "BRL", "pix_key": "ana@example.com", "pix_key_type": "email"}
-	response, body := doJSON(t, http.MethodPost, s.api+"/v1/payouts", token, randomHex(t), input)
+	response, body := sendJSON(t, http.MethodPost, s.api+"/v1/payouts", token, randomHex(t), input)
 	expectStatus(t, response, body, http.StatusCreated)
 	id := text(t, body, "id")
 	return id, queryText(t, s.databaseURL, fmt.Sprintf("SELECT provider_id FROM payouts WHERE id = '%s'", id))
@@ -48,7 +48,7 @@ func (s stack) providerEvent(t *testing.T, eventID, kind, providerID string) {
 
 func (s stack) expectPaymentStatus(t *testing.T, token, path, want string) {
 	t.Helper()
-	response, body := doJSON(t, http.MethodGet, s.api+path, token, "", nil)
+	response, body := sendJSON(t, http.MethodGet, s.api+path, token, "", nil)
 	expectStatus(t, response, body, http.StatusOK)
 	if got := text(t, body, "status"); got != want {
 		t.Errorf("%s status = %q, want %q", path, got, want)
@@ -57,7 +57,7 @@ func (s stack) expectPaymentStatus(t *testing.T, token, path, want string) {
 
 func (s stack) expectLedgerConsistent(t *testing.T) {
 	t.Helper()
-	response, body := doJSON(t, http.MethodGet, s.api+"/admin/v1/ledger/check", adminToken, "", nil)
+	response, body := sendJSON(t, http.MethodGet, s.api+"/admin/v1/ledger/check", adminToken, "", nil)
 	expectStatus(t, response, body, http.StatusOK)
 }
 
@@ -106,7 +106,7 @@ func TestE2E_PaymentSyncRecovers(t *testing.T) {
 	}
 	execute(t, running.databaseURL, fmt.Sprintf("UPDATE charges SET created_at = now() - interval '2 minutes' WHERE id = '%s'", id))
 	eventually(t, syncDeadline, "the charge to be paid", func() bool {
-		_, body := doJSON(t, http.MethodGet, running.api+"/v1/charges/"+id, token, "", nil)
+		_, body := sendJSON(t, http.MethodGet, running.api+"/v1/charges/"+id, token, "", nil)
 		return body["status"] == "paid"
 	})
 	running.expectBalance(t, token, account, "100.00")

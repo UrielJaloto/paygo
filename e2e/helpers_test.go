@@ -1,6 +1,6 @@
 //go:build integration
 
-package main_test
+package e2e_test
 
 import (
 	"bytes"
@@ -30,7 +30,7 @@ const (
 	fakeToken       = "e2e-fake-token-0123456789abcdef01234"
 	ownerOne        = "01890000-0000-7000-8000-000000000001"
 	ownerTwo        = "01890000-0000-7000-8000-000000000002"
-	moduleRoot      = "../.."
+	moduleRoot      = ".."
 	pollInterval    = 50 * time.Millisecond
 	bootTimeout     = 15 * time.Second
 	requestTimeout  = 10 * time.Second
@@ -283,7 +283,7 @@ func send(t *testing.T, request *http.Request) (*http.Response, []byte) {
 	return response, raw
 }
 
-func getText(t *testing.T, target string) (*http.Response, string) {
+func readText(t *testing.T, target string) (*http.Response, string) {
 	t.Helper()
 	request, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
@@ -293,7 +293,7 @@ func getText(t *testing.T, target string) (*http.Response, string) {
 	return response, string(raw)
 }
 
-func doJSON(t *testing.T, method, target, token, idempotencyKey string, body any) (*http.Response, map[string]any) {
+func sendJSON(t *testing.T, method, target, token, idempotencyKey string, body any) (*http.Response, map[string]any) {
 	t.Helper()
 	encoded, err := json.Marshal(body)
 	if err != nil {
@@ -359,14 +359,14 @@ func text(t *testing.T, body map[string]any, field string) string {
 
 func (s stack) issueKey(t *testing.T, owner string) (id, token string) {
 	t.Helper()
-	response, body := doJSON(t, http.MethodPost, s.api+"/admin/v1/owners/"+owner+"/api-keys", adminToken, "", nil)
+	response, body := sendJSON(t, http.MethodPost, s.api+"/admin/v1/owners/"+owner+"/api-keys", adminToken, "", nil)
 	expectStatus(t, response, body, http.StatusCreated)
 	return text(t, body, "id"), text(t, body, "token")
 }
 
 func (s stack) openAccount(t *testing.T, token string) string {
 	t.Helper()
-	response, body := doJSON(t, http.MethodPost, s.api+"/v1/accounts", token, "", map[string]string{"currency": "BRL"})
+	response, body := sendJSON(t, http.MethodPost, s.api+"/v1/accounts", token, "", map[string]string{"currency": "BRL"})
 	expectStatus(t, response, body, http.StatusCreated)
 	return text(t, body, "id")
 }
@@ -374,7 +374,7 @@ func (s stack) openAccount(t *testing.T, token string) string {
 func (s stack) deposit(t *testing.T, account, amount string) string {
 	t.Helper()
 	input := map[string]string{"account_id": account, "amount": amount, "currency": "BRL"}
-	response, body := doJSON(t, http.MethodPost, s.api+"/admin/v1/deposits", adminToken, randomHex(t), input)
+	response, body := sendJSON(t, http.MethodPost, s.api+"/admin/v1/deposits", adminToken, randomHex(t), input)
 	expectStatus(t, response, body, http.StatusCreated)
 	return text(t, body, "id")
 }
@@ -382,14 +382,14 @@ func (s stack) deposit(t *testing.T, account, amount string) string {
 func (s stack) transfer(t *testing.T, token string, accounts [2]string, amount string) string {
 	t.Helper()
 	input := map[string]string{"from_account_id": accounts[0], "to_account_id": accounts[1], "amount": amount, "currency": "BRL"}
-	response, body := doJSON(t, http.MethodPost, s.api+"/v1/transfers", token, randomHex(t), input)
+	response, body := sendJSON(t, http.MethodPost, s.api+"/v1/transfers", token, randomHex(t), input)
 	expectStatus(t, response, body, http.StatusCreated)
 	return text(t, body, "id")
 }
 
 func (s stack) expectBalance(t *testing.T, token, account, want string) {
 	t.Helper()
-	response, body := doJSON(t, http.MethodGet, s.api+"/v1/accounts/"+account+"/balance", token, "", nil)
+	response, body := sendJSON(t, http.MethodGet, s.api+"/v1/accounts/"+account+"/balance", token, "", nil)
 	expectStatus(t, response, body, http.StatusOK)
 	if got := text(t, body, "amount"); got != want {
 		t.Fatalf("balance of %s = %s, want %s", account, got, want)

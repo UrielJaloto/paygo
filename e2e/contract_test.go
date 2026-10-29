@@ -1,6 +1,6 @@
 //go:build integration
 
-package main_test
+package e2e_test
 
 import (
 	"encoding/json"
@@ -9,10 +9,12 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/goccy/go-yaml"
 )
 
 const (
-	contractPath   = moduleRoot + "/api/openapi.json"
+	contractPath   = moduleRoot + "/api/openapi.yaml"
 	fakePixPrefix  = "00020126fake"
 	schemaReferenceStart = "#/components/schemas/"
 	validDocument  = "52998224725"
@@ -44,11 +46,15 @@ type contractClient struct {
 	visited  map[string]bool
 }
 
-func loadContract(t *testing.T) contractDocument {
+func readContract(t *testing.T) contractDocument {
 	t.Helper()
-	raw, err := os.ReadFile(contractPath)
+	source, err := os.ReadFile(contractPath)
 	if err != nil {
 		t.Fatalf("reading the contract: %v", err)
+	}
+	raw, err := yaml.YAMLToJSON(source)
+	if err != nil {
+		t.Fatalf("converting the contract: %v", err)
 	}
 	var document contractDocument
 	if err := json.Unmarshal(raw, &document); err != nil {
@@ -81,14 +87,14 @@ func (c *contractClient) expectFields(t *testing.T, route string, response docum
 func (c *contractClient) call(t *testing.T, route, path, token string, input any) map[string]any {
 	t.Helper()
 	method, _, _ := strings.Cut(route, " ")
-	response, body := doJSON(t, method, c.running.api+path, token, randomHex(t), input)
+	response, body := sendJSON(t, method, c.running.api+path, token, randomHex(t), input)
 	c.expectFields(t, route, c.documented(t, route, response.StatusCode), body)
 	return body
 }
 
 func (c *contractClient) public(t *testing.T, route, path string) {
 	t.Helper()
-	response, _ := getText(t, c.running.api+path)
+	response, _ := readText(t, c.running.api+path)
 	c.documented(t, route, response.StatusCode)
 }
 
@@ -161,7 +167,7 @@ func (c *contractClient) providerEvent(t *testing.T, event map[string]any) {
 
 func TestE2E_OpenAPIContract(t *testing.T) {
 	running := startStackWith(t, fastWorker)
-	client := &contractClient{document: loadContract(t), running: running, visited: map[string]bool{}}
+	client := &contractClient{document: readContract(t), running: running, visited: map[string]bool{}}
 	client.public(t, "GET /healthz", "/healthz")
 	client.public(t, "GET /readyz", "/readyz")
 	client.public(t, "GET /metrics", "/metrics")

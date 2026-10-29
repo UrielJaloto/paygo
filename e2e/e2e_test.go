@@ -1,6 +1,6 @@
 //go:build integration
 
-package main_test
+package e2e_test
 
 import (
 	"fmt"
@@ -37,7 +37,7 @@ func runSuite(m *testing.M) int {
 func TestE2E_HealthAndReadiness(t *testing.T) {
 	running := startStack(t)
 	for _, path := range []string{"/healthz", "/readyz"} {
-		response, body := getText(t, running.api+path)
+		response, body := readText(t, running.api+path)
 		if response.StatusCode != http.StatusOK {
 			t.Errorf("%s status = %d, body %s", path, response.StatusCode, body)
 		}
@@ -45,7 +45,7 @@ func TestE2E_HealthAndReadiness(t *testing.T) {
 			t.Errorf("%s has no X-Request-Id", path)
 		}
 	}
-	response, body := getText(t, running.api+"/metrics")
+	response, body := readText(t, running.api+"/metrics")
 	if response.StatusCode != http.StatusOK || !strings.Contains(body, "paygo_http_requests_total") {
 		t.Errorf("/metrics status = %d, body lacks the request counter:\n%s", response.StatusCode, body)
 	}
@@ -57,7 +57,7 @@ func TestE2E_AdminIssuesKey_OwnerOpensAccount(t *testing.T) {
 	if !tokenPattern.MatchString(token) {
 		t.Fatalf("token = %q does not match the documented format", token)
 	}
-	response, body := doJSON(t, http.MethodPost, running.api+"/v1/accounts", token, "", map[string]string{"currency": "BRL"})
+	response, body := sendJSON(t, http.MethodPost, running.api+"/v1/accounts", token, "", map[string]string{"currency": "BRL"})
 	expectStatus(t, response, body, http.StatusCreated)
 	if text(t, body, "status") != "active" || text(t, body, "owner_id") != ownerOne {
 		t.Fatalf("account = %v", body)
@@ -72,7 +72,7 @@ func TestE2E_DepositTransferWithdraw_BalancesAndStatement(t *testing.T) {
 	running.deposit(t, source, "100.00")
 	running.transfer(t, first, [2]string{source, target}, "30.00")
 	withdrawal := map[string]string{"account_id": target, "amount": "10.00", "currency": "BRL"}
-	response, body := doJSON(t, http.MethodPost, running.api+"/admin/v1/withdrawals", adminToken, randomHex(t), withdrawal)
+	response, body := sendJSON(t, http.MethodPost, running.api+"/admin/v1/withdrawals", adminToken, randomHex(t), withdrawal)
 	expectStatus(t, response, body, http.StatusCreated)
 	running.expectBalance(t, first, source, "70.00")
 	running.expectBalance(t, second, target, "20.00")
@@ -81,7 +81,7 @@ func TestE2E_DepositTransferWithdraw_BalancesAndStatement(t *testing.T) {
 
 func expectStatement(t *testing.T, running stack, token, account string, want []string) {
 	t.Helper()
-	response, body := doJSON(t, http.MethodGet, running.api+"/v1/accounts/"+account+"/statement", token, "", nil)
+	response, body := sendJSON(t, http.MethodGet, running.api+"/v1/accounts/"+account+"/statement", token, "", nil)
 	expectStatus(t, response, body, http.StatusOK)
 	items, _ := body["items"].([]any)
 	got := make([]string, 0, len(items))
