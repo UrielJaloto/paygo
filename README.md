@@ -13,24 +13,23 @@ paygo is a digital wallet and double-entry payments ledger written in Go. It exp
 - Signed webhooks with retries, a delivery log and replay
 - API keys scoped by owner, rate limiting and an OpenAPI contract
 - JSON logs, Prometheus metrics and OpenTelemetry traces
-- PostgreSQL storage, or an in-memory engine behind the same ports
 
 ## Architecture
 
 ```mermaid
 flowchart TD
     cmd["cmd: wiring only"] --> presentation["presentation/rest: Gin controllers"]
-    cmd --> infrastructure["infrastructure: postgres, provider, logging, metrics, tracing"]
+    cmd --> infrastructure["infrastructure: postgres, provider, webhooks, telemetry"]
     presentation --> services["services: use cases, declare their own ports"]
     infrastructure --> services
     services --> domain["domain: entities and rules, standard library only"]
 ```
 
-**Dependency rule.** Imports point inward. `domain` knows nothing about the outside, `services` declare the interfaces they consume, and `presentation` and `infrastructure` never import each other. [architecture_test.go](architecture_test.go) parses the source and fails the build when a rule is broken.
+**Dependency rule.** Imports point inward. `domain` knows nothing about the outside, `services` declare the interfaces they consume, and `presentation` and `infrastructure` never import each other. [internal/architecture](internal/architecture/architecture_test.go) parses the source and fails the build when a rule is broken.
 
 **How a transfer flows.** The controller validates the request and calls the transfer service. In one database transaction the service checks the idempotency key, locks both accounts in ascending id order, checks funds, appends the balanced journal entries, updates the balances and writes the event to the outbox. The worker later fans the event out to webhook deliveries.
 
-**Why decorators.** Logging, metrics and tracing wrap each service as decorators in `infrastructure`, and `main` composes them. Services stay free of observability code, and each concern is tested alone.
+**Observability stays out of the use cases.** A Gin middleware logs and traces every request, pgx opens a span per query, the provider client is traced, and the money-moving services are wrapped with Prometheus counters in `main`. Services never import a logger or a tracer.
 
 ## Domain rules
 
@@ -94,11 +93,10 @@ Alice ends with 70.00, Bob with 80.00, and the ledger check returns `"ok":true`.
 |---|---|---|
 | `PAYGO_PROVIDER` | `fake`, `asaas` | Runs PIX against the fake provider or Asaas |
 | `PAYGO_ASAAS_ENV` | `sandbox`, `production` | Production also requires `PAYGO_ASAAS_ALLOW_PRODUCTION=true` |
-| `PAYGO_STORAGE` | `postgres`, `memory` | Selects durable storage or the in-memory engine |
 
 ## API
 
-The full contract is in [api/openapi.json](api/openapi.json).
+The full contract is in [api/openapi.yaml](api/openapi.yaml). A unit test checks that every route the router serves is documented, and the end-to-end suite calls every operation and checks the response fields against it.
 
 | Area | Endpoints |
 |---|---|
@@ -135,6 +133,23 @@ CI runs formatting, vet, govulncheck, race tests on Linux, Windows and macOS, th
 - Prometheus: <http://localhost:9090>
 - Example metrics: `paygo_transfers_total`, `paygo_http_request_duration_seconds`, `paygo_webhook_deliveries_total`, `paygo_outbox_events_published_total`
 
+## Performance
+
+[tools/loadgen](tools/loadgen) opens 1,000 accounts, then sends 200,000 transfers from 64 concurrent clients over HTTP, each with its own idempotency key. At the end it compares every balance with the sum of the transfers that succeeded and reads WAL growth from PostgreSQL. In `contention`, 90% of the transfers touch 10 hot accounts.
+
+| Scenario | Transfers/s | p50 | p95 | p99 | Errors | WAL per transfer | Balances correct |
+|---|---|---|---|---|---|---|---|
+| uniform | 5,002 | 9.9 ms | 19.7 ms | 69.8 ms | 0 | 2.1 KB | yes |
+| contention | 1,854 | 14.2 ms | 140.2 ms | 397.6 ms | 0 | 2.1 KB | yes |
+
+Measured on an Intel Core i7-13700F with Docker Desktop on Windows (4 GB VM), PostgreSQL 18 with `synchronous_commit=on`, and the load generator on the same machine. Contention costs throughput because transfers on a hot account wait for its row lock, which is what keeps the balances exact.
+
+```bash
+cd tools/loadgen
+docker compose up -d --build --wait
+PAYGO_ADMIN_TOKEN=bench-admin-token-0123456789abcdef go run . -scenario uniform
+```
+
 ## Design decisions
 
 - **Polling outbox instead of a broker.** PostgreSQL is the only moving part, at the cost of some delivery latency and polling load.
@@ -147,14 +162,15 @@ CI runs formatting, vet, govulncheck, race tests on Linux, Windows and macOS, th
 
 ```text
 api/             OpenAPI contract
-bench/           Load generator
 cmd/             paygo-api, paygo-migrate and paygo-worker
 deploy/          Prometheus configuration
 domain/          Entities and business rules
-infrastructure/  Adapters and observability decorators
-internal/        Shared store contract tests
-presentation/    REST controllers
+e2e/             End-to-end tests against the built binaries
+infrastructure/  PostgreSQL, PIX providers, webhook delivery, telemetry
+internal/        Architecture tests
+presentation/    REST controllers and middleware
 services/        Use cases
+tools/loadgen/   Load generator
 ```
 
 ## License
