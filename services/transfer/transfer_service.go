@@ -36,6 +36,7 @@ type Ledger interface {
 
 type Repository interface {
 	FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (transfer.Transfer, transfer.Fingerprint, error)
+	FindByIDForUpdate(ctx context.Context, id transfer.ID) (transfer.Transfer, error)
 	Save(ctx context.Context, t transfer.Transfer, fingerprint transfer.Fingerprint) error
 	MarkReversed(ctx context.Context, t transfer.Transfer) error
 }
@@ -93,6 +94,62 @@ func (s *Service) Withdraw(ctx context.Context, input FundingInput) (TransferOut
 	request.Kind = transfer.KindWithdrawal
 	request.From, request.To = request.To, request.From
 	return s.execute(ctx, request)
+}
+
+func (s *Service) Reverse(ctx context.Context, input ReverseInput) (TransferOutput, error) {
+	owner, err := apikey.ParseOwnerID(input.OwnerID)
+	if err != nil {
+		return TransferOutput{}, err
+	}
+	key, err := transfer.ParseIdempotencyKey(input.IdempotencyKey)
+	if err != nil {
+		return TransferOutput{}, err
+	}
+	var output TransferOutput
+	err = s.uow.Run(ctx, func(ctx context.Context, store Store) error {
+		reversed, err := s.reverse(ctx, store, reversal{owner: owner, key: key, id: transfer.ID(input.TransferID)})
+		output = reversed
+		return err
+	})
+	if err != nil {
+		return TransferOutput{}, fmt.Errorf("reversing transfer: %w", err)
+	}
+	return output, nil
+}
+
+func (s *Service) Get(ctx context.Context, query TransferQuery) (TransferOutput, error) {
+	owner, err := apikey.ParseOwnerID(query.OwnerID)
+	if err != nil {
+		return TransferOutput{}, err
+	}
+	found, err := s.reader.FindByID(ctx, transfer.ID(query.TransferID))
+	if err != nil {
+		return TransferOutput{}, fmt.Errorf("getting transfer: %w", err)
+	}
+	if found.OwnerID() != owner {
+		return TransferOutput{}, fmt.Errorf("%w: %s", transfer.ErrTransferNotFound, query.TransferID)
+	}
+	return toOutput(found), nil
+}
+
+func (s *Service) List(ctx context.Context, input ListInput) (TransferPage, error) {
+	owner, err := apikey.ParseOwnerID(input.OwnerID)
+	if err != nil {
+		return TransferPage{}, err
+	}
+	id, err := account.ParseID(input.AccountID)
+	if err != nil {
+		return TransferPage{}, err
+	}
+	cursor, limit, err := parsePage(input.Cursor, input.Limit)
+	if err != nil {
+		return TransferPage{}, err
+	}
+	found, err := s.reader.ListByAccount(ctx, id, cursor, limit+1)
+	if err != nil {
+		return TransferPage{}, fmt.Errorf("listing transfers: %w", err)
+	}
+	return buildPage(found, owner, limit), nil
 }
 
 func (s *Service) execute(ctx context.Context, request transfer.Request) (TransferOutput, error) {
