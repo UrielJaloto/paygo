@@ -28,30 +28,36 @@ type methodCase[D any] struct {
 func runSuite[D any](t *testing.T, build func(err error, tracer trace.Tracer) D, cases []methodCase[D]) {
 	t.Helper()
 	for _, method := range cases {
-		t.Run(method.span+"/success", func(t *testing.T) {
-			exporter, tracer := newRecorder(t)
-			got, err := method.call(context.Background(), build(nil, tracer))
-			if err != nil {
-				t.Fatalf("err = %v", err)
-			}
-			if !reflect.DeepEqual(got, method.want) {
-				t.Errorf("output = %+v, want %+v", got, method.want)
-			}
-			span := singleSpan(t, exporter)
-			if span.Name != method.span || span.Status.Code == codes.Error || len(span.Events) != 0 {
-				t.Errorf("span = %s, status %v, events %d", span.Name, span.Status.Code, len(span.Events))
-			}
-		})
-		t.Run(method.span+"/error", func(t *testing.T) {
-			exporter, tracer := newRecorder(t)
-			if _, err := method.call(context.Background(), build(errBoom, tracer)); !errors.Is(err, errBoom) {
-				t.Fatalf("err = %v, want %v", err, errBoom)
-			}
-			span := singleSpan(t, exporter)
-			if span.Status.Code != codes.Error || len(span.Events) != 1 || span.Events[0].Name != "exception" {
-				t.Errorf("status = %v, events = %+v", span.Status.Code, span.Events)
-			}
-		})
+		t.Run(method.span+"/success", func(t *testing.T) { assertSpanOnSuccess(t, build, method) })
+		t.Run(method.span+"/error", func(t *testing.T) { assertSpanOnError(t, build, method) })
+	}
+}
+
+func assertSpanOnSuccess[D any](t *testing.T, build func(err error, tracer trace.Tracer) D, method methodCase[D]) {
+	t.Helper()
+	exporter, tracer := newRecorder(t)
+	got, err := method.call(context.Background(), build(nil, tracer))
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if !reflect.DeepEqual(got, method.want) {
+		t.Errorf("output = %+v, want %+v", got, method.want)
+	}
+	span := singleSpan(t, exporter)
+	if span.Name != method.span || span.Status.Code == codes.Error || len(span.Events) != 0 {
+		t.Errorf("span = %s, status %v, events %d", span.Name, span.Status.Code, len(span.Events))
+	}
+}
+
+func assertSpanOnError[D any](t *testing.T, build func(err error, tracer trace.Tracer) D, method methodCase[D]) {
+	t.Helper()
+	exporter, tracer := newRecorder(t)
+	if _, err := method.call(context.Background(), build(errBoom, tracer)); !errors.Is(err, errBoom) {
+		t.Fatalf("err = %v, want %v", err, errBoom)
+	}
+	span := singleSpan(t, exporter)
+	if span.Status.Code != codes.Error || len(span.Events) != 1 || span.Events[0].Name != "exception" {
+		t.Errorf("status = %v, events = %+v", span.Status.Code, span.Events)
 	}
 }
 

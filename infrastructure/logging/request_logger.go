@@ -15,12 +15,14 @@ func NewRequestLogger(logger *slog.Logger) RequestLogger {
 	return RequestLogger{logger: logger}
 }
 
-func (l RequestLogger) LogRequest(ctx context.Context, method, route string, status int, duration time.Duration) {
-	l.logger.InfoContext(ctx, "http.request",
-		slog.String("method", method),
-		slog.String("route", route),
-		slog.Int("status", status),
-		slog.Int64("duration_ms", duration.Milliseconds()))
+func (l RequestLogger) LogRequest(ctx context.Context, method, route string) func(status int, duration time.Duration) {
+	return func(status int, duration time.Duration) {
+		l.logger.InfoContext(ctx, "http.request",
+			slog.String("method", method),
+			slog.String("route", route),
+			slog.Int("status", status),
+			slog.Int64("duration_ms", duration.Milliseconds()))
+	}
 }
 
 func (l RequestLogger) ContextWithRequestID(ctx context.Context, id string) context.Context {

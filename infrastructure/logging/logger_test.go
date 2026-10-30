@@ -145,7 +145,7 @@ func TestRequestLogger_LogRequest_WritesAccessLog(t *testing.T) {
 	var buffer bytes.Buffer
 	requests := logging.NewRequestLogger(logging.NewJSONLogger(&buffer, slog.LevelInfo))
 	ctx := requests.ContextWithRequestID(context.Background(), "req-1")
-	requests.LogRequest(ctx, "GET", "/v1/accounts/:id", 200, 1500*time.Millisecond)
+	requests.LogRequest(ctx, "GET", "/v1/accounts/:id")(200, 1500*time.Millisecond)
 	assertAttrs(t, singleLine(t, &buffer), map[string]any{
 		"level":       "INFO",
 		"method":      "GET",

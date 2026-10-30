@@ -54,19 +54,24 @@ func (s decoratorSuite[D]) run(t *testing.T) {
 	for _, method := range s.cases {
 		for _, scenario := range scenarios {
 			t.Run(method.msg+"/"+scenario.name, func(t *testing.T) {
-				var buffer bytes.Buffer
-				decorator := s.build(scenario.err, logging.NewJSONLogger(&buffer, slog.LevelDebug))
-				got, err := method.call(context.Background(), decorator)
-				if !errors.Is(err, scenario.err) {
-					t.Fatalf("err = %v, want %v", err, scenario.err)
-				}
-				if !reflect.DeepEqual(got, method.want) {
-					t.Errorf("output = %+v, want %+v", got, method.want)
-				}
-				assertOperationLine(t, singleLine(t, &buffer), method.msg, scenario.level, scenario.err)
+				s.assertCall(t, method, scenario.err, scenario.level)
 			})
 		}
 	}
+}
+
+func (s decoratorSuite[D]) assertCall(t *testing.T, method methodCase[D], want error, level string) {
+	t.Helper()
+	var buffer bytes.Buffer
+	decorator := s.build(want, logging.NewJSONLogger(&buffer, slog.LevelDebug))
+	got, err := method.call(context.Background(), decorator)
+	if !errors.Is(err, want) {
+		t.Fatalf("err = %v, want %v", err, want)
+	}
+	if !reflect.DeepEqual(got, method.want) {
+		t.Errorf("output = %+v, want %+v", got, method.want)
+	}
+	assertOperationLine(t, singleLine(t, &buffer), method.msg, level, want)
 }
 
 func assertOperationLine(t *testing.T, line map[string]any, msg, level string, err error) {

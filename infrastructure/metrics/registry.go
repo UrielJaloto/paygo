@@ -56,7 +56,9 @@ func (r *Registry) Handler() http.Handler {
 	return promhttp.HandlerFor(r.registry, promhttp.HandlerOpts{})
 }
 
-func (r *Registry) ObserveRequest(method, route string, status int, duration time.Duration) {
-	r.httpRequests.WithLabelValues(method, route, strconv.Itoa(status)).Inc()
-	r.httpDuration.WithLabelValues(method, route).Observe(duration.Seconds())
+func (r *Registry) ObserveRequest(method, route string) func(status int, duration time.Duration) {
+	return func(status int, duration time.Duration) {
+		r.httpRequests.WithLabelValues(method, route, strconv.Itoa(status)).Inc()
+		r.httpDuration.WithLabelValues(method, route).Observe(duration.Seconds())
+	}
 }
