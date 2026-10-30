@@ -63,6 +63,7 @@ func TestPresentError_EachMapping_ReturnsStatusAndType(t *testing.T) {
 		{transfer.ErrIdempotencyConflict, http.StatusConflict, "idempotency-conflict"},
 		{transfer.ErrInsufficientFunds, http.StatusUnprocessableEntity, "insufficient-funds"},
 		{money.ErrAmountTooLarge, http.StatusUnprocessableEntity, "amount-too-large"},
+		{rest.ErrRateLimited, http.StatusTooManyRequests, "rate-limited"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.err.Error(), func(t *testing.T) {

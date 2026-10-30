@@ -70,6 +70,7 @@ func errorMappings() []errorMapping {
 		mappingsFor(problemKind{http.StatusConflict, "idempotency-conflict", "Idempotency conflict"}, transfer.ErrIdempotencyConflict),
 		mappingsFor(problemKind{http.StatusUnprocessableEntity, "insufficient-funds", "Insufficient funds"}, transfer.ErrInsufficientFunds),
 		mappingsFor(problemKind{http.StatusUnprocessableEntity, "amount-too-large", "Amount too large"}, money.ErrAmountTooLarge),
+		mappingsFor(problemKind{http.StatusTooManyRequests, "rate-limited", "Rate limited"}, errRateLimited),
 	)
 }
 
