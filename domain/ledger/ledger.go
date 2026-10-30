@@ -1,0 +1,124 @@
+package ledger
+
+import (
+	"errors"
+	"fmt"
+	"slices"
+	"time"
+
+	"github.com/UrielJaloto/paygo/domain/account"
+	"github.com/UrielJaloto/paygo/domain/money"
+)
+
+const (
+	Debit  Direction = "debit"
+	Credit Direction = "credit"
+
+	minEntries = 2
+)
+
+var (
+	ErrTooFewEntries         = errors.New("too few entries")
+	ErrUnbalancedTransaction = errors.New("unbalanced transaction")
+)
+
+type Direction string
+
+type Entry struct {
+	id        string
+	accountID account.ID
+	direction Direction
+	amount    money.Money
+	createdAt time.Time
+}
+
+func NewEntry(id string, accountID account.ID, direction Direction, amount money.Money, createdAt time.Time) (Entry, error) {
+	if amount.Minor() < 1 {
+		return Entry{}, fmt.Errorf("%w: entry of %s", money.ErrInvalidAmount, amount)
+	}
+	return Entry{id: id, accountID: accountID, direction: direction, amount: amount, createdAt: createdAt}, nil
+}
+
+func (e Entry) ID() string {
+	return e.id
+}
+
+func (e Entry) AccountID() account.ID {
+	return e.accountID
+}
+
+func (e Entry) Direction() Direction {
+	return e.direction
+}
+
+func (e Entry) Amount() money.Money {
+	return e.amount
+}
+
+func (e Entry) CreatedAt() time.Time {
+	return e.createdAt
+}
+
+func (e Entry) applyTo(balance money.Money) (money.Money, error) {
+	if e.direction == Credit {
+		return balance.Add(e.amount)
+	}
+	return balance.Subtract(e.amount)
+}
+
+type JournalTransaction struct {
+	id      string
+	entries []Entry
+}
+
+func NewJournalTransaction(id string, entries []Entry) (JournalTransaction, error) {
+	if len(entries) < minEntries {
+		return JournalTransaction{}, fmt.Errorf("%w: %d", ErrTooFewEntries, len(entries))
+	}
+	net, err := Balance(entries[0].amount.Currency(), entries)
+	if err != nil {
+		return JournalTransaction{}, err
+	}
+	if !net.IsZero() {
+		return JournalTransaction{}, fmt.Errorf("%w: net %s", ErrUnbalancedTransaction, net)
+	}
+	return JournalTransaction{id: id, entries: slices.Clone(entries)}, nil
+}
+
+func (j JournalTransaction) ID() string {
+	return j.id
+}
+
+func (j JournalTransaction) Entries() []Entry {
+	return slices.Clone(j.entries)
+}
+
+type Posting struct {
+	ID       string
+	EntryIDs [2]string
+	From     account.ID
+	To       account.ID
+	Amount   money.Money
+	At       time.Time
+}
+
+func Transfer(posting Posting) (JournalTransaction, error) {
+	debit, err := NewEntry(posting.EntryIDs[0], posting.From, Debit, posting.Amount, posting.At)
+	if err != nil {
+		return JournalTransaction{}, err
+	}
+	credit := Entry{id: posting.EntryIDs[1], accountID: posting.To, direction: Credit, amount: posting.Amount, createdAt: posting.At}
+	return NewJournalTransaction(posting.ID, []Entry{debit, credit})
+}
+
+func Balance(currency money.Currency, entries []Entry) (money.Money, error) {
+	balance := money.Zero(currency)
+	for _, entry := range entries {
+		next, err := entry.applyTo(balance)
+		if err != nil {
+			return money.Money{}, err
+		}
+		balance = next
+	}
+	return balance, nil
+}
