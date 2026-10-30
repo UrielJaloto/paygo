@@ -9,6 +9,7 @@ import (
 
 	"github.com/UrielJaloto/paygo/domain/account"
 	"github.com/UrielJaloto/paygo/domain/apikey"
+	"github.com/UrielJaloto/paygo/domain/event"
 	"github.com/UrielJaloto/paygo/domain/ledger"
 	"github.com/UrielJaloto/paygo/domain/money"
 	"github.com/UrielJaloto/paygo/domain/page"
@@ -43,6 +44,7 @@ func RunTransferContract(t *testing.T, newStores func(t *testing.T) Stores) {
 		{"failed work rolls everything back", transferRollback},
 		{"service moves money and replays the key", transferService},
 		{"service reverses once", transferReversal},
+		{"claimed event carries its stored transfer", transferOutboxClaim},
 	})
 }
 
@@ -222,6 +224,18 @@ func transferRollback(t *testing.T, stores Stores) {
 	Equal(t, len(entries), 0)
 	_, _, err = stores.Transfers.FindByIdempotencyKey(ctx, OwnerA, created.IdempotencyKey())
 	ErrorIs(t, err, transfer.ErrTransferNotFound)
+}
+
+func transferOutboxClaim(t *testing.T, stores Stores) {
+	ctx := context.Background()
+	saved := newPair(t, stores).transfer(t, 10, OwnerA)
+	NoError(t, stores.Transfers.Save(ctx, saved, fingerprint))
+	NoError(t, stores.Outbox.Add(ctx, event.ForTransfer(event.Meta{ID: event.ID(ID(20)), At: At}, saved, []apikey.OwnerID{OwnerA})))
+	claimed, err := stores.Outbox.ClaimUnpublished(ctx, 1)
+	NoError(t, err)
+	Equal(t, len(claimed), 1)
+	Equal(t, claimed[0].Transfer().ID(), saved.ID())
+	Equal(t, claimed[0].Transfer().Amount(), saved.Amount())
 }
 
 func fund(t *testing.T, service *transferservice.Service, id account.ID) {

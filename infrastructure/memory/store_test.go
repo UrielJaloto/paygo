@@ -35,6 +35,7 @@ func newStores(store *memory.Store) storetest.Stores {
 		Ledger:    memory.NewLedgerRepository(store),
 		Transfers: memory.NewTransferRepository(store),
 		Unit:      memory.NewTransferUnitOfWork(store),
+		Outbox:    memory.NewOutboxRepository(store),
 	}
 }
 
