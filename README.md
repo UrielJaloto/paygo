@@ -20,16 +20,16 @@ paygo is a digital wallet and double-entry payments ledger written in Go. It exp
 flowchart TD
     cmd["cmd: wiring only"] --> presentation["presentation/rest: Gin controllers"]
     cmd --> infrastructure["infrastructure: postgres, provider, webhooks, telemetry"]
-    presentation --> services["services: use cases, declare their own ports"]
+    presentation --> services["services: application services, declare their own ports"]
     infrastructure --> services
     services --> domain["domain: entities and rules, standard library only"]
 ```
 
-**Dependency rule.** Imports point inward. `domain` knows nothing about the outside, `services` declare the interfaces they consume, and `presentation` and `infrastructure` never import each other. [internal/architecture](internal/architecture/architecture_test.go) parses the source and fails the build when a rule is broken.
+**Dependency rule.** Imports point inward. `domain` knows nothing about the outside, `services` declare the interfaces they consume, and `presentation` and `infrastructure` never import each other. [internal/test/architecture_test.go](internal/test/architecture_test.go) parses the source and fails the build when a rule is broken.
 
 **How a transfer flows.** The controller validates the request and calls the transfer service. In one database transaction the service checks the idempotency key, locks both accounts in ascending id order, checks funds, appends the balanced journal entries, updates the balances and writes the event to the outbox. The worker later fans the event out to webhook deliveries.
 
-**Observability stays out of the use cases.** A Gin middleware logs and traces every request, pgx opens a span per query, the provider client is traced, and the money-moving services are wrapped with Prometheus counters in `main`. Services never import a logger or a tracer.
+**Observability stays out of the services.** A Gin middleware logs and traces every request, pgx opens a span per query, the provider client is traced, and the money-moving services are wrapped with Prometheus counters in `main`. Services never import a logger or a tracer.
 
 ## Domain rules
 
@@ -45,7 +45,7 @@ flowchart TD
 Requires Docker, `curl` and `jq`.
 
 ```bash
-docker compose up -d --build
+docker compose -f env/compose.yaml up -d --build
 ```
 
 If host port 8080 or 5432 is taken, set `PAYGO_API_PORT` or `PAYGO_POSTGRES_PORT` before starting, and adjust `API` below.
@@ -96,7 +96,7 @@ Alice ends with 70.00, Bob with 80.00, and the ledger check returns `"ok":true`.
 
 ## API
 
-The full contract is in [api/openapi.yaml](api/openapi.yaml). A unit test checks that every route the router serves is documented, and the end-to-end suite calls every operation and checks the response fields against it.
+The full contract is in [docs/openapi.yaml](docs/openapi.yaml). A unit test checks that every route the router serves is documented, and the end-to-end suite calls every operation and checks the response fields against it.
 
 | Area | Endpoints |
 |---|---|
@@ -118,7 +118,7 @@ go test -race ./...
 Unit, integration and end-to-end tests, using PostgreSQL at `PAYGO_TEST_DATABASE_URL`:
 
 ```bash
-docker compose up -d postgres
+docker compose -f env/compose.yaml up -d postgres
 ```
 
 ```bash
@@ -135,7 +135,7 @@ CI runs formatting, vet, govulncheck, race tests on Linux, Windows and macOS, th
 
 ## Performance
 
-[tools/loadgen](tools/loadgen) opens 1,000 accounts, then sends 200,000 transfers from 64 concurrent clients over HTTP, each with its own idempotency key. At the end it compares every balance with the sum of the transfers that succeeded and reads WAL growth from PostgreSQL. In `contention`, 90% of the transfers touch 10 hot accounts.
+[packages/loadgen](packages/loadgen) opens 1,000 accounts, then sends 200,000 transfers from 64 concurrent clients over HTTP, each with its own idempotency key. At the end it compares every balance with the sum of the transfers that succeeded and reads WAL growth from PostgreSQL. In `contention`, 90% of the transfers touch 10 hot accounts.
 
 | Scenario | Transfers/s | p50 | p95 | p99 | Errors | WAL per transfer | Balances correct |
 |---|---|---|---|---|---|---|---|
@@ -145,8 +145,8 @@ CI runs formatting, vet, govulncheck, race tests on Linux, Windows and macOS, th
 Measured on an Intel Core i7-13700F with Docker Desktop on Windows (4 GB VM), PostgreSQL 18 with `synchronous_commit=on`, and the load generator on the same machine. Contention costs throughput because transfers on a hot account wait for its row lock, which is what keeps the balances exact.
 
 ```bash
-cd tools/loadgen
-docker compose up -d --build --wait
+docker compose -f env/load.compose.yaml up -d --build --wait
+cd packages/loadgen
 PAYGO_ADMIN_TOKEN=bench-admin-token-0123456789abcdef go run . -scenario uniform
 ```
 
@@ -161,16 +161,16 @@ PAYGO_ADMIN_TOKEN=bench-admin-token-0123456789abcdef go run . -scenario uniform
 ## Project layout
 
 ```text
-api/             OpenAPI contract
-cmd/             paygo-api, paygo-migrate and paygo-worker
-deploy/          Prometheus configuration
-domain/          Entities and business rules
-e2e/             End-to-end tests against the built binaries
-infrastructure/  PostgreSQL, PIX providers, webhook delivery, telemetry
-internal/        Architecture tests
-presentation/    REST controllers and middleware
-services/        Use cases
-tools/loadgen/   Load generator
+internal/
+  cmd/             paygo-api, paygo-migrate and paygo-worker
+  domain/          Entities and business rules
+  services/        Application services
+  presentation/    REST controllers and middleware
+  infrastructure/  PostgreSQL, PIX providers, webhook delivery, telemetry
+  test/            Architecture rules and end-to-end suite
+docs/              OpenAPI contract
+env/               Dockerfile, Compose files and SQL migrations
+packages/          Load generator, a separate Go module
 ```
 
 ## License
