@@ -32,6 +32,7 @@ type Controllers struct {
 	Health   *HealthController
 	Account  *AccountController
 	Transfer *TransferController
+	Admin    *AdminController
 }
 
 type Dependencies struct {
@@ -59,6 +60,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	owner := ownerGroup(engine, deps.Access)
 	registerAccountRoutes(owner, deps.Controllers.Account)
 	registerTransferRoutes(owner, deps.Controllers.Transfer)
+	registerAdminRoutes(adminGroup(engine, deps.Access), deps.Controllers.Admin)
 	return engine
 }
 

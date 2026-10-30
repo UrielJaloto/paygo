@@ -1,6 +1,11 @@
 package rest
 
-import transferservice "github.com/UrielJaloto/paygo/services/transfer"
+import (
+	"net/http"
+
+	transferservice "github.com/UrielJaloto/paygo/services/transfer"
+	"github.com/gin-gonic/gin"
+)
 
 type transferResponse struct {
 	ID            string `json:"id"`
@@ -33,6 +38,19 @@ func (TransferPresenter) transfer(output transferservice.TransferOutput) transfe
 		ReversalOf:    output.ReversalOf,
 		CreatedAt:     formatTimestamp(output.CreatedAt),
 	}
+}
+
+func (p TransferPresenter) moneyMovement(c *gin.Context, output transferservice.TransferOutput, err error) {
+	if err != nil {
+		PresentError(c, err)
+		return
+	}
+	status := http.StatusCreated
+	if output.IsReplay {
+		status = http.StatusOK
+		c.Header(idempotentReplayedHeader, idempotentReplayedPresent)
+	}
+	c.JSON(status, p.transfer(output))
 }
 
 func (p TransferPresenter) transferPage(page transferservice.TransferPage) transferPageResponse {
