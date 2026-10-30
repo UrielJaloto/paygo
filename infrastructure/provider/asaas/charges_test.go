@@ -21,10 +21,11 @@ import (
 )
 
 const (
-	apiKey     = "secret-api-key"
-	document   = "24971563792"
-	customerID = "cus_000005401844"
-	paymentID  = "pay_080225913252"
+	apiKey       = "secret-api-key"
+	webhookToken = "secret-webhook-token"
+	document     = "24971563792"
+	customerID   = "cus_000005401844"
+	paymentID    = "pay_080225913252"
 )
 
 var errCache = errors.New("cache down")
@@ -110,7 +111,7 @@ func newStub(t *testing.T, cache *stubCache, replies ...reply) (*asaas.Provider,
 	stub := &stubServer{replies: replies}
 	server := httptest.NewServer(stub)
 	t.Cleanup(server.Close)
-	return asaas.New(server.URL, apiKey, cache, server.Client()), stub
+	return asaas.New(server.URL, apiKey, webhookToken, cache, server.Client()), stub
 }
 
 func emptyCache() *stubCache {
@@ -253,7 +254,7 @@ func TestGetCharge_Statuses_MapToKinds(t *testing.T) {
 				_, _ = w.Write([]byte(`{"id":"pay","status":"` + tt.status + `"}`))
 			}))
 			defer server.Close()
-			provider := asaas.New(server.URL, apiKey, emptyCache(), server.Client())
+			provider := asaas.New(server.URL, apiKey, webhookToken, emptyCache(), server.Client())
 			got, err := provider.GetCharge(context.Background(), "pay")
 			if err != nil {
 				t.Fatalf("GetCharge: %v", err)
@@ -282,7 +283,7 @@ func TestGetCharge_TransportFailures_ReturnUnavailable(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider := asaas.New("http://asaas.test", apiKey, emptyCache(), &http.Client{Transport: tt.transport})
+			provider := asaas.New("http://asaas.test", apiKey, webhookToken, emptyCache(), &http.Client{Transport: tt.transport})
 			_, err := provider.GetCharge(context.Background(), "pay")
 			if !errors.Is(err, payment.ErrProviderUnavailable) {
 				t.Fatalf("err = %v, want ErrProviderUnavailable", err)
@@ -309,14 +310,14 @@ func TestGetCharge_MalformedErrorBody_ReturnsRejected(t *testing.T) {
 }
 
 func TestGetCharge_InvalidBaseURL_ReturnsError(t *testing.T) {
-	provider := asaas.New("http://[::1", apiKey, emptyCache(), &http.Client{})
+	provider := asaas.New("http://[::1", apiKey, webhookToken, emptyCache(), &http.Client{})
 	if _, err := provider.GetCharge(context.Background(), "pay"); err == nil {
 		t.Fatal("err = nil, want build error")
 	}
 }
 
 func TestDo_UnencodableInput_ReturnsError(t *testing.T) {
-	provider := asaas.New("http://asaas.test", apiKey, emptyCache(), &http.Client{})
+	provider := asaas.New("http://asaas.test", apiKey, webhookToken, emptyCache(), &http.Client{})
 	var unsupported *json.UnsupportedTypeError
 	if err := asaas.DoWithInput(context.Background(), provider, make(chan int)); !errors.As(err, &unsupported) {
 		t.Fatalf("err = %v, want UnsupportedTypeError", err)
@@ -324,7 +325,7 @@ func TestDo_UnencodableInput_ReturnsError(t *testing.T) {
 }
 
 func TestName_Always_ReturnsAsaas(t *testing.T) {
-	if got := asaas.New("", apiKey, emptyCache(), &http.Client{}).Name(); got != "asaas" {
+	if got := asaas.New("", apiKey, webhookToken, emptyCache(), &http.Client{}).Name(); got != "asaas" {
 		t.Fatalf("name = %q, want asaas", got)
 	}
 }

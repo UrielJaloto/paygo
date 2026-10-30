@@ -25,10 +25,11 @@ type CustomerCache interface {
 }
 
 type Provider struct {
-	baseURL   string
-	apiKey    string
-	customers CustomerCache
-	http      *http.Client
+	baseURL      string
+	apiKey       string
+	webhookToken string
+	customers    CustomerCache
+	http         *http.Client
 }
 
 type apiCall struct {
@@ -44,10 +45,10 @@ type errorResponse struct {
 	} `json:"errors"`
 }
 
-func New(baseURL, apiKey string, customers CustomerCache, httpClient *http.Client) *Provider {
+func New(baseURL, apiKey, webhookToken string, customers CustomerCache, httpClient *http.Client) *Provider {
 	client := *httpClient
 	client.Timeout = requestTimeout
-	return &Provider{baseURL: baseURL, apiKey: apiKey, customers: customers, http: &client}
+	return &Provider{baseURL: baseURL, apiKey: apiKey, webhookToken: webhookToken, customers: customers, http: &client}
 }
 
 func (p *Provider) Name() string {
