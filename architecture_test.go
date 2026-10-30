@@ -134,10 +134,16 @@ func TestDependencyMatrix_ContextsFollowDeclaredOrder(t *testing.T) {
 func layerViolations(pkgs []sourcePackage) []string {
 	var violations []string
 	for _, pkg := range pkgs {
-		for _, imported := range pkg.imports {
-			if breaksLayerOrder(pkg.dir, imported) {
-				violations = append(violations, pkg.dir+" must not import "+imported)
-			}
+		violations = append(violations, packageLayerViolations(pkg)...)
+	}
+	return violations
+}
+
+func packageLayerViolations(pkg sourcePackage) []string {
+	var violations []string
+	for _, imported := range pkg.imports {
+		if breaksLayerOrder(pkg.dir, imported) {
+			violations = append(violations, pkg.dir+" must not import "+imported)
 		}
 	}
 	return violations
@@ -465,11 +471,17 @@ func isGenericName(name string) bool {
 func functionViolations(files []sourceFile) []string {
 	var violations []string
 	for _, file := range files {
-		for _, declaration := range file.syntax.Decls {
-			function, ok := declaration.(*ast.FuncDecl)
-			if ok && function.Body != nil {
-				violations = append(violations, measureFunction(file, function)...)
-			}
+		violations = append(violations, fileFunctionViolations(file)...)
+	}
+	return violations
+}
+
+func fileFunctionViolations(file sourceFile) []string {
+	var violations []string
+	for _, declaration := range file.syntax.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if ok && function.Body != nil {
+			violations = append(violations, measureFunction(file, function)...)
 		}
 	}
 	return violations
@@ -659,13 +671,18 @@ func structViolations(file sourceFile, spec *ast.TypeSpec) []string {
 func domainImportViolations(files []sourceFile) []string {
 	var violations []string
 	for _, file := range files {
-		if layerOf(file.dir()) != "domain" || file.isTest() {
-			continue
+		if layerOf(file.dir()) == "domain" && !file.isTest() {
+			violations = append(violations, forbiddenImports(file, isAllowedInDomain)...)
 		}
-		for _, imported := range file.imports() {
-			if !isAllowedInDomain(imported) {
-				violations = append(violations, file.path+" must not import "+imported)
-			}
+	}
+	return violations
+}
+
+func forbiddenImports(file sourceFile, allowed func(string) bool) []string {
+	var violations []string
+	for _, imported := range file.imports() {
+		if !allowed(imported) {
+			violations = append(violations, file.path+" must not import "+imported)
 		}
 	}
 	return violations
@@ -678,11 +695,9 @@ func isAllowedInDomain(imported string) bool {
 func thirdPartyViolations(files []sourceFile) []string {
 	var violations []string
 	for _, file := range files {
-		for _, imported := range file.imports() {
-			if !livesInHome(file.dir(), imported) {
-				violations = append(violations, file.path+" must not import "+imported)
-			}
-		}
+		violations = append(violations, forbiddenImports(file, func(imported string) bool {
+			return livesInHome(file.dir(), imported)
+		})...)
 	}
 	return violations
 }
