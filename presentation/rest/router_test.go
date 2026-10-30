@@ -74,8 +74,40 @@ func routerObservedBy(observability rest.Observability, panics *spyPanics, ready
 			RequestTimeout: time.Minute,
 			Observability:  observability,
 		},
+		Access:      rest.Access{Authenticator: stubAuthenticator{}, Limiter: &spyLimiter{allow: true}, Admin: stubAdmin{}},
 		Controllers: rest.Controllers{Health: rest.NewHealthController(stubReadiness(ready), metrics)},
 	})
+}
+
+func apiRouter(controllers rest.Controllers) *gin.Engine {
+	controllers.Health = rest.NewHealthController(stubReadiness(true), http.NotFoundHandler())
+	return rest.NewRouter(rest.Dependencies{
+		Middleware: rest.Middleware{
+			IDs:            stubIDs{},
+			RequestContext: contextualizer{},
+			Panics:         &spyPanics{},
+			RequestTimeout: time.Minute,
+			Observability:  newSpyObservability().observability(),
+		},
+		Access:      rest.Access{Authenticator: stubAuthenticator{}, Limiter: &spyLimiter{allow: true}, Admin: stubAdmin{}},
+		Controllers: controllers,
+	})
+}
+
+func call(router http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	request.Header.Set("Authorization", "Bearer "+ownerToken)
+	if body != "" {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	return send(router, request)
+}
+
+func assertResponse(t *testing.T, recorder *httptest.ResponseRecorder, code int, body string) {
+	t.Helper()
+	if recorder.Code != code || recorder.Body.String() != body {
+		t.Fatalf("got %d %s, want %d %s", recorder.Code, recorder.Body.String(), code, body)
+	}
 }
 
 func send(router http.Handler, request *http.Request) *httptest.ResponseRecorder {

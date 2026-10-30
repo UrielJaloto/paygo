@@ -29,11 +29,13 @@ type Access struct {
 }
 
 type Controllers struct {
-	Health *HealthController
+	Health  *HealthController
+	Account *AccountController
 }
 
 type Dependencies struct {
 	Middleware  Middleware
+	Access      Access
 	Controllers Controllers
 }
 
@@ -53,6 +55,8 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		presentProblem(c, problemKind{http.StatusNotFound, "not-found", "Not found"}, "route not found")
 	})
 	registerHealthRoutes(engine, deps.Controllers.Health)
+	owner := ownerGroup(engine, deps.Access)
+	registerAccountRoutes(owner, deps.Controllers.Account)
 	return engine
 }
 
