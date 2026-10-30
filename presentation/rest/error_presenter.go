@@ -64,6 +64,7 @@ func errorMappings() []errorMapping {
 		mappingsFor(problemKind{http.StatusRequestEntityTooLarge, "payload-too-large", "Payload too large"}, errPayloadTooLarge),
 		mappingsFor(problemKind{http.StatusUnsupportedMediaType, "unsupported-media-type", "Unsupported media type"}, errUnsupportedMediaType),
 		mappingsFor(problemKind{http.StatusBadRequest, "invalid-request", "Invalid request"}, invalidRequestErrors()...),
+		mappingsFor(problemKind{http.StatusBadRequest, "idempotency-key-required", "Idempotency key required"}, errIdempotencyKeyRequired),
 		mappingsFor(problemKind{http.StatusUnauthorized, "unauthenticated", "Unauthenticated"}, apikeyservice.ErrUnauthenticated),
 		mappingsFor(problemKind{http.StatusNotFound, "not-found", "Not found"}, notFoundErrors()...),
 		mappingsFor(problemKind{http.StatusConflict, "conflict", "Conflict"}, conflictErrors()...),

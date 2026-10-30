@@ -30,6 +30,7 @@ func TestPresentError_EachMapping_ReturnsStatusAndType(t *testing.T) {
 		slug   string
 	}{
 		{rest.ErrMalformedRequest, http.StatusBadRequest, "malformed-request"},
+		{rest.ErrIdempotencyKeyRequired, http.StatusBadRequest, "idempotency-key-required"},
 		{rest.ErrPayloadTooLarge, http.StatusRequestEntityTooLarge, "payload-too-large"},
 		{rest.ErrUnsupportedMediaType, http.StatusUnsupportedMediaType, "unsupported-media-type"},
 		{money.ErrInvalidAmount, http.StatusBadRequest, "invalid-request"},
