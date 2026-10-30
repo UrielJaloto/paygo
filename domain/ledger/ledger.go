@@ -26,6 +26,7 @@ type Direction string
 
 type Entry struct {
 	id        string
+	journalID string
 	accountID account.ID
 	direction Direction
 	amount    money.Money
@@ -41,6 +42,15 @@ func NewEntry(id string, accountID account.ID, direction Direction, amount money
 
 func (e Entry) ID() string {
 	return e.id
+}
+
+func (e Entry) JournalID() string {
+	return e.journalID
+}
+
+func (e Entry) InJournal(journalID string) Entry {
+	e.journalID = journalID
+	return e
 }
 
 func (e Entry) AccountID() account.ID {
@@ -82,7 +92,11 @@ func NewJournalTransaction(id string, entries []Entry) (JournalTransaction, erro
 	if !net.IsZero() {
 		return JournalTransaction{}, fmt.Errorf("%w: net %s", ErrUnbalancedTransaction, net)
 	}
-	return JournalTransaction{id: id, entries: slices.Clone(entries)}, nil
+	stamped := slices.Clone(entries)
+	for i := range stamped {
+		stamped[i].journalID = id
+	}
+	return JournalTransaction{id: id, entries: stamped}, nil
 }
 
 func (j JournalTransaction) ID() string {

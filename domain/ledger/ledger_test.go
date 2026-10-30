@@ -145,6 +145,33 @@ func TestTransfer_BuildsDebitThenCredit(t *testing.T) {
 	}
 }
 
+func TestTransfer_StampsJournalIDOnEntries(t *testing.T) {
+	journal, err := ledger.Transfer(ledger.Posting{
+		ID:       "j1",
+		EntryIDs: [2]string{"e1", "e2"},
+		From:     accountA,
+		To:       accountB,
+		Amount:   money.New(100, money.BRL),
+		At:       postedAt,
+	})
+	if err != nil {
+		t.Fatalf("Transfer: %v", err)
+	}
+	for _, got := range journal.Entries() {
+		if got.JournalID() != "j1" {
+			t.Fatalf("journal id = %q, want j1", got.JournalID())
+		}
+	}
+}
+
+func TestInJournal_ReturnsCopyWithJournalID(t *testing.T) {
+	original := entry(t, ledger.Debit, 100, money.BRL)
+	got := original.InJournal("j1")
+	if got.JournalID() != "j1" || original.JournalID() != "" {
+		t.Fatalf("got %q, original %q", got.JournalID(), original.JournalID())
+	}
+}
+
 func TestTransfer_InvalidAmount_ReturnsErrInvalidAmount(t *testing.T) {
 	_, err := ledger.Transfer(ledger.Posting{Amount: money.New(0, money.BRL)})
 	if !errors.Is(err, money.ErrInvalidAmount) {
