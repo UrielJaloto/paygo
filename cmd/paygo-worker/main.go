@@ -11,12 +11,14 @@ import (
 	"syscall"
 	"time"
 
+	domainpayment "github.com/UrielJaloto/paygo/domain/payment"
 	"github.com/UrielJaloto/paygo/domain/webhook"
 	"github.com/UrielJaloto/paygo/infrastructure/config"
 	"github.com/UrielJaloto/paygo/infrastructure/httpserver"
 	"github.com/UrielJaloto/paygo/infrastructure/poller"
 	"github.com/UrielJaloto/paygo/infrastructure/tracing"
 	"github.com/UrielJaloto/paygo/services/dispatch"
+	"github.com/UrielJaloto/paygo/services/payment"
 )
 
 const (
@@ -26,6 +28,8 @@ const (
 	providerClientTimeout = 30 * time.Second
 	leaseMargin           = 30 * time.Second
 	batchLimit            = 100
+	fakeProviderName      = "fake"
+	maxFakeMarkBytes      = 1 << 16
 )
 
 func main() {
@@ -72,7 +76,7 @@ func workTraced(ctx context.Context, cfg config.WorkerConfig, kit toolkit) error
 	if err != nil {
 		return err
 	}
-	server := httpserver.New(cfg.Worker.Addr, newMux(kit.registry.Handler()), readHeaderTimeout, cfg.Worker.ShutdownTimeout)
+	server := httpserver.New(cfg.Worker.Addr, newMux(kit.registry.Handler(), backend.provider), readHeaderTimeout, cfg.Worker.ShutdownTimeout)
 	serve := func(ctx context.Context) error { return server.Run(ctx, listener) }
 	return poller.RunAll(ctx, append(newPollers(pollerPlan{worker: cfg.Worker, input: input, syncInterval: cfg.Payments.PaymentSyncInterval}, backend, kit), serve)...)
 }
@@ -85,9 +89,25 @@ func deliverInput(worker config.Worker) (dispatch.DeliverInput, error) {
 	return dispatch.DeliverInput{Limit: worker.Concurrency, Lease: worker.WebhookTimeout + leaseMargin, Policy: policy}, nil
 }
 
-func newMux(metrics http.Handler) http.Handler {
+func markFakeState(provider payment.PaymentProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(http.MaxBytesReader(w, r.Body, maxFakeMarkBytes))
+		_, err := provider.ParseWebhook(r.Context(), r.Header, body)
+		switch {
+		case errors.Is(err, domainpayment.ErrWebhookUnauthorized):
+			w.WriteHeader(http.StatusUnauthorized)
+		case err != nil:
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}
+}
+
+func newMux(metrics http.Handler, provider payment.PaymentProvider) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /metrics", metrics)
+	if provider.Name() == fakeProviderName {
+		mux.Handle("POST /provider/v1/webhooks/fake", markFakeState(provider))
+	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))

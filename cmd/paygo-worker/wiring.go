@@ -47,6 +47,7 @@ type pollerPlan struct {
 type storage struct {
 	dispatch *dispatch.Service
 	payments *payment.Service
+	provider payment.PaymentProvider
 	close    func()
 }
 
@@ -75,6 +76,7 @@ func openStorage(ctx context.Context, cfg config.WorkerConfig, kit toolkit) (sto
 	return storage{
 		dispatch: dispatch.New(postgres.NewDispatchUnitOfWork(pool, kit.ids), postgres.NewDeliveryRepository(pool), newSender(cfg.Worker, kit), kit.clock, newJitter()),
 		payments: payment.New(postgres.NewPaymentUnitOfWork(pool), provider, kit.clock, kit.ids),
+		provider: provider,
 		close:    pool.Close,
 	}, nil
 }
@@ -85,6 +87,7 @@ func newMemoryStorage(cfg config.WorkerConfig, kit toolkit) storage {
 	return storage{
 		dispatch: dispatch.New(memory.NewDispatchUnitOfWork(store, kit.ids), memory.NewDeliveryRepository(store), newSender(cfg.Worker, kit), kit.clock, newJitter()),
 		payments: payment.New(memory.NewPaymentUnitOfWork(store), provider, kit.clock, kit.ids),
+		provider: provider,
 		close:    func() {},
 	}
 }

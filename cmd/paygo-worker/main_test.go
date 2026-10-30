@@ -13,6 +13,7 @@ import (
 
 	"github.com/UrielJaloto/paygo/domain/webhook"
 	"github.com/UrielJaloto/paygo/infrastructure/config"
+	"github.com/UrielJaloto/paygo/infrastructure/provider/fake"
 )
 
 const (
@@ -194,7 +195,7 @@ func TestNewMux_Routes_ServeOnlyHealthAndMetrics(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.path, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
-			newMux(metrics).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			newMux(metrics, fake.New(markToken, nil)).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, tc.path, nil))
 			if recorder.Code != tc.want {
 				t.Errorf("status = %d, want %d", recorder.Code, tc.want)
 			}
