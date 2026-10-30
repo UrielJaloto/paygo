@@ -265,6 +265,16 @@ func webhookFor(kind payment.EventKind, eventID string) *spyProvider {
 	return &spyProvider{parsed: payment.ProviderEvent{Provider: "fake", EventID: eventID, ProviderID: providerRef, Kind: kind}}
 }
 
+func assertChargePosting(t *testing.T, posted transfer.Transfer) {
+	t.Helper()
+	if posted.Kind() != transfer.KindCharge || posted.From() != clearingID || posted.To() != customerID || posted.Amount().Minor() != 1000 {
+		t.Errorf("posted = %s %s -> %s %d", posted.Kind(), posted.From(), posted.To(), posted.Amount().Minor())
+	}
+	if posted.IdempotencyKey() != "charge-charge-1" {
+		t.Errorf("transfer key = %q, want charge-charge-1", posted.IdempotencyKey())
+	}
+}
+
 func TestHandleWebhook_ChargePaid_PostsChargeAndPublishesEvent(t *testing.T) {
 	store := paymentStore()
 	seedCharge(t, store, payment.ChargePending)
@@ -278,17 +288,20 @@ func TestHandleWebhook_ChargePaid_PostsChargeAndPublishesEvent(t *testing.T) {
 		t.Fatalf("transfers = %d, journals = %d, want 1 and 1", len(store.transfers), len(store.journals))
 	}
 	posted := store.transfers[0]
-	if posted.Kind() != transfer.KindCharge || posted.From() != clearingID || posted.To() != customerID || posted.Amount().Minor() != 1000 {
-		t.Errorf("posted = %s %s -> %s %d", posted.Kind(), posted.From(), posted.To(), posted.Amount().Minor())
-	}
-	if posted.IdempotencyKey() != "charge-charge-1" {
-		t.Errorf("transfer key = %q, want charge-charge-1", posted.IdempotencyKey())
-	}
+	assertChargePosting(t, posted)
 	if len(store.events) != 1 || store.events[0].Type() != event.TypeChargePaid {
 		t.Errorf("events = %+v, want one charge.paid", store.events)
 	}
 	if got := store.charges.items[0]; got.Status() != payment.ChargePaid || got.TransferID() != string(posted.ID()) {
 		t.Errorf("charge = %s transfer %q, want paid transfer %q", got.Status(), got.TransferID(), posted.ID())
+	}
+}
+
+func deliverPaid(t *testing.T, store *fakeStore, eventID string) {
+	t.Helper()
+	err := newService(store, webhookFor(payment.EventChargePaid, eventID)).HandleWebhook(context.Background(), service.WebhookInput{Provider: "fake"})
+	if err != nil {
+		t.Fatalf("HandleWebhook(%s) error = %v", eventID, err)
 	}
 }
 
@@ -304,12 +317,8 @@ func TestHandleWebhook_RepeatedPaidEvents_PostOnce(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store := paymentStore()
 			seedCharge(t, store, payment.ChargePending)
-			for _, id := range []string{"evt-1", tc.second} {
-				err := newService(store, webhookFor(payment.EventChargePaid, id)).HandleWebhook(context.Background(), service.WebhookInput{Provider: "fake"})
-				if err != nil {
-					t.Fatalf("HandleWebhook(%s) error = %v", id, err)
-				}
-			}
+			deliverPaid(t, store, "evt-1")
+			deliverPaid(t, store, tc.second)
 			if len(store.transfers) != 1 || len(store.events) != 1 {
 				t.Errorf("transfers = %d, events = %d, want 1 and 1", len(store.transfers), len(store.events))
 			}

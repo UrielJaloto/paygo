@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -143,13 +144,19 @@ func (s *Service) buildDeliveries(ids IDGenerator, events []event.Event, endpoin
 	now := s.clock.Now()
 	var deliveries []webhook.Delivery
 	for _, occurred := range events {
-		for _, owner := range occurred.OwnerIDs() {
-			for _, endpoint := range byOwner[owner] {
-				deliveries = append(deliveries, webhook.NewDelivery(webhook.DeliveryID(ids.NewID()), occurred.ID(), endpoint.ID(), owner, now))
-			}
+		for _, endpoint := range subscribers(occurred, byOwner) {
+			deliveries = append(deliveries, webhook.NewDelivery(webhook.DeliveryID(ids.NewID()), occurred.ID(), endpoint.ID(), endpoint.OwnerID(), now))
 		}
 	}
 	return deliveries
+}
+
+func subscribers(occurred event.Event, byOwner map[apikey.OwnerID][]webhook.Endpoint) []webhook.Endpoint {
+	var endpoints []webhook.Endpoint
+	for _, owner := range occurred.OwnerIDs() {
+		endpoints = append(endpoints, byOwner[owner]...)
+	}
+	return endpoints
 }
 
 func (s *Service) sendAll(ctx context.Context, claims []Claim) <-chan sendOutcome {
@@ -185,17 +192,12 @@ func (s *Service) apply(delivery *webhook.Delivery, sendErr error, policy webhoo
 }
 
 func uniqueOwners(events []event.Event) []apikey.OwnerID {
-	seen := make(map[apikey.OwnerID]bool)
 	var owners []apikey.OwnerID
 	for _, occurred := range events {
-		for _, owner := range occurred.OwnerIDs() {
-			if !seen[owner] {
-				seen[owner] = true
-				owners = append(owners, owner)
-			}
-		}
+		owners = append(owners, occurred.OwnerIDs()...)
 	}
-	return owners
+	slices.Sort(owners)
+	return slices.Compact(owners)
 }
 
 func eventIDs(events []event.Event) []event.ID {
