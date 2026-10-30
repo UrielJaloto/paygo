@@ -51,6 +51,24 @@ func ForPayout(meta Meta, eventType Type, payout payment.Payout) Event {
 	return Event{meta: meta, eventType: eventType, payout: payout, transferID: payout.Transfers().Final, ownerIDs: owners}
 }
 
+type Snapshot struct {
+	Meta       Meta
+	Type       Type
+	Transfer   transfer.Transfer
+	TransferID string
+	OwnerIDs   []apikey.OwnerID
+}
+
+func Restore(snapshot Snapshot) Event {
+	return Event{
+		meta:       snapshot.Meta,
+		eventType:  snapshot.Type,
+		transfer:   snapshot.Transfer,
+		transferID: snapshot.TransferID,
+		ownerIDs:   snapshot.OwnerIDs,
+	}
+}
+
 func typeOf(t transfer.Transfer) Type {
 	if t.Kind() == transfer.KindReversal {
 		return TypeTransferReversed

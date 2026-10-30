@@ -88,3 +88,17 @@ func TestOwnerIDs_ReturnsCopy(t *testing.T) {
 		t.Fatalf("owners changed to %v", created.OwnerIDs())
 	}
 }
+
+func TestRestore_KeepsEveryField(t *testing.T) {
+	owners := []apikey.OwnerID{"o1", "o2"}
+	got := event.Restore(event.Snapshot{Meta: meta, Type: event.TypeChargePaid, Transfer: ofKind(transfer.KindDeposit), TransferID: "t1", OwnerIDs: owners})
+	if got.ID() != meta.ID || got.OccurredAt() != occurredAt || got.Type() != event.TypeChargePaid {
+		t.Fatalf("restored meta = %s %v %s", got.ID(), got.OccurredAt(), got.Type())
+	}
+	if got.Transfer().ID() != "t1" || got.TransferID() != "t1" {
+		t.Fatalf("restored transfer = %s, id = %s", got.Transfer().ID(), got.TransferID())
+	}
+	if !slices.Equal(got.OwnerIDs(), owners) {
+		t.Fatalf("owners = %v, want %v", got.OwnerIDs(), owners)
+	}
+}
