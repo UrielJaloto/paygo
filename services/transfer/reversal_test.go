@@ -259,3 +259,28 @@ func TestList_Failures_ReturnExactError(t *testing.T) {
 		})
 	}
 }
+
+func TestReverse_OriginalCannotBePosted_ReturnsDomainError(t *testing.T) {
+	cases := []struct {
+		name   string
+		to     account.ID
+		amount int64
+		want   error
+	}{
+		{name: "same account", to: lowID, amount: 100, want: transfer.ErrSameAccount},
+		{name: "zero amount", to: highID, amount: 0, want: money.ErrInvalidAmount},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := standardStore()
+			store.balances[lowID] = money.New(1000, money.BRL)
+			store.balances[highID] = money.New(1000, money.BRL)
+			request := transfer.Request{OwnerID: ownerOne, Key: "key-0", Kind: transfer.KindTransfer, From: lowID, To: tc.to, Amount: money.New(tc.amount, money.BRL)}
+			store.originals[originalID] = transfer.Restore(transfer.Snapshot{ID: originalID, Request: request, Status: transfer.StatusCompleted, CreatedAt: now})
+			svc, _ := newService(store)
+			if _, err := svc.Reverse(context.Background(), validReverse()); !errors.Is(err, tc.want) {
+				t.Fatalf("error = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}

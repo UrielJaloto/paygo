@@ -489,3 +489,51 @@ func TestSync_ListFails_ReturnsError(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleWebhook_PayoutDoneTwice_PostsOnce(t *testing.T) {
+	store := paymentStore()
+	seedPayout(t, store, "payout-1", providerRef)
+
+	for _, id := range []string{"e1", "e2"} {
+		if err := newService(store, payoutEvent(payment.EventPayoutDone, id)).HandleWebhook(context.Background(), webhook()); err != nil {
+			t.Fatalf("HandleWebhook(%s) error = %v", id, err)
+		}
+	}
+
+	if len(store.transfers) != 1 || len(store.events) != 1 {
+		t.Errorf("transfers = %d, events = %d, want 1 and 1", len(store.transfers), len(store.events))
+	}
+}
+
+func TestSync_ChargeWithoutProviderID_SkipsProvider(t *testing.T) {
+	store := paymentStore()
+	seedCharge(t, store, payment.ChargePending)
+	store.charges.items[0].AttachProvider("", "", "")
+	provider := &spyProvider{statusErrs: map[string]error{"": errBoom}}
+
+	got, err := newService(store, provider).Sync(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("Sync() error = %v", err)
+	}
+
+	if want := (service.SyncResult{Checked: 1}); got != want {
+		t.Errorf("Sync() = %+v, want %+v", got, want)
+	}
+}
+
+func TestSync_ChargePaidAfterListing_ReturnsInvalidTransition(t *testing.T) {
+	store := paymentStore()
+	listed := seedCharge(t, store, payment.ChargePending)
+	store.charges.stale = []payment.Charge{listed}
+	if _, err := store.charges.items[0].MarkPaid("transfer-1", testNow); err != nil {
+		t.Fatalf("MarkPaid() error = %v", err)
+	}
+	provider := &spyProvider{kinds: map[string]payment.EventKind{providerRef: payment.EventIgnored}}
+	svc := service.New(&fakeUnitOfWork{store: store}, provider, stubClock{now: testNow.Add(26 * time.Hour)}, &sequenceIDs{})
+
+	_, err := svc.Sync(context.Background(), 10)
+
+	if !errors.Is(err, payment.ErrInvalidTransition) {
+		t.Errorf("Sync() error = %v, want %v", err, payment.ErrInvalidTransition)
+	}
+}

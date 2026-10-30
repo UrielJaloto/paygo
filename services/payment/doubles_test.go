@@ -106,6 +106,7 @@ func (f *fakeStore) Add(_ context.Context, e event.Event) error {
 type fakeCharges struct {
 	store       *fakeStore
 	items       []payment.Charge
+	stale       []payment.Charge
 	fingerprint transfer.Fingerprint
 	hasKey      bool
 }
@@ -162,6 +163,9 @@ func (f *fakeCharges) FindByIdempotencyKey(context.Context, apikey.OwnerID, tran
 func (f *fakeCharges) ListPending(context.Context, time.Time, int) ([]payment.Charge, error) {
 	if err := f.store.record("charge.pending"); err != nil {
 		return nil, err
+	}
+	if f.stale != nil {
+		return f.stale, nil
 	}
 	var pending []payment.Charge
 	for _, item := range f.items {
