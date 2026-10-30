@@ -58,7 +58,7 @@ func newPayout(t *testing.T) payment.Payout {
 func TestParseDocument_Valid_ReturnsDigits(t *testing.T) {
 	cases := []struct{ name, text, want string }{
 		{name: "cpf", text: "529.982.247-25", want: "52998224725"},
-		{name: "cpf with zero check digit", text: "00000000191", want: "00000000191"},
+		{name: "cpf with zero check digit", text: "123.456.789-09", want: "12345678909"},
 		{name: "cnpj", text: "11.222.333/0001-81", want: "11222333000181"},
 	}
 	for _, tc := range cases {
