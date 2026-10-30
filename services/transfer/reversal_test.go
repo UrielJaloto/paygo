@@ -3,6 +3,7 @@ package transfer_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 
@@ -148,11 +149,11 @@ func TestReverse_InvalidInput_DoesNotRunUnitOfWork(t *testing.T) {
 }
 
 func TestReverse_StoreCallFails_StopsLaterCalls(t *testing.T) {
-	order := []string{"original", "find", "lock", "balance", "append", "save", "outbox", "mark"}
+	order := []string{"original", "find", "lock", "find", "balance", "append", "save", "outbox", "mark"}
 	for i, failing := range order {
-		t.Run(failing, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d_%s", i, failing), func(t *testing.T) {
 			store := reversibleStore()
-			store.errs[failing] = errBoom
+			store.failOnCall = i + 1
 			svc, _ := newService(store)
 			if _, err := svc.Reverse(context.Background(), validReverse()); !errors.Is(err, errBoom) {
 				t.Fatalf("error = %v", err)

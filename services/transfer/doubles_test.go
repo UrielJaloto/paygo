@@ -22,17 +22,19 @@ type savedTransfer struct {
 }
 
 type fakeStore struct {
-	accounts  map[account.ID]account.Account
-	balances  map[account.ID]money.Money
-	existing  *savedTransfer
-	originals map[transfer.ID]transfer.Transfer
-	locked    []account.ID
-	journals  []ledger.JournalTransaction
-	saved     []savedTransfer
-	events    []event.Event
-	marked    []transfer.Transfer
-	calls     []string
-	errs      map[string]error
+	existingAfterLock *savedTransfer
+	failOnCall        int
+	accounts          map[account.ID]account.Account
+	balances          map[account.ID]money.Money
+	existing          *savedTransfer
+	originals         map[transfer.ID]transfer.Transfer
+	locked            []account.ID
+	journals          []ledger.JournalTransaction
+	saved             []savedTransfer
+	events            []event.Event
+	marked            []transfer.Transfer
+	calls             []string
+	errs              map[string]error
 }
 
 func newFakeStore(accounts ...account.Account) *fakeStore {
@@ -50,6 +52,9 @@ func newFakeStore(accounts ...account.Account) *fakeStore {
 
 func (f *fakeStore) record(call string) error {
 	f.calls = append(f.calls, call)
+	if len(f.calls) == f.failOnCall {
+		return errBoom
+	}
 	return f.errs[call]
 }
 
@@ -57,6 +62,9 @@ func (f *fakeStore) LockByIDs(_ context.Context, ids []account.ID) ([]account.Ac
 	f.locked = ids
 	if err := f.record("lock"); err != nil {
 		return nil, err
+	}
+	if f.existingAfterLock != nil {
+		f.existing = f.existingAfterLock
 	}
 	locked := make([]account.Account, 0, len(ids))
 	for _, id := range ids {

@@ -188,6 +188,10 @@ func (s *Service) openCharge(ctx context.Context, opening chargeOpening) (Charge
 		if err := checkCustomerAccount(ctx, store, opening.charge.OwnerID(), opening.charge.AccountID()); err != nil {
 			return err
 		}
+		replayed, found, err = findChargeReplay(ctx, store, opening)
+		if err != nil || found {
+			return err
+		}
 		return store.Charges.Save(ctx, opening.charge, opening.key, opening.fingerprint)
 	})
 	if err != nil {

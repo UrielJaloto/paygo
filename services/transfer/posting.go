@@ -42,6 +42,10 @@ func (s *Service) move(ctx context.Context, store Store, request transfer.Reques
 	if err != nil {
 		return TransferOutput{}, err
 	}
+	replayed, found, err := findReplay(ctx, store, request)
+	if err != nil || found {
+		return replayed, err
+	}
 	if err := checkAccounts(request, from, to); err != nil {
 		return TransferOutput{}, err
 	}
