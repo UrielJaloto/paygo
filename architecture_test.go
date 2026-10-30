@@ -39,7 +39,7 @@ var contextOrder = map[string]map[string]int{
 	},
 	"infrastructure": {
 		"config": 0, "clock": 0, "identifier": 0, "secret": 0, "randomness": 0, "ratelimit": 0,
-		"postgres": 1, "webhookhttp": 1, "poller": 1, "httpserver": 1, "provider": 1,
+		"postgres": 1, "webhookhttp": 1, "poller": 1, "httpserver": 1, "provider": 1, "memory": 1,
 		"logging": 2, "metrics": 2, "tracing": 2,
 	},
 	"presentation": {
