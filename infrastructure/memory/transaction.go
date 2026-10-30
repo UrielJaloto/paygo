@@ -31,6 +31,21 @@ func (t *transaction) acquire(lock *sync.Mutex) {
 	t.order = append(t.order, lock)
 }
 
+func (t *transaction) tryAcquire(lock *sync.Mutex) bool {
+	if t == nil {
+		return true
+	}
+	if _, owned := t.held[lock]; owned {
+		return true
+	}
+	if !lock.TryLock() {
+		return false
+	}
+	t.held[lock] = struct{}{}
+	t.order = append(t.order, lock)
+	return true
+}
+
 func (t *transaction) pendingDelta(id account.ID) int64 {
 	if t == nil {
 		return 0
