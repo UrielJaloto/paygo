@@ -18,6 +18,7 @@ var allMigrations = []string{
 	"0003_transfers.sql",
 	"0004_api_keys.sql",
 	"0005_webhooks.sql",
+	"0006_payments.sql",
 }
 
 func TestNewPool_InvalidInput_ReturnsError(t *testing.T) {

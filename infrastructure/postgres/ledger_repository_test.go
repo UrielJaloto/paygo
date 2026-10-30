@@ -137,8 +137,8 @@ func TestLedgerCheckBalances_Tampered_ReportsMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CheckBalances() error = %v", err)
 	}
-	if len(mismatches) != 0 || accounts != 5 {
-		t.Fatalf("CheckBalances() = %v, %d, want no mismatch and 5 accounts", mismatches, accounts)
+	if len(mismatches) != 0 || accounts != 7 {
+		t.Fatalf("CheckBalances() = %v, %d, want no mismatch and 7 accounts", mismatches, accounts)
 	}
 	if _, err := pool.Exec(ctx, "UPDATE accounts SET balance_minor = 1 WHERE id = $1", to); err != nil {
 		t.Fatalf("tampering balance: %v", err)
