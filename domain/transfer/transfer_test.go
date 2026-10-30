@@ -51,6 +51,10 @@ func TestNew_Valid_IsCompleted(t *testing.T) {
 	if created.Kind() != transfer.KindTransfer || created.Status() != transfer.StatusCompleted {
 		t.Fatalf("unexpected state: %+v", created)
 	}
+}
+
+func TestNew_Valid_KeepsMovement(t *testing.T) {
+	created := newTransfer(t)
 	if created.From() != accountA || created.To() != accountB || created.Amount() != money.New(100, money.BRL) {
 		t.Fatalf("unexpected movement: %+v", created)
 	}
