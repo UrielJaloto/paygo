@@ -11,8 +11,10 @@ import (
 )
 
 const (
-	KindCustomer   Kind = "customer"
-	KindSettlement Kind = "settlement"
+	KindCustomer         Kind = "customer"
+	KindSettlement       Kind = "settlement"
+	KindProviderClearing Kind = "provider_clearing"
+	KindPayoutHold       Kind = "payout_hold"
 
 	StatusActive Status = "active"
 	StatusFrozen Status = "frozen"
@@ -142,7 +144,7 @@ func (a Account) CanMoveMoney() bool {
 }
 
 func (a Account) AllowsNegativeBalance() bool {
-	return a.kind == KindSettlement
+	return a.kind == KindSettlement || a.kind == KindProviderClearing
 }
 
 func (a Account) IsOwnedBy(owner apikey.OwnerID) bool {

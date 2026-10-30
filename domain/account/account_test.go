@@ -110,10 +110,23 @@ func TestCanMoveMoney_FollowsStatus(t *testing.T) {
 	}
 }
 
-func TestAllowsNegativeBalance_OnlySettlement(t *testing.T) {
-	settlement := account.Restore(account.Snapshot{Kind: account.KindSettlement})
-	if newCustomer(t).AllowsNegativeBalance() || !settlement.AllowsNegativeBalance() {
-		t.Fatal("only settlement accounts may go negative")
+func TestAllowsNegativeBalance_FollowsKind(t *testing.T) {
+	cases := []struct {
+		kind account.Kind
+		want bool
+	}{
+		{kind: account.KindCustomer, want: false},
+		{kind: account.KindSettlement, want: true},
+		{kind: account.KindProviderClearing, want: true},
+		{kind: account.KindPayoutHold, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.kind), func(t *testing.T) {
+			got := account.Restore(account.Snapshot{Kind: tc.kind}).AllowsNegativeBalance()
+			if got != tc.want {
+				t.Fatalf("AllowsNegativeBalance = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
