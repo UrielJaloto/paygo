@@ -101,9 +101,13 @@ func TestAPIKey_RoundTrip_FindsAndRevokes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindByPrefix() error = %v", err)
 	}
-	if found.ID() != key.ID() || found.OwnerID() != testOwner || found.Hash() != testHash || !found.IsActive() || !found.CreatedAt().Equal(testTime) {
-		t.Fatalf("found = %+v, want %+v", found, key)
-	}
+	assertChecks(t, map[string]bool{
+		"id":         found.ID() == key.ID(),
+		"owner":      found.OwnerID() == testOwner,
+		"hash":       found.Hash() == testHash,
+		"active":     found.IsActive(),
+		"created at": found.CreatedAt().Equal(testTime),
+	})
 	if err := found.Revoke(testTime); err != nil {
 		t.Fatalf("Revoke() error = %v", err)
 	}
@@ -132,7 +136,7 @@ func TestEndpoints_ActiveAndInactive_CountAndListOnlyActive(t *testing.T) {
 	fixture.saveEndpoint(t, 100, testOwner)
 	second := fixture.saveEndpoint(t, 101, testOwner)
 	disabled := fixture.saveEndpoint(t, 102, testOwner)
-	foreign := fixture.saveEndpoint(t, 103, otherOwner)
+	fixture.saveEndpoint(t, 103, otherOwner)
 	if err := disabled.Disable(); err != nil {
 		t.Fatalf("Disable() error = %v", err)
 	}
@@ -151,6 +155,12 @@ func TestEndpoints_ActiveAndInactive_CountAndListOnlyActive(t *testing.T) {
 	if err != nil || len(all) != 3 {
 		t.Fatalf("ListByOwner() = %+v, %v", all, err)
 	}
+}
+
+func TestEndpointFindByID_SavedAndMissing_ReturnsEndpointOrNotFound(t *testing.T) {
+	fixture := newWebhookFixture(t)
+	ctx := context.Background()
+	foreign := fixture.saveEndpoint(t, 103, otherOwner)
 	found, err := fixture.endpoints.FindByID(ctx, foreign.ID())
 	if err != nil || found.OwnerID() != otherOwner || found.Secret() != testSecret || !found.IsActive() {
 		t.Fatalf("FindByID() = %+v, %v", found, err)
@@ -263,12 +273,37 @@ func TestDeliveries_DeadFilter_PagesAndUpdates(t *testing.T) {
 	if err != nil || len(second) != 1 || second[0].ID() != ids[0] {
 		t.Fatalf("second page = %+v, %v", second, err)
 	}
-	pending, err := fixture.deliveries.ListPendingByEndpoint(ctx, webhook.EndpointID(testID(100)))
-	if err != nil || len(pending) != 1 || pending[0].ID() != ids[2] {
-		t.Fatalf("pending = %+v, %v", pending, err)
+	assertOnlyPending(t, fixture, ids[2])
+}
+
+func assertOnlyPending(t *testing.T, fixture webhookFixture, want webhook.DeliveryID) {
+	t.Helper()
+	pending, err := fixture.deliveries.ListPendingByEndpoint(context.Background(), webhook.EndpointID(testID(100)))
+	if err != nil || len(pending) != 1 || pending[0].ID() != want {
+		t.Fatalf("pending = %+v, %v, want only %s", pending, err, want)
 	}
-	if _, err := fixture.deliveries.FindByID(ctx, webhook.DeliveryID(testID(9))); !errors.Is(err, webhook.ErrDeliveryNotFound) {
+}
+
+func TestDeliveryFindByID_Missing_ReturnsNotFound(t *testing.T) {
+	fixture := newWebhookFixture(t)
+	if _, err := fixture.deliveries.FindByID(context.Background(), webhook.DeliveryID(testID(9))); !errors.Is(err, webhook.ErrDeliveryNotFound) {
 		t.Fatalf("FindByID() error = %v, want %v", err, webhook.ErrDeliveryNotFound)
+	}
+}
+
+func TestClaims_TransferLookupFails_ReturnError(t *testing.T) {
+	fixture := newWebhookFixture(t)
+	ctx := context.Background()
+	fixture.saveDeliveries(t, 100, testTime, 1)
+	if _, err := fixture.pool.Exec(ctx, "ALTER TABLE transfers RENAME TO transfers_unavailable"); err != nil {
+		t.Fatalf("Exec() error = %v", err)
+	}
+	_, claimErr := fixture.deliveries.ClaimDue(ctx, testTime, testLease, 1)
+	_, outboxErr := fixture.outbox.ClaimUnpublished(ctx, 1)
+	for name, err := range map[string]error{"ClaimDue": claimErr, "ClaimUnpublished": outboxErr} {
+		if err == nil {
+			t.Errorf("%s() error = nil, want an error", name)
+		}
 	}
 }
 

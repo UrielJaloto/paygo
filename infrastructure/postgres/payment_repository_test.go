@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -119,18 +120,17 @@ func TestChargeRepository_RoundTrip_KeepsEveryField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindByID() error = %v", err)
 	}
-	if found.Amount() != charge.Amount() || found.Payer() != charge.Payer() || found.Reference() != charge.Reference() {
-		t.Errorf("FindByID() = %+v, want %+v", found, charge)
-	}
-	if found.Status() != payment.ChargePaid || found.TransferID() != string(settled.ID()) {
-		t.Errorf("status = %q transfer = %q, want paid %q", found.Status(), found.TransferID(), settled.ID())
-	}
-	if found.Pix().CopyPaste != "copy" || found.Pix().QRBase64 != "qr" || !found.Pix().ExpiresAt.Equal(charge.Pix().ExpiresAt) {
-		t.Errorf("Pix() = %+v, want %+v", found.Pix(), charge.Pix())
-	}
-	if !found.Timeline().UpdatedAt.Equal(charge.Timeline().UpdatedAt) {
-		t.Errorf("UpdatedAt = %v, want %v", found.Timeline().UpdatedAt, charge.Timeline().UpdatedAt)
-	}
+	assertChecks(t, map[string]bool{
+		"amount":     found.Amount() == charge.Amount(),
+		"payer":      found.Payer() == charge.Payer(),
+		"reference":  found.Reference() == charge.Reference(),
+		"status":     found.Status() == payment.ChargePaid,
+		"transfer":   found.TransferID() == string(settled.ID()),
+		"copy paste": found.Pix().CopyPaste == "copy",
+		"qr":         found.Pix().QRBase64 == "qr",
+		"expires at": found.Pix().ExpiresAt.Equal(charge.Pix().ExpiresAt),
+		"updated at": found.Timeline().UpdatedAt.Equal(charge.Timeline().UpdatedAt),
+	})
 }
 
 func TestChargeRepository_Finders_LocateSavedCharge(t *testing.T) {
@@ -198,8 +198,12 @@ func TestChargeRepository_ListPending_FiltersAndLimits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListPending() error = %v", err)
 	}
-	if len(all) != 2 || all[0].ID() != payment.ChargeID(testID(100)) || all[1].ID() != payment.ChargeID(testID(101)) {
-		t.Fatalf("ListPending() = %+v, want charges 100 and 101", all)
+	got := make([]payment.ChargeID, 0, len(all))
+	for _, charge := range all {
+		got = append(got, charge.ID())
+	}
+	if want := []payment.ChargeID{payment.ChargeID(testID(100)), payment.ChargeID(testID(101))}; !slices.Equal(got, want) {
+		t.Fatalf("ListPending() = %v, want %v", got, want)
 	}
 	limited, err := fixture.charges.ListPending(ctx, cutoff, 1)
 	if err != nil || len(limited) != 1 {
