@@ -33,6 +33,38 @@ type ChargeQuery struct {
 	ChargeID string
 }
 
+type PayoutInput struct {
+	OwnerID        string
+	IdempotencyKey string
+	AccountID      string
+	Amount         string
+	Currency       string
+	PixKey         string
+	PixKeyType     string
+}
+
+type PayoutOutput struct {
+	ID          string
+	AccountID   string
+	Status      string
+	PixKeyType  string
+	AmountMinor int64
+	Currency    string
+	CreatedAt   time.Time
+	IsReplay    bool
+}
+
+type PayoutQuery struct {
+	OwnerID  string
+	PayoutID string
+}
+
+type SyncResult struct {
+	Checked int
+	Changed int
+	Retried int
+}
+
 type WebhookInput struct {
 	Provider string
 	Header   http.Header
