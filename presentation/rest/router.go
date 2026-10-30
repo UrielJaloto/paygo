@@ -29,11 +29,14 @@ type Access struct {
 }
 
 type Controllers struct {
-	Health   *HealthController
-	Account  *AccountController
-	Transfer *TransferController
-	Admin    *AdminController
-	Webhook  *WebhookController
+	Health          *HealthController
+	Account         *AccountController
+	Transfer        *TransferController
+	Admin           *AdminController
+	Webhook         *WebhookController
+	Payment         *PaymentController
+	ProviderWebhook *ProviderWebhookController
+	LedgerCheck     *LedgerCheckController
 }
 
 type Dependencies struct {
@@ -58,11 +61,15 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		presentProblem(c, problemKind{http.StatusNotFound, "not-found", "Not found"}, "route not found")
 	})
 	registerHealthRoutes(engine, deps.Controllers.Health)
+	registerProviderWebhookRoutes(engine, deps.Controllers.ProviderWebhook)
 	owner := ownerGroup(engine, deps.Access)
 	registerAccountRoutes(owner, deps.Controllers.Account)
 	registerTransferRoutes(owner, deps.Controllers.Transfer)
 	registerWebhookRoutes(owner, deps.Controllers.Webhook)
-	registerAdminRoutes(adminGroup(engine, deps.Access), deps.Controllers.Admin)
+	registerPaymentRoutes(owner, deps.Controllers.Payment)
+	admin := adminGroup(engine, deps.Access)
+	registerAdminRoutes(admin, deps.Controllers.Admin)
+	registerLedgerCheckRoutes(admin, deps.Controllers.LedgerCheck)
 	return engine
 }
 

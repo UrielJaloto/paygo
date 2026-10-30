@@ -9,6 +9,7 @@ import (
 	"github.com/UrielJaloto/paygo/domain/apikey"
 	"github.com/UrielJaloto/paygo/domain/money"
 	"github.com/UrielJaloto/paygo/domain/page"
+	"github.com/UrielJaloto/paygo/domain/payment"
 	"github.com/UrielJaloto/paygo/domain/transfer"
 	"github.com/UrielJaloto/paygo/domain/webhook"
 	"github.com/UrielJaloto/paygo/presentation/rest"
@@ -45,6 +46,15 @@ func TestPresentError_EachMapping_ReturnsStatusAndType(t *testing.T) {
 		{apikey.ErrInvalidOwner, http.StatusBadRequest, "invalid-request"},
 		{transfer.ErrSameAccount, http.StatusBadRequest, "invalid-request"},
 		{apikeyservice.ErrUnauthenticated, http.StatusUnauthorized, "unauthenticated"},
+		{payment.ErrWebhookUnauthorized, http.StatusUnauthorized, "unauthenticated"},
+		{payment.ErrChargeNotFound, http.StatusNotFound, "not-found"},
+		{payment.ErrPayoutNotFound, http.StatusNotFound, "not-found"},
+		{payment.ErrInvalidPixKey, http.StatusBadRequest, "invalid-request"},
+		{payment.ErrInvalidDocument, http.StatusBadRequest, "invalid-request"},
+		{payment.ErrUnsupportedProvider, http.StatusBadRequest, "invalid-request"},
+		{payment.ErrInvalidPayerName, http.StatusBadRequest, "invalid-request"},
+		{payment.ErrProviderRejected, http.StatusUnprocessableEntity, "provider-rejected"},
+		{payment.ErrProviderUnavailable, http.StatusBadGateway, "provider-unavailable"},
 		{account.ErrAccountNotFound, http.StatusNotFound, "not-found"},
 		{transfer.ErrTransferNotFound, http.StatusNotFound, "not-found"},
 		{webhook.ErrEndpointNotFound, http.StatusNotFound, "not-found"},
