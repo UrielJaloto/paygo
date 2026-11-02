@@ -102,12 +102,12 @@ func TestReadMigrate_Variables_ReturnsConfig(t *testing.T) {
 		{
 			name: "defaults",
 			env:  map[string]string{"PAYGO_DATABASE_URL": databaseURL},
-			want: config.MigrateSettings{Database: config.Database{URL: databaseURL, MaxConns: 20}, MigrationsDir: "env/migrations"},
+			want: config.MigrateSettings{Database: config.Database{URL: databaseURL, MaxConns: 20}},
 		},
 		{
 			name: "overrides",
-			env:  map[string]string{"PAYGO_DATABASE_URL": databaseURL, "PAYGO_DB_MAX_CONNS": "5", "PAYGO_MIGRATIONS_DIR": "/srv/migrations"},
-			want: config.MigrateSettings{Database: config.Database{URL: databaseURL, MaxConns: 5}, MigrationsDir: "/srv/migrations"},
+			env:  map[string]string{"PAYGO_DATABASE_URL": databaseURL, "PAYGO_DB_MAX_CONNS": "5"},
+			want: config.MigrateSettings{Database: config.Database{URL: databaseURL, MaxConns: 5}},
 		},
 	}
 	for _, test := range tests {

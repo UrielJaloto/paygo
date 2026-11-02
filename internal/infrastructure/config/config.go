@@ -85,7 +85,6 @@ type WorkerSettings struct {
 
 type MigrateSettings struct {
 	Database
-	MigrationsDir string
 }
 
 func ReadAPI(lookup func(string) (string, bool)) (APISettings, error) {
@@ -110,7 +109,7 @@ func ReadWorker(lookup func(string) (string, bool)) (WorkerSettings, error) {
 
 func ReadMigrate(lookup func(string) (string, bool)) (MigrateSettings, error) {
 	r := reader{lookup: lookup}
-	settings := MigrateSettings{Database: r.database(), MigrationsDir: r.text("PAYGO_MIGRATIONS_DIR", "env/migrations")}
+	settings := MigrateSettings{Database: r.database()}
 	if err := r.err(); err != nil {
 		return MigrateSettings{}, err
 	}

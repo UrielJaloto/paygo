@@ -31,7 +31,6 @@ const (
 	ownerOne        = "01890000-0000-7000-8000-000000000001"
 	ownerTwo        = "01890000-0000-7000-8000-000000000002"
 	moduleRoot      = "../../.."
-	migrationsDirectory   = moduleRoot + "/env/migrations"
 	pollInterval    = 50 * time.Millisecond
 	bootTimeout     = 15 * time.Second
 	requestTimeout  = 10 * time.Second
@@ -67,7 +66,7 @@ func buildBinaries(directory string) (binaries, error) {
 	}
 	for _, output := range []string{built.api, built.worker, built.migrate} {
 		name := strings.TrimSuffix(filepath.Base(output), ".exe")
-		command := exec.Command("go", "build", "-cover", "-covermode=atomic", "-coverpkg=./...", "-o", output, "./internal/cmd/"+name)
+		command := exec.Command("go", "build", "-cover", "-covermode=atomic", "-coverpkg=./...", "-o", output, "./cmd/"+name)
 		command.Dir = moduleRoot
 		if combined, err := command.CombinedOutput(); err != nil {
 			return binaries{}, fmt.Errorf("building %s: %w: %s", name, err, combined)
@@ -181,7 +180,6 @@ func startStackWith(t *testing.T, overrides map[string]string) stack {
 		"PAYGO_DATABASE_URL":       running.databaseURL,
 		"PAYGO_ADMIN_TOKEN":        adminToken,
 		"PAYGO_FAKE_WEBHOOK_TOKEN": fakeToken,
-		"PAYGO_MIGRATIONS_DIR":     migrationsDirectory,
 	}
 	for name, value := range overrides {
 		shared[name] = value

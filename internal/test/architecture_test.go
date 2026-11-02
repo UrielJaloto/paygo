@@ -16,6 +16,8 @@ import (
 
 const modulePath = "github.com/UrielJaloto/paygo/internal/"
 
+var sourceRoots = []string{"internal", "cmd"}
+
 var layerRanks = map[string]int{
 	"domain":         0,
 	"services":       1,
@@ -203,14 +205,8 @@ func contextOf(directory string) string {
 func readPackages(t *testing.T) []sourcePackage {
 	t.Helper()
 	imports := map[string][]string{}
-	err := filepath.WalkDir(".", func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			return skipUnlessSource(path, entry)
-		}
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+	err := walkSources(func(path string) error {
+		if strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
 		return collectImports(path, imports)
@@ -225,12 +221,37 @@ func readPackages(t *testing.T) []sourcePackage {
 	return packages
 }
 
-func skipUnlessSource(path string, entry fs.DirEntry) error {
+func walkSources(visit func(path string) error) error {
+	for _, root := range sourceRoots {
+		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				return skipUnlessSource(entry)
+			}
+			if !strings.HasSuffix(path, ".go") {
+				return nil
+			}
+			return visit(path)
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func skipUnlessSource(entry fs.DirEntry) error {
 	name := entry.Name()
-	if path != "." && (strings.HasPrefix(name, ".") || name == "test") {
+	if strings.HasPrefix(name, ".") || name == "test" {
 		return filepath.SkipDir
 	}
 	return nil
+}
+
+func layerPath(path string) string {
+	return strings.TrimPrefix(filepath.ToSlash(path), "internal/")
 }
 
 func collectImports(path string, imports map[string][]string) error {
@@ -238,7 +259,7 @@ func collectImports(path string, imports map[string][]string) error {
 	if err != nil {
 		return fmt.Errorf("parse %s: %w", path, err)
 	}
-	directory := filepath.ToSlash(filepath.Dir(path))
+	directory := filepath.ToSlash(filepath.Dir(layerPath(path)))
 	list := imports[directory]
 	for _, spec := range file.Imports {
 		value, err := strconv.Unquote(spec.Path.Value)
@@ -363,17 +384,9 @@ func livesInHome(directory, imported string) bool {
 func readFiles(t *testing.T) []sourceFile {
 	t.Helper()
 	var files []sourceFile
-	err := filepath.WalkDir(".", func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			return skipUnlessSource(path, entry)
-		}
-		if !strings.HasSuffix(path, ".go") {
-			return nil
-		}
-		file, err := parseFile(filepath.ToSlash(path), nil)
+	err := walkSources(func(path string) error {
+		file, err := parseFile(path, nil)
+		file.path = layerPath(path)
 		files = append(files, file)
 		return err
 	})
@@ -401,7 +414,7 @@ func parseFile(path string, source any) (sourceFile, error) {
 }
 
 func TestMain(m *testing.M) {
-	if err := os.Chdir(".."); err != nil {
+	if err := os.Chdir("../.."); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

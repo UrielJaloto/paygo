@@ -34,7 +34,7 @@ func migrate(ctx context.Context, lookup func(string) (string, bool), stdout io.
 		return err
 	}
 	defer pool.Close()
-	applied, err := postgres.NewMigrator(pool, os.DirFS(settings.MigrationsDir)).Migrate(ctx)
+	applied, err := postgres.NewMigrator(pool).Migrate(ctx)
 	if err != nil {
 		return err
 	}

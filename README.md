@@ -207,15 +207,15 @@ Go 1.26, Gin, PostgreSQL 18 with pgx, OpenTelemetry, Prometheus, Docker Compose 
 ## Project layout
 
 ```text
+cmd/               paygo-api, paygo-migrate and paygo-worker
 internal/
-  cmd/             paygo-api, paygo-migrate and paygo-worker
   domain/          Entities and business rules
   services/        Application services
   presentation/    REST controllers and middleware
-  infrastructure/  PostgreSQL, PIX providers, webhook delivery, telemetry
+  infrastructure/  PostgreSQL with embedded migrations, PIX providers, webhook delivery, telemetry
   test/            Architecture rules and end-to-end suite
 docs/              OpenAPI contract
-env/               Dockerfile, Compose files and SQL migrations
+env/               Compose files for the local and load test stacks
 packages/          Load generator, a separate Go module
 ```
 

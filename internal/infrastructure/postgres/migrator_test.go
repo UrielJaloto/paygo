@@ -5,7 +5,6 @@ package postgres_test
 import (
 	"context"
 	"io/fs"
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -47,7 +46,7 @@ func TestNewPool_InvalidInput_ReturnsError(t *testing.T) {
 }
 
 func TestUp_FreshDatabase_AppliesEveryFile(t *testing.T) {
-	applied, err := postgres.NewMigrator(newEmptyTestPool(t), migrationFiles()).Migrate(context.Background())
+	applied, err := postgres.NewMigrator(newEmptyTestPool(t)).Migrate(context.Background())
 	if err != nil {
 		t.Fatalf("Up() error = %v", err)
 	}
@@ -58,10 +57,10 @@ func TestUp_FreshDatabase_AppliesEveryFile(t *testing.T) {
 
 func TestUp_DirectoryWithOtherFiles_AppliesOnlySQL(t *testing.T) {
 	files := fstest.MapFS{
-		"0001_notes.sql": {Data: []byte("CREATE TABLE notes (id integer)")},
-		"README.md":      {Data: []byte("not a migration")},
+		"migrations/0001_notes.sql": {Data: []byte("CREATE TABLE notes (id integer)")},
+		"migrations/README.md":      {Data: []byte("not a migration")},
 	}
-	applied, err := postgres.NewMigrator(newEmptyTestPool(t), files).Migrate(context.Background())
+	applied, err := postgres.NewMigratorFrom(newEmptyTestPool(t), files).Migrate(context.Background())
 	if err != nil {
 		t.Fatalf("Up() error = %v", err)
 	}
@@ -76,12 +75,12 @@ func TestUp_UnreadableMigrations_ReturnsError(t *testing.T) {
 		files fs.FS
 		want  string
 	}{
-		{name: "missing directory", files: os.DirFS(migrationsDirectory + "/missing"), want: "listing migrations"},
-		{name: "unreadable file", files: fstest.MapFS{"0001_broken.sql/part": {}}, want: "reading migration 0001_broken.sql"},
+		{name: "missing directory", files: fstest.MapFS{}, want: "listing migrations"},
+		{name: "unreadable file", files: fstest.MapFS{"migrations/0001_broken.sql/part": {}}, want: "reading migration 0001_broken.sql"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := postgres.NewMigrator(nil, test.files).Migrate(context.Background())
+			_, err := postgres.NewMigratorFrom(nil, test.files).Migrate(context.Background())
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("Up() error = %v, want it to mention %q", err, test.want)
 			}
@@ -90,7 +89,7 @@ func TestUp_UnreadableMigrations_ReturnsError(t *testing.T) {
 }
 
 func TestUp_AlreadyMigrated_AppliesNothing(t *testing.T) {
-	applied, err := postgres.NewMigrator(newTestPool(t), migrationFiles()).Migrate(context.Background())
+	applied, err := postgres.NewMigrator(newTestPool(t)).Migrate(context.Background())
 	if err != nil {
 		t.Fatalf("Up() error = %v", err)
 	}
@@ -100,7 +99,7 @@ func TestUp_AlreadyMigrated_AppliesNothing(t *testing.T) {
 }
 
 func TestUp_Concurrent_AppliesEachFileOnce(t *testing.T) {
-	migrator := postgres.NewMigrator(newEmptyTestPool(t), migrationFiles())
+	migrator := postgres.NewMigrator(newEmptyTestPool(t))
 	results := make([][]string, 2)
 	failures := make([]error, 2)
 	var running sync.WaitGroup
@@ -125,7 +124,7 @@ func TestUp_Concurrent_AppliesEachFileOnce(t *testing.T) {
 func TestUp_ClosedPool_ReturnsError(t *testing.T) {
 	pool := newEmptyTestPool(t)
 	pool.Close()
-	if _, err := postgres.NewMigrator(pool, migrationFiles()).Migrate(context.Background()); err == nil {
+	if _, err := postgres.NewMigrator(pool).Migrate(context.Background()); err == nil {
 		t.Fatal("Up() error = nil, want an error")
 	}
 }
@@ -137,7 +136,7 @@ func TestUp_MigrationFails_ReturnsErrorAndKeepsItUnrecorded(t *testing.T) {
 		t.Fatalf("preparing conflict: %v", err)
 	}
 
-	applied, err := postgres.NewMigrator(pool, migrationFiles()).Migrate(ctx)
+	applied, err := postgres.NewMigrator(pool).Migrate(ctx)
 
 	if err == nil || len(applied) != 0 {
 		t.Fatalf("Up() = %v, %v, want nothing applied and an error", applied, err)
@@ -157,7 +156,7 @@ func TestUp_MigrationsRelationIsReadOnly_ReturnsError(t *testing.T) {
 	if _, err := pool.Exec(ctx, "CREATE VIEW schema_migrations AS SELECT 'x'::text AS version"); err != nil {
 		t.Fatalf("preparing view: %v", err)
 	}
-	if _, err := postgres.NewMigrator(pool, migrationFiles()).Migrate(ctx); err == nil {
+	if _, err := postgres.NewMigrator(pool).Migrate(ctx); err == nil {
 		t.Fatal("Up() error = nil, want an error")
 	}
 }

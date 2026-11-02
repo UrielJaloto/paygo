@@ -49,7 +49,7 @@ func appliedFiles(t *testing.T, output string) []string {
 }
 
 func TestRun_FreshDatabaseThenSecondRun_AppliesOnce(t *testing.T) {
-	env := map[string]string{"PAYGO_DATABASE_URL": newDatabaseURL(t), "PAYGO_MIGRATIONS_DIR": migrationsDirectory}
+	env := map[string]string{"PAYGO_DATABASE_URL": newDatabaseURL(t)}
 	first := runWith(env)
 	if first.code != 0 {
 		t.Fatalf("first run = %d, stderr %q", first.code, first.stderr)
@@ -76,8 +76,7 @@ func TestRun_Failure_ReturnsOneAndReportsOnStderr(t *testing.T) {
 	}{
 		{name: "missing url", env: map[string]string{}, want: "PAYGO_DATABASE_URL"},
 		{name: "database down", env: map[string]string{"PAYGO_DATABASE_URL": "postgres://paygo:paygo@127.0.0.1:1/paygo?connect_timeout=1"}, want: "pinging database"},
-		{name: "migrations missing", env: map[string]string{"PAYGO_DATABASE_URL": broken, "PAYGO_MIGRATIONS_DIR": migrationsDirectory + "/missing"}, want: "listing migrations"},
-		{name: "migration fails", env: map[string]string{"PAYGO_DATABASE_URL": broken, "PAYGO_MIGRATIONS_DIR": migrationsDirectory}, want: "applying migration"},
+		{name: "migration fails", env: map[string]string{"PAYGO_DATABASE_URL": broken}, want: "applying migration"},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -92,10 +91,7 @@ func TestRun_Failure_ReturnsOneAndReportsOnStderr(t *testing.T) {
 	}
 }
 
-const (
-	defaultAdminURL = "postgres://paygo:paygo@localhost:5432/postgres?sslmode=disable"
-	migrationsDirectory   = "../../../env/migrations"
-)
+const defaultAdminURL = "postgres://paygo:paygo@localhost:5432/postgres?sslmode=disable"
 
 func adminURL() string {
 	if configured := os.Getenv("PAYGO_TEST_DATABASE_URL"); configured != "" {

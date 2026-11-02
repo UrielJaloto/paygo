@@ -1,6 +1,7 @@
+name: paygo
+
 x-paygo-build: &paygo-build
   context: ..
-  dockerfile: env/Dockerfile
 
 x-paygo-environment: &paygo-environment
   PAYGO_DATABASE_URL: postgres://paygo:paygo@postgres:5432/paygo?sslmode=disable

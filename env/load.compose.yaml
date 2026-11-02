@@ -26,7 +26,6 @@ services:
   migrate:
     build: &paygo-build
       context: ..
-      dockerfile: env/Dockerfile
     entrypoint: ["/usr/local/bin/paygo-migrate"]
     environment:
       PAYGO_DATABASE_URL: postgres://paygo:paygo@postgres:5432/paygo?sslmode=disable

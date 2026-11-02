@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"io/fs"
 	"net/url"
 	"os"
 	"testing"
@@ -18,14 +17,7 @@ import (
 	"github.com/UrielJaloto/paygo/internal/infrastructure/postgres"
 )
 
-const (
-	defaultAdminURL = "postgres://paygo:paygo@localhost:5432/postgres?sslmode=disable"
-	migrationsDirectory   = "../../../env/migrations"
-)
-
-func migrationFiles() fs.FS {
-	return os.DirFS(migrationsDirectory)
-}
+const defaultAdminURL = "postgres://paygo:paygo@localhost:5432/postgres?sslmode=disable"
 
 func adminURL() string {
 	if configured := os.Getenv("PAYGO_TEST_DATABASE_URL"); configured != "" {
@@ -63,7 +55,7 @@ func newEmptyTestPool(t *testing.T) *pgxpool.Pool {
 func newTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	pool := newEmptyTestPool(t)
-	if _, err := postgres.NewMigrator(pool, migrationFiles()).Migrate(context.Background()); err != nil {
+	if _, err := postgres.NewMigrator(pool).Migrate(context.Background()); err != nil {
 		t.Fatalf("migrating the test database: %v", err)
 	}
 	return pool

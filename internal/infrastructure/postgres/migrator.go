@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"io/fs"
 	"path"
@@ -11,6 +12,7 @@ import (
 )
 
 const (
+	migrationsDirectory         = "migrations"
 	createMigrationsTable = `
 		SELECT pg_advisory_xact_lock(727274);
 		CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -24,6 +26,9 @@ const (
 		ON CONFLICT DO NOTHING`
 )
 
+//go:embed migrations/*.sql
+var embeddedMigrations embed.FS
+
 type Migrator struct {
 	pool  *pgxpool.Pool
 	files fs.FS
@@ -34,8 +39,8 @@ type migration struct {
 	content string
 }
 
-func NewMigrator(pool *pgxpool.Pool, files fs.FS) *Migrator {
-	return &Migrator{pool: pool, files: files}
+func NewMigrator(pool *pgxpool.Pool) *Migrator {
+	return &Migrator{pool: pool, files: embeddedMigrations}
 }
 
 func (m *Migrator) Migrate(ctx context.Context) ([]string, error) {
@@ -60,7 +65,7 @@ func (m *Migrator) Migrate(ctx context.Context) ([]string, error) {
 }
 
 func (m *Migrator) readMigrations() ([]migration, error) {
-	entries, err := fs.ReadDir(m.files, ".")
+	entries, err := fs.ReadDir(m.files, migrationsDirectory)
 	if err != nil {
 		return nil, fmt.Errorf("listing migrations: %w", err)
 	}
@@ -69,7 +74,7 @@ func (m *Migrator) readMigrations() ([]migration, error) {
 		if path.Ext(entry.Name()) != ".sql" {
 			continue
 		}
-		content, err := fs.ReadFile(m.files, entry.Name())
+		content, err := fs.ReadFile(m.files, path.Join(migrationsDirectory, entry.Name()))
 		if err != nil {
 			return nil, fmt.Errorf("reading migration %s: %w", entry.Name(), err)
 		}
