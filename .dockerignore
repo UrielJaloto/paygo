@@ -1,7 +1,6 @@
 .git
+.github
 cover
-cover.out
+*.out
 bin
-docs
-CLAUDE.md
-.claude
+tools
