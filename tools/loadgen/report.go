@@ -25,12 +25,10 @@ type hardware struct {
 
 type versions struct {
 	Go       string `json:"go"`
-	Target   string `json:"target"`
 	Postgres string `json:"postgres,omitempty"`
 }
 
 type report struct {
-	Target           string    `json:"target"`
 	Scenario         string    `json:"scenario"`
 	Accounts         int       `json:"accounts"`
 	Transfers        int       `json:"transfers"`
@@ -76,7 +74,7 @@ func ramBytes(meminfo string) int64 {
 }
 
 func resultPath(directory string, measured report, date time.Time) string {
-	name := fmt.Sprintf("%s-%s-%s.json", date.Format(time.DateOnly), measured.Target, measured.Scenario)
+	name := fmt.Sprintf("%s-%s.json", date.Format(time.DateOnly), measured.Scenario)
 	return filepath.Join(directory, name)
 }
 

@@ -6,11 +6,15 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/UrielJaloto/paygo/bench/targets"
 )
 
 const transferMinor = 100
+
+type wallet interface {
+	Setup(ctx context.Context, accounts int) ([]string, error)
+	Transfer(ctx context.Context, from, to string, amountMinor int64, key string) error
+	Balances(ctx context.Context) (map[string]int64, error)
+}
 
 type workload struct {
 	scenario  string
@@ -18,6 +22,7 @@ type workload struct {
 	transfers int
 	clients   int
 	seed      uint64
+	run       string
 }
 
 type outcome struct {
@@ -33,7 +38,7 @@ type clientResult struct {
 	deltas   map[string]int64
 }
 
-func drive(ctx context.Context, target targets.Target, load workload) (outcome, error) {
+func drive(ctx context.Context, target wallet, load workload) (outcome, error) {
 	pickers := make([]*picker, load.clients)
 	for client := range pickers {
 		chosen, err := newPicker(load.scenario, len(load.accounts), load.seed+uint64(client))
@@ -61,11 +66,11 @@ type clientState struct {
 	issued *atomic.Int64
 }
 
-func runClient(ctx context.Context, target targets.Target, load workload, state clientState) clientResult {
+func runClient(ctx context.Context, target wallet, load workload, state clientState) clientResult {
 	result := clientResult{deltas: make(map[string]int64)}
 	for sequence := state.issued.Add(1); sequence <= int64(load.transfers); sequence = state.issued.Add(1) {
 		from, to := state.picker.next()
-		key := fmt.Sprintf("bench-%d-%d-%d", load.seed, state.index, sequence)
+		key := fmt.Sprintf("%s-%d-%d", load.run, state.index, sequence)
 		started := time.Now()
 		err := target.Transfer(ctx, load.accounts[from], load.accounts[to], transferMinor, key)
 		result.samples = append(result.samples, time.Since(started))

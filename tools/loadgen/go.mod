@@ -1,4 +1,4 @@
-module github.com/UrielJaloto/paygo/bench
+module github.com/UrielJaloto/paygo/tools/loadgen
 
 go 1.26.10
 
