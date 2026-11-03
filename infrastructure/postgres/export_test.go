@@ -5,3 +5,7 @@ var (
 	IsUniqueViolation = isUniqueViolation
 	NotFound          = notFound
 )
+
+func NewQueryTracer(spans QuerySpans) queryTracer {
+	return queryTracer{spans: spans}
+}

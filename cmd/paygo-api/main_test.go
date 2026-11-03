@@ -31,9 +31,9 @@ func baseEnv(address string) map[string]string {
 	}
 }
 
-func memoryEnv(address string) map[string]string {
+func unreachableEnv(address string) map[string]string {
 	env := baseEnv(address)
-	env["PAYGO_STORAGE"] = "memory"
+	env["PAYGO_DATABASE_URL"] = unreachableDB
 	return env
 }
 
@@ -101,43 +101,8 @@ func (a runningAPI) exitCode(t *testing.T) int {
 	}
 }
 
-func TestRun_MemoryStorage_ServesUntilCancelled(t *testing.T) {
-	tests := []struct {
-		name  string
-		extra map[string]string
-	}{
-		{name: "fake provider"},
-		{name: "asaas provider", extra: map[string]string{
-			"PAYGO_PROVIDER":            "asaas",
-			"PAYGO_ASAAS_API_KEY":       "sandbox-key",
-			"PAYGO_ASAAS_WEBHOOK_TOKEN": testToken,
-		}},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			env := memoryEnv(freeAddress(t))
-			for name, value := range tc.extra {
-				env[name] = value
-			}
-			api := startAPI(t, env)
-			api.waitHealthy(t)
-			api.cancel()
-			if code := api.exitCode(t); code != 0 {
-				t.Errorf("exit = %d, stderr %q", code, api.stderr.String())
-			}
-		})
-	}
-}
-
 func TestRun_StartupFailure_ReturnsOneAndNamesTheCause(t *testing.T) {
-	occupied, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("occupying a port: %v", err)
-	}
-	defer occupied.Close()
-	unreachable := baseEnv("127.0.0.1:0")
-	unreachable["PAYGO_DATABASE_URL"] = unreachableDB
-	missingToken := memoryEnv("127.0.0.1:0")
+	missingToken := unreachableEnv("127.0.0.1:0")
 	delete(missingToken, "PAYGO_ADMIN_TOKEN")
 	tests := []struct {
 		name string
@@ -145,8 +110,7 @@ func TestRun_StartupFailure_ReturnsOneAndNamesTheCause(t *testing.T) {
 		want string
 	}{
 		{name: "invalid config", env: missingToken, want: "PAYGO_ADMIN_TOKEN"},
-		{name: "unreachable database", env: unreachable, want: "pinging database"},
-		{name: "occupied port", env: memoryEnv(occupied.Addr().String()), want: "listening on"},
+		{name: "unreachable database", env: unreachableEnv("127.0.0.1:0"), want: "pinging database"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

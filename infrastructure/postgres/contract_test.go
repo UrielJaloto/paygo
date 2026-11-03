@@ -6,14 +6,13 @@ import (
 	"testing"
 
 	"github.com/UrielJaloto/paygo/infrastructure/postgres"
-	"github.com/UrielJaloto/paygo/internal/storetest"
 	apikeyservice "github.com/UrielJaloto/paygo/services/apikey"
 )
 
-func newPostgresStores(t *testing.T) storetest.Stores {
+func newPostgresStores(t *testing.T) Stores {
 	t.Helper()
 	pool := newTestPool(t)
-	return storetest.Stores{
+	return Stores{
 		Accounts:  postgres.NewAccountRepository(pool),
 		Ledger:    postgres.NewLedgerRepository(pool),
 		Transfers: postgres.NewTransferRepository(pool),
@@ -23,37 +22,37 @@ func newPostgresStores(t *testing.T) storetest.Stores {
 }
 
 func TestAccountContract_Postgres_Passes(t *testing.T) {
-	storetest.RunAccountContract(t, newPostgresStores)
+	runAccountContract(t, newPostgresStores)
 }
 
 func TestTransferContract_Postgres_Passes(t *testing.T) {
-	storetest.RunTransferContract(t, newPostgresStores)
+	runTransferContract(t, newPostgresStores)
 }
 
 func TestAPIKeyContract_Postgres_Passes(t *testing.T) {
-	storetest.RunAPIKeyContract(t, func(t *testing.T) apikeyservice.Repository {
+	runAPIKeyContract(t, func(t *testing.T) apikeyservice.Repository {
 		return postgres.NewAPIKeyRepository(newTestPool(t))
 	})
 }
 
 func TestWebhookContract_Postgres_Passes(t *testing.T) {
-	storetest.RunWebhookContract(t, func(t *testing.T) storetest.WebhookStores {
+	runWebhookContract(t, func(t *testing.T) WebhookStores {
 		pool := newTestPool(t)
-		return storetest.WebhookStores{
+		return WebhookStores{
 			Endpoints:  postgres.NewEndpointRepository(pool),
 			Deliveries: postgres.NewDeliveryRepository(pool),
 			Outbox:     postgres.NewOutboxRepository(pool),
 			Unit:       postgres.NewWebhookUnitOfWork(pool),
-			Dispatch:   postgres.NewDispatchUnitOfWork(pool, &storetest.SequentialIDs{}),
+			Dispatch:   postgres.NewDispatchUnitOfWork(pool, &sequentialIDs{}),
 		}
 	})
 }
 
 func TestPaymentContract_Postgres_Passes(t *testing.T) {
-	storetest.RunPaymentContract(t, func(t *testing.T) storetest.PaymentStores {
+	runPaymentContract(t, func(t *testing.T) PaymentStores {
 		pool := newTestPool(t)
-		return storetest.PaymentStores{
-			Base: storetest.Stores{
+		return PaymentStores{
+			Base: Stores{
 				Accounts:  postgres.NewAccountRepository(pool),
 				Ledger:    postgres.NewLedgerRepository(pool),
 				Transfers: postgres.NewTransferRepository(pool),

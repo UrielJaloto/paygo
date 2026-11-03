@@ -26,7 +26,7 @@ func lookupFrom(env map[string]string) func(string) (string, bool) {
 
 func defaultPayments() config.Payments {
 	return config.Payments{
-		Storage: config.StoragePostgres, Provider: config.ProviderFake, FakeWebhookToken: fakeToken,
+		Provider: config.ProviderFake, FakeWebhookToken: fakeToken,
 		Asaas:               config.Asaas{Env: "sandbox", BaseURL: "https://api-sandbox.asaas.com/v3"},
 		PaymentSyncInterval: 30 * time.Second,
 	}
@@ -254,7 +254,6 @@ func TestLoadAPI_InvalidPayments_NamesVariable(t *testing.T) {
 		{"missing key", map[string]string{"PAYGO_ASAAS_API_KEY": ""}, "PAYGO_ASAAS_API_KEY required"},
 		{"short webhook token", map[string]string{"PAYGO_ASAAS_WEBHOOK_TOKEN": fakeToken[:31]}, "PAYGO_ASAAS_WEBHOOK_TOKEN must have at least 32 characters"},
 		{"unknown env", map[string]string{"PAYGO_ASAAS_ENV": "staging"}, "PAYGO_ASAAS_ENV must be one of sandbox, production"},
-		{"unknown storage", map[string]string{"PAYGO_STORAGE": "redis"}, "PAYGO_STORAGE must be one of postgres, memory"},
 		{"unknown provider", map[string]string{"PAYGO_PROVIDER": "stripe"}, "PAYGO_PROVIDER must be one of fake, asaas"},
 		{"sync below minimum", map[string]string{"PAYGO_PAYMENT_SYNC_INTERVAL": "999ms"}, "PAYGO_PAYMENT_SYNC_INTERVAL"},
 		{"sync above maximum", map[string]string{"PAYGO_PAYMENT_SYNC_INTERVAL": "10m1s"}, "PAYGO_PAYMENT_SYNC_INTERVAL"},
@@ -280,15 +279,5 @@ func TestLoadAPI_AsaasProduction_UsesProductionURL(t *testing.T) {
 	want := config.Asaas{Env: "production", AllowProduction: true, APIKey: "key", WebhookToken: fakeToken, BaseURL: "https://api.asaas.com/v3"}
 	if cfg.Asaas != want {
 		t.Fatalf("asaas = %+v, want %+v", cfg.Asaas, want)
-	}
-}
-
-func TestLoadAPI_MemoryStorage_DoesNotRequireDatabase(t *testing.T) {
-	cfg, err := config.LoadAPI(lookupFrom(map[string]string{"PAYGO_STORAGE": "memory", "PAYGO_ADMIN_TOKEN": adminToken, "PAYGO_FAKE_WEBHOOK_TOKEN": fakeToken}))
-	if err != nil {
-		t.Fatalf("LoadAPI: %v", err)
-	}
-	if cfg.Storage != config.StorageMemory || cfg.Database != (config.Database{}) {
-		t.Fatalf("cfg = %+v, want memory storage without database", cfg)
 	}
 }
