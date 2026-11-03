@@ -97,7 +97,7 @@ func newJitter() *randomness.Jitter {
 }
 
 func newSender(worker config.Worker, kit toolkit) *webhookhttp.HTTPWebhookSender {
-	return webhookhttp.New(&http.Client{Timeout: worker.WebhookTimeout}, secret.WebhookSigner{}, kit.clock)
+	return webhookhttp.New(webhookhttp.NewClient(worker.WebhookTimeout), secret.WebhookSigner{}, kit.clock)
 }
 
 func newProvider(cfg config.Payments, customers asaas.CustomerCache, kit toolkit) payment.PaymentProvider {
