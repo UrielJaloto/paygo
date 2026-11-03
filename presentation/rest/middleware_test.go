@@ -2,6 +2,7 @@ package rest_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -38,11 +39,14 @@ type observation struct {
 type spyLogger struct {
 	observation
 	requestID any
+	err       error
 }
 
-func (s *spyLogger) LogRequest(ctx context.Context, method, route string) func(int, time.Duration) {
+func (s *spyLogger) LogRequest(ctx context.Context, method, route string) func(int, time.Duration, error) {
 	s.method, s.route, s.requestID = method, route, ctx.Value(requestIDKey{})
-	return func(status int, duration time.Duration) { s.status, s.duration = status, duration }
+	return func(status int, duration time.Duration, err error) {
+		s.status, s.duration, s.err = status, duration, err
+	}
 }
 
 type spyObserver struct {
@@ -159,6 +163,16 @@ func TestAccessLog_MatchedRoute_LogsTemplateStatusAndDuration(t *testing.T) {
 	assertObservation(t, spies.logger.observation, clockStep*3)
 	if spies.logger.requestID != generatedRequestID {
 		t.Fatalf("request id = %v", spies.logger.requestID)
+	}
+}
+
+func TestAccessLog_PresentedError_LogsCause(t *testing.T) {
+	spies := newSpyObservability()
+	router := routerObservedBy(spies.observability(), &spyPanics{}, true)
+	router.GET("/fail", func(c *gin.Context) { rest.PresentError(c, errBoom) })
+	get(router, "/fail")
+	if !errors.Is(spies.logger.err, errBoom) || spies.logger.status != http.StatusInternalServerError {
+		t.Fatalf("logged %d with %v", spies.logger.status, spies.logger.err)
 	}
 }
 
