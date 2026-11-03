@@ -1,6 +1,6 @@
 //go:build integration
 
-package main_test
+package e2e_test
 
 import (
 	"bytes"
@@ -30,7 +30,7 @@ const (
 	fakeToken       = "e2e-fake-token-0123456789abcdef01234"
 	ownerOne        = "01890000-0000-7000-8000-000000000001"
 	ownerTwo        = "01890000-0000-7000-8000-000000000002"
-	moduleRoot      = "../.."
+	moduleRoot      = ".."
 	pollInterval    = 50 * time.Millisecond
 	bootTimeout     = 15 * time.Second
 	requestTimeout  = 10 * time.Second

@@ -1,6 +1,6 @@
 //go:build integration && unix
 
-package main_test
+package e2e_test
 
 import (
 	"context"

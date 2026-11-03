@@ -1,6 +1,6 @@
 //go:build integration
 
-package main_test
+package e2e_test
 
 import (
 	"encoding/json"
@@ -9,10 +9,12 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/goccy/go-yaml"
 )
 
 const (
-	contractPath   = moduleRoot + "/api/openapi.json"
+	contractPath   = moduleRoot + "/api/openapi.yaml"
 	fakePixPrefix  = "00020126fake"
 	schemaRefStart = "#/components/schemas/"
 	validDocument  = "52998224725"
@@ -46,9 +48,13 @@ type contractClient struct {
 
 func loadContract(t *testing.T) contractDocument {
 	t.Helper()
-	raw, err := os.ReadFile(contractPath)
+	source, err := os.ReadFile(contractPath)
 	if err != nil {
 		t.Fatalf("reading the contract: %v", err)
+	}
+	raw, err := yaml.YAMLToJSON(source)
+	if err != nil {
+		t.Fatalf("converting the contract: %v", err)
 	}
 	var document contractDocument
 	if err := json.Unmarshal(raw, &document); err != nil {
