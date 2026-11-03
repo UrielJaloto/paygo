@@ -2,6 +2,7 @@ package payment
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -68,7 +69,7 @@ func (s *Service) payCharge(ctx context.Context, store Store, providerID string)
 	transferID := s.ids.NewID()
 	changed, err := charge.MarkPaid(transferID, s.clock.Now())
 	if err != nil || !changed {
-		return err
+		return ignoreStale(err)
 	}
 	err = s.post(ctx, store, posting{id: transferID, build: transfer.NewCharge, movement: transfer.Movement{
 		OwnerID: charge.OwnerID(),
@@ -89,9 +90,16 @@ func (s *Service) expireCharge(ctx context.Context, store Store, providerID stri
 		return fmt.Errorf("finding charge: %w", err)
 	}
 	if err := charge.MarkExpired(s.clock.Now()); err != nil {
-		return err
+		return ignoreStale(err)
 	}
 	return s.publishCharge(ctx, store, charge, event.TypeChargeExpired)
+}
+
+func ignoreStale(err error) error {
+	if errors.Is(err, payment.ErrInvalidTransition) {
+		return nil
+	}
+	return err
 }
 
 func (s *Service) publishCharge(ctx context.Context, store Store, charge payment.Charge, eventType event.Type) error {

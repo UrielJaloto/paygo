@@ -80,7 +80,7 @@ func (s *Service) expireStaleCharge(ctx context.Context, id payment.ChargeID) er
 			return err
 		}
 		if err := charge.MarkExpired(s.clock.Now()); err != nil {
-			return err
+			return ignoreStale(err)
 		}
 		return s.publishCharge(ctx, store, charge, event.TypeChargeExpired)
 	})

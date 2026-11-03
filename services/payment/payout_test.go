@@ -521,7 +521,7 @@ func TestSync_ChargeWithoutProviderID_SkipsProvider(t *testing.T) {
 	}
 }
 
-func TestSync_ChargePaidAfterListing_ReturnsInvalidTransition(t *testing.T) {
+func TestSync_ChargePaidAfterListing_KeepsItPaid(t *testing.T) {
 	store := paymentStore()
 	listed := seedCharge(t, store, payment.ChargePending)
 	store.charges.stale = []payment.Charge{listed}
@@ -533,8 +533,11 @@ func TestSync_ChargePaidAfterListing_ReturnsInvalidTransition(t *testing.T) {
 
 	_, err := svc.Sync(context.Background(), 10)
 
-	if !errors.Is(err, payment.ErrInvalidTransition) {
-		t.Errorf("Sync() error = %v, want %v", err, payment.ErrInvalidTransition)
+	if err != nil {
+		t.Fatalf("Sync() error = %v, want nil", err)
+	}
+	if got := store.charges.items[0].Status(); got != payment.ChargePaid || len(store.events) != 0 {
+		t.Errorf("status = %s, events = %d, want paid and none", got, len(store.events))
 	}
 }
 
