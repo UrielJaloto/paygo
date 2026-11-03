@@ -27,7 +27,7 @@ jobs:
       - name: Vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
       - name: Load generator module
-        working-directory: tools/loadgen
+        working-directory: packages/loadgen
         run: |
           go vet ./...
           go test -race ./...
@@ -84,4 +84,4 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Build
-        run: docker build .
+        run: docker build -f env/Dockerfile .

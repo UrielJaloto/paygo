@@ -1,0 +1,51 @@
+name: paygo-loadgen
+
+services:
+  postgres:
+    image: postgres:18
+    command:
+      - postgres
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - synchronous_commit=on
+      - -c
+      - max_connections=200
+    environment:
+      POSTGRES_USER: paygo
+      POSTGRES_PASSWORD: paygo
+      POSTGRES_DB: paygo
+    ports:
+      - "55433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paygo"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  migrate:
+    build: &paygo-build
+      context: ..
+      dockerfile: env/Dockerfile
+    entrypoint: ["/usr/local/bin/paygo-migrate"]
+    environment:
+      PAYGO_DATABASE_URL: postgres://paygo:paygo@postgres:5432/paygo?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: *paygo-build
+    environment:
+      PAYGO_DATABASE_URL: postgres://paygo:paygo@postgres:5432/paygo?sslmode=disable
+      PAYGO_ADMIN_TOKEN: bench-admin-token-0123456789abcdef
+      PAYGO_FAKE_WEBHOOK_TOKEN: bench-webhook-token-0123456789abcd
+      PAYGO_DB_MAX_CONNS: "64"
+      PAYGO_RATE_LIMIT_RPS: "10000"
+      PAYGO_RATE_LIMIT_BURST: "10000"
+      PAYGO_REQUEST_TIMEOUT: 60s
+    ports:
+      - "18080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully

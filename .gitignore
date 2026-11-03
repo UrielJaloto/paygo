@@ -4,7 +4,7 @@
 *.coverprofile
 /cover/
 /bin/
-/tools/loadgen/results/
+/packages/loadgen/results/
 .env
 go.work
 go.work.sum
