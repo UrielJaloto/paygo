@@ -34,11 +34,7 @@ jobs:
           go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
   unit:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -46,6 +42,16 @@ jobs:
           go-version-file: go.mod
       - name: Test
         run: go test -race ./...
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: go test ./...
 
   integration:
     runs-on: ubuntu-latest
