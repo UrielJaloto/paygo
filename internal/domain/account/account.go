@@ -11,13 +11,13 @@ import (
 )
 
 const (
-	KindCustomer         Kind = "customer"
-	KindSettlement       Kind = "settlement"
-	KindProviderClearing Kind = "provider_clearing"
-	KindPayoutHold       Kind = "payout_hold"
+	KindCustomer         = "customer"
+	KindSettlement       = "settlement"
+	KindProviderClearing = "provider_clearing"
+	KindPayoutHold       = "payout_hold"
 
-	StatusActive Status = "active"
-	StatusFrozen Status = "frozen"
+	StatusActive = "active"
+	StatusFrozen = "frozen"
 
 	initialVersion int64 = 1
 )
@@ -42,16 +42,12 @@ func ParseID(text string) (ID, error) {
 	return ID(text), nil
 }
 
-type Kind string
-
-type Status string
-
 type Snapshot struct {
 	ID        ID
 	OwnerID   apikey.OwnerID
 	Currency  money.Currency
-	Kind      Kind
-	Status    Status
+	Kind      string
+	Status    string
 	Version   int64
 	CreatedAt time.Time
 }
@@ -60,8 +56,8 @@ type Account struct {
 	id        ID
 	ownerID   apikey.OwnerID
 	currency  money.Currency
-	kind      Kind
-	status    Status
+	kind      string
+	status    string
 	version   int64
 	createdAt time.Time
 }
@@ -105,11 +101,11 @@ func (a Account) Currency() money.Currency {
 	return a.currency
 }
 
-func (a Account) Kind() Kind {
+func (a Account) Kind() string {
 	return a.kind
 }
 
-func (a Account) Status() Status {
+func (a Account) Status() string {
 	return a.status
 }
 

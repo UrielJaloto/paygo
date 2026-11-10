@@ -11,20 +11,20 @@ import (
 func TestPaymentConstructors_SetKindAndValidate(t *testing.T) {
 	cases := []struct {
 		name  string
-		build func(transfer.ID, transfer.Movement) (transfer.Transfer, error)
-		want  transfer.Kind
+		build func(string, transfer.Movement) (transfer.Transfer, error)
+		want  string
 	}{
-		{name: "charge", want: transfer.KindCharge, build: func(id transfer.ID, m transfer.Movement) (transfer.Transfer, error) {
-			return transfer.NewCharge(id, m, createdAt)
+		{name: "charge", want: transfer.KindCharge, build: func(id string, movement transfer.Movement) (transfer.Transfer, error) {
+			return transfer.NewCharge(id, movement, createdAt)
 		}},
-		{name: "payout", want: transfer.KindPayout, build: func(id transfer.ID, m transfer.Movement) (transfer.Transfer, error) {
-			return transfer.NewPayout(id, m, createdAt)
+		{name: "payout", want: transfer.KindPayout, build: func(id string, movement transfer.Movement) (transfer.Transfer, error) {
+			return transfer.NewPayout(id, movement, createdAt)
 		}},
-		{name: "completion", want: transfer.KindPayoutCompletion, build: func(id transfer.ID, m transfer.Movement) (transfer.Transfer, error) {
-			return transfer.NewPayoutCompletion(id, m, createdAt)
+		{name: "completion", want: transfer.KindPayoutCompletion, build: func(id string, movement transfer.Movement) (transfer.Transfer, error) {
+			return transfer.NewPayoutCompletion(id, movement, createdAt)
 		}},
-		{name: "failure", want: transfer.KindPayoutFailure, build: func(id transfer.ID, m transfer.Movement) (transfer.Transfer, error) {
-			return transfer.NewPayoutFailure(id, m, createdAt)
+		{name: "failure", want: transfer.KindPayoutFailure, build: func(id string, movement transfer.Movement) (transfer.Transfer, error) {
+			return transfer.NewPayoutFailure(id, movement, createdAt)
 		}},
 	}
 	movement := transfer.Movement{OwnerID: owner, From: accountA, To: accountB, Amount: money.NewMoney(100, money.BRL)}

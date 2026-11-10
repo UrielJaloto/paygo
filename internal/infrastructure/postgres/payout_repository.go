@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -38,7 +39,7 @@ func NewPayoutRepository(pool *pgxpool.Pool) *PayoutRepository {
 	return &PayoutRepository{database: pool}
 }
 
-func (r *PayoutRepository) Save(ctx context.Context, payout payment.Payout, key transfer.IdempotencyKey, fingerprint transfer.Fingerprint) error {
+func (r *PayoutRepository) Save(ctx context.Context, payout payment.Payout, key transfer.IdempotencyKey, fingerprint string) error {
 	_, err := r.database.Exec(ctx, insertPayout, payout.ID(), payout.OwnerID(), key, fingerprint, payout.AccountID(),
 		payout.Amount().Minor(), payout.Amount().Currency(), payout.PixKey().Value(), payout.PixKey().Kind(),
 		payout.Reference().Provider, payout.Reference().ProviderID, payout.Transfers().Hold, payout.Transfers().Final,
@@ -54,7 +55,7 @@ func (r *PayoutRepository) Update(ctx context.Context, payout payment.Payout) er
 	return err
 }
 
-func (r *PayoutRepository) FindByID(ctx context.Context, id payment.PayoutID) (payment.Payout, error) {
+func (r *PayoutRepository) FindByID(ctx context.Context, id string) (payment.Payout, error) {
 	found, err := scanPayout(r.database.QueryRow(ctx, selectPayout, id))
 	return found, mapNotFound(err, payment.ErrPayoutNotFound)
 }
@@ -64,8 +65,8 @@ func (r *PayoutRepository) FindByProviderID(ctx context.Context, providerID stri
 	return found, mapNotFound(err, payment.ErrPayoutNotFound)
 }
 
-func (r *PayoutRepository) FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (payment.Payout, transfer.Fingerprint, error) {
-	var fingerprint transfer.Fingerprint
+func (r *PayoutRepository) FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (payment.Payout, string, error) {
+	var fingerprint string
 	found, err := scanPayout(r.database.QueryRow(ctx, selectPayoutByKey, owner, key), &fingerprint)
 	return found, fingerprint, mapNotFound(err, payment.ErrPayoutNotFound)
 }
@@ -87,6 +88,7 @@ func scanPayout(row pgx.Row, extra ...any) (payment.Payout, error) {
 		&snapshot.Status, &snapshot.Timeline.CreatedAt, &snapshot.Timeline.UpdatedAt}
 	err := row.Scan(append(destinations, extra...)...)
 	snapshot.Amount = money.NewMoney(minor, currency)
-	snapshot.PixKey, _ = payment.ParsePixKey(keyKind, keyValue)
-	return payment.RestorePayout(snapshot), err
+	key, keyErr := payment.ParsePixKey(keyKind, keyValue)
+	snapshot.PixKey = key
+	return payment.RestorePayout(snapshot), errors.Join(err, keyErr)
 }

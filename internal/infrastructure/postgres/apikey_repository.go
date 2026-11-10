@@ -31,11 +31,11 @@ func (r *APIKeyRepository) Save(ctx context.Context, key apikey.APIKey) error {
 	return err
 }
 
-func (r *APIKeyRepository) FindByPrefix(ctx context.Context, prefix apikey.Prefix) (apikey.APIKey, error) {
+func (r *APIKeyRepository) FindByPrefix(ctx context.Context, prefix string) (apikey.APIKey, error) {
 	return scanAPIKey(r.database.QueryRow(ctx, selectAPIKeyPrefix, prefix))
 }
 
-func (r *APIKeyRepository) FindByID(ctx context.Context, id apikey.ID) (apikey.APIKey, error) {
+func (r *APIKeyRepository) FindByID(ctx context.Context, id string) (apikey.APIKey, error) {
 	return scanAPIKey(r.database.QueryRow(ctx, selectAPIKey, id))
 }
 
@@ -45,16 +45,16 @@ func (r *APIKeyRepository) Update(ctx context.Context, key apikey.APIKey) error 
 }
 
 func scanAPIKey(row pgx.Row) (apikey.APIKey, error) {
-	var id apikey.ID
+	var id string
 	var owner apikey.OwnerID
-	var prefix apikey.Prefix
+	var prefix string
 	var hash string
 	var createdAt time.Time
 	var revokedAt *time.Time
 	if err := row.Scan(&id, &owner, &prefix, &hash, &createdAt, &revokedAt); err != nil {
 		return apikey.APIKey{}, mapNotFound(err, apikey.ErrAPIKeyNotFound)
 	}
-	key, err := apikey.NewMoney(id, owner, prefix, hash, createdAt)
+	key, err := apikey.NewAPIKey(id, owner, prefix, hash, createdAt)
 	if revokedAt != nil {
 		key = apikey.Restore(key, *revokedAt)
 	}

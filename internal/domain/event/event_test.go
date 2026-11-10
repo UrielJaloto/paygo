@@ -13,17 +13,17 @@ import (
 
 var (
 	occurredAt = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	metadata       = event.Metadata{ID: "e1", At: occurredAt}
+	metadata   = event.Metadata{ID: "e1", At: occurredAt}
 )
 
-func ofKind(kind transfer.Kind) transfer.Transfer {
+func ofKind(kind string) transfer.Transfer {
 	return transfer.Restore(transfer.Snapshot{ID: "t1", Request: transfer.Request{Kind: kind}})
 }
 
 func TestNewTransferEvent_TypeFollowsKind(t *testing.T) {
 	cases := []struct {
-		kind transfer.Kind
-		want event.Type
+		kind string
+		want string
 	}{
 		{kind: transfer.KindTransfer, want: event.TypeTransferCompleted},
 		{kind: transfer.KindDeposit, want: event.TypeTransferCompleted},
@@ -93,7 +93,7 @@ func TestRestore_KeepsEveryField(t *testing.T) {
 	owners := []apikey.OwnerID{"o1", "o2"}
 	got := event.Restore(event.Snapshot{Metadata: metadata, Type: event.TypeChargePaid, Transfer: ofKind(transfer.KindDeposit), TransferID: "t1", OwnerIDs: owners})
 	if got.ID() != metadata.ID || got.OccurredAt() != occurredAt || got.Type() != event.TypeChargePaid {
-		t.Fatalf("restored meta = %s %v %s", got.ID(), got.OccurredAt(), got.Type())
+		t.Fatalf("restored metadata = %s %v %s", got.ID(), got.OccurredAt(), got.Type())
 	}
 	if got.Transfer().ID() != "t1" || got.TransferID() != "t1" {
 		t.Fatalf("restored transfer = %s, id = %s", got.Transfer().ID(), got.TransferID())

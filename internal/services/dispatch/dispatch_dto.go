@@ -23,7 +23,7 @@ type DeliverResult struct {
 	Dead      int
 }
 
-func (r *DeliverResult) countStatus(status webhook.DeliveryStatus) {
+func (r *DeliverResult) countStatus(status string) {
 	switch status {
 	case webhook.DeliverySucceeded:
 		r.Succeeded++

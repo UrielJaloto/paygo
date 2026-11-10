@@ -24,9 +24,7 @@ type transferPageResponse struct {
 	NextCursor string             `json:"next_cursor,omitempty"`
 }
 
-type TransferPresenter struct{}
-
-func (TransferPresenter) toTransferResponse(output transferservice.TransferOutput) transferResponse {
+func toTransferResponse(output transferservice.TransferOutput) transferResponse {
 	return transferResponse{
 		ID:            output.ID,
 		Kind:          output.Kind,
@@ -40,23 +38,22 @@ func (TransferPresenter) toTransferResponse(output transferservice.TransferOutpu
 	}
 }
 
-func (p TransferPresenter) presentMoneyMovement(c *gin.Context, output transferservice.TransferOutput, err error) {
+func presentMoneyMovement(ginContext *gin.Context, output transferservice.TransferOutput, err error) {
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
 	status := http.StatusCreated
 	if output.IsReplay {
-		status = http.StatusOK
-		c.Header(idempotentReplayedHeader, idempotentReplayedPresent)
+		status = markReplayed(ginContext)
 	}
-	c.JSON(status, p.toTransferResponse(output))
+	ginContext.JSON(status, toTransferResponse(output))
 }
 
-func (p TransferPresenter) toTransferPageResponse(page transferservice.TransferPage) transferPageResponse {
+func toTransferPageResponse(page transferservice.TransferPage) transferPageResponse {
 	items := make([]transferResponse, 0, len(page.Items))
 	for _, item := range page.Items {
-		items = append(items, p.toTransferResponse(item))
+		items = append(items, toTransferResponse(item))
 	}
 	return transferPageResponse{Items: items, NextCursor: page.NextCursor}
 }

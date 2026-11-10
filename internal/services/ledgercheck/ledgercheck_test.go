@@ -14,9 +14,9 @@ var errBoom = errors.New("boom")
 type stubReader struct {
 	mismatches []service.Mismatch
 	accounts   int
-	totals       map[string]int64
+	totals     map[string]int64
 	balanceErr error
-	totalsErr     error
+	totalsErr  error
 }
 
 func (s stubReader) ListBalanceMismatches(context.Context) ([]service.Mismatch, int, error) {
@@ -49,7 +49,7 @@ func TestCheck_ReaderSucceeds_ReportsLedgerHealth(t *testing.T) {
 			reader: stubReader{
 				accounts:   2,
 				mismatches: []service.Mismatch{{AccountID: "a", StoredMinor: 10, CalculatedMinor: 9}},
-				totals:       map[string]int64{"BRL": 0},
+				totals:     map[string]int64{"BRL": 0},
 			},
 			accounts:   2,
 			mismatches: []string{"a"},
@@ -67,7 +67,7 @@ func TestCheck_ReaderSucceeds_ReportsLedgerHealth(t *testing.T) {
 			reader: stubReader{
 				accounts:   4,
 				mismatches: []service.Mismatch{{AccountID: "b"}, {AccountID: "a"}},
-				totals:       map[string]int64{"USD": -1, "BRL": 5, "EUR": 0},
+				totals:     map[string]int64{"USD": -1, "BRL": 5, "EUR": 0},
 			},
 			accounts:   4,
 			mismatches: []string{"a", "b"},
@@ -76,7 +76,7 @@ func TestCheck_ReaderSucceeds_ReportsLedgerHealth(t *testing.T) {
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			got, err := service.NewMoney(testCase.reader).Check(context.Background())
+			got, err := service.NewService(testCase.reader).Check(context.Background())
 			if err != nil {
 				t.Fatalf("Check() error = %v", err)
 			}
@@ -103,7 +103,7 @@ func TestCheck_ReaderFails_ReturnsWrappedError(t *testing.T) {
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			_, err := service.NewMoney(testCase.reader).Check(context.Background())
+			_, err := service.NewService(testCase.reader).Check(context.Background())
 			if !errors.Is(err, errBoom) {
 				t.Fatalf("Check() error = %v, want %v", err, errBoom)
 			}

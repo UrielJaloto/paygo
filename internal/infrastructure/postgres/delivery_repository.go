@@ -53,7 +53,7 @@ func NewDeliveryRepository(pool *pgxpool.Pool) *DeliveryRepository {
 	return &DeliveryRepository{database: pool}
 }
 
-func (r *DeliveryRepository) FindByID(ctx context.Context, id webhook.DeliveryID) (webhook.Delivery, error) {
+func (r *DeliveryRepository) FindByID(ctx context.Context, id string) (webhook.Delivery, error) {
 	var snapshot webhook.DeliverySnapshot
 	err := r.database.QueryRow(ctx, selectDelivery, id).Scan(scanDeliveryTargets(&snapshot)...)
 	return webhook.RestoreDelivery(snapshot), mapNotFound(err, webhook.ErrDeliveryNotFound)
@@ -64,7 +64,7 @@ func (r *DeliveryRepository) ListByOwner(ctx context.Context, filter webhookserv
 	return pgx.CollectRows(rows, scanDeliveryRow)
 }
 
-func (r *DeliveryRepository) ListPendingByEndpoint(ctx context.Context, id webhook.EndpointID) ([]webhook.Delivery, error) {
+func (r *DeliveryRepository) ListPendingByEndpoint(ctx context.Context, id string) ([]webhook.Delivery, error) {
 	rows, _ := r.database.Query(ctx, listPendingDeliveries, id)
 	return pgx.CollectRows(rows, scanDeliveryRow)
 }
@@ -76,8 +76,8 @@ func (r *DeliveryRepository) Update(ctx context.Context, delivery webhook.Delive
 
 func (r *DeliveryRepository) SaveAll(ctx context.Context, deliveries []webhook.Delivery) error {
 	batch := &pgx.Batch{}
-	for _, d := range deliveries {
-		batch.Queue(insertDelivery, d.ID(), d.EventID(), d.EndpointID(), d.OwnerID(), d.Status(), d.Attempts(), d.NextAttemptAt(), d.LastError(), d.UpdatedAt())
+	for _, delivery := range deliveries {
+		batch.Queue(insertDelivery, delivery.ID(), delivery.EventID(), delivery.EndpointID(), delivery.OwnerID(), delivery.Status(), delivery.Attempts(), delivery.NextAttemptAt(), delivery.LastError(), delivery.UpdatedAt())
 	}
 	return r.database.SendBatch(ctx, batch).Close()
 }

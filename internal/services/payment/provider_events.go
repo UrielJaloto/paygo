@@ -13,7 +13,7 @@ import (
 	"github.com/UrielJaloto/paygo/internal/domain/transfer"
 )
 
-type movementBuilder func(id transfer.ID, movement transfer.Movement, createdAt time.Time) (transfer.Transfer, error)
+type movementBuilder func(id string, movement transfer.Movement, createdAt time.Time) (transfer.Transfer, error)
 
 type posting struct {
 	id       string
@@ -67,7 +67,7 @@ func (s *Service) markChargePaid(ctx context.Context, store Store, providerID st
 		return fmt.Errorf("finding charge: %w", err)
 	}
 	transferID := s.ids.NewID()
-	changed, err := charge.MarkPaid(transferID, s.clock.Now())
+	changed, err := charge.MarkPaid(transferID, s.now())
 	if err != nil || !changed {
 		return ignoreInvalidTransition(err)
 	}
@@ -89,7 +89,7 @@ func (s *Service) markChargeExpired(ctx context.Context, store Store, providerID
 	if err != nil {
 		return fmt.Errorf("finding charge: %w", err)
 	}
-	if err := charge.MarkExpired(s.clock.Now()); err != nil {
+	if err := charge.MarkExpired(s.now()); err != nil {
 		return ignoreInvalidTransition(err)
 	}
 	return s.publishCharge(ctx, store, charge, event.TypeChargeExpired)
@@ -102,11 +102,11 @@ func ignoreInvalidTransition(err error) error {
 	return err
 }
 
-func (s *Service) publishCharge(ctx context.Context, store Store, charge payment.Charge, eventType event.Type) error {
+func (s *Service) publishCharge(ctx context.Context, store Store, charge payment.Charge, eventType string) error {
 	if err := store.Charges.Update(ctx, charge); err != nil {
 		return fmt.Errorf("updating charge: %w", err)
 	}
-	metadata := event.Metadata{ID: event.ID(s.ids.NewID()), At: s.clock.Now()}
+	metadata := event.Metadata{ID: s.ids.NewID(), At: s.now()}
 	if err := store.Outbox.Add(ctx, event.NewChargeEvent(metadata, eventType, charge)); err != nil {
 		return fmt.Errorf("adding event: %w", err)
 	}
@@ -123,7 +123,7 @@ func (s *Service) postJournal(ctx context.Context, store Store, plan posting) er
 }
 
 func (s *Service) recordPosting(ctx context.Context, store Store, plan posting) error {
-	created, err := plan.build(transfer.ID(plan.id), plan.movement, s.clock.Now())
+	created, err := plan.build(plan.id, plan.movement, s.now())
 	if err != nil {
 		return err
 	}

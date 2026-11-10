@@ -31,7 +31,7 @@ type fakeStore struct {
 	recorded  map[string]bool
 	events    []event.Event
 	calls     []string
-	failures      map[string]error
+	failures  map[string]error
 }
 
 func newFakeStore(accounts ...account.Account) *fakeStore {
@@ -39,12 +39,12 @@ func newFakeStore(accounts ...account.Account) *fakeStore {
 		accounts: map[account.ID]account.Account{},
 		balances: map[account.ID]money.Money{},
 		recorded: map[string]bool{},
-		failures:     map[string]error{},
+		failures: map[string]error{},
 	}
 	store.charges = &fakeCharges{store: store}
 	store.payouts = &fakePayouts{store: store}
-	for _, acc := range accounts {
-		store.accounts[acc.ID()] = acc
+	for _, account := range accounts {
+		store.accounts[account.ID()] = account
 	}
 	return store
 }
@@ -76,7 +76,7 @@ func (f *fakeStore) LockByIDs(_ context.Context, ids []account.ID) ([]account.Ac
 	return locked, nil
 }
 
-func (f *fakeStore) CalculateBalance(_ context.Context, id account.ID) (money.Money, error) {
+func (f *fakeStore) FindBalance(_ context.Context, id account.ID) (money.Money, error) {
 	return f.balances[id], f.record("balance")
 }
 
@@ -85,8 +85,8 @@ func (f *fakeStore) Append(_ context.Context, journal ledger.JournalTransaction)
 	return f.record("append")
 }
 
-func (f *fakeStore) Save(_ context.Context, t transfer.Transfer, _ transfer.Fingerprint) error {
-	f.transfers = append(f.transfers, t)
+func (f *fakeStore) Save(_ context.Context, transfer transfer.Transfer, _ string) error {
+	f.transfers = append(f.transfers, transfer)
 	return f.record("transfer.save")
 }
 
@@ -102,8 +102,8 @@ func (f *fakeStore) Record(_ context.Context, provider, eventID string) (bool, e
 	return true, nil
 }
 
-func (f *fakeStore) Add(_ context.Context, e event.Event) error {
-	f.events = append(f.events, e)
+func (f *fakeStore) Add(_ context.Context, event event.Event) error {
+	f.events = append(f.events, event)
 	return f.record("outbox")
 }
 
@@ -111,11 +111,11 @@ type fakeCharges struct {
 	store       *fakeStore
 	items       []payment.Charge
 	stale       []payment.Charge
-	fingerprint transfer.Fingerprint
+	fingerprint string
 	hasKey      bool
 }
 
-func (f *fakeCharges) Save(_ context.Context, charge payment.Charge, _ transfer.IdempotencyKey, fingerprint transfer.Fingerprint) error {
+func (f *fakeCharges) Save(_ context.Context, charge payment.Charge, _ transfer.IdempotencyKey, fingerprint string) error {
 	f.items = append(f.items, charge)
 	f.fingerprint = fingerprint
 	f.hasKey = true
@@ -123,9 +123,9 @@ func (f *fakeCharges) Save(_ context.Context, charge payment.Charge, _ transfer.
 }
 
 func (f *fakeCharges) Update(_ context.Context, charge payment.Charge) error {
-	for i, item := range f.items {
+	for index, item := range f.items {
 		if item.ID() == charge.ID() {
-			f.items[i] = charge
+			f.items[index] = charge
 		}
 	}
 	return f.store.record("charge.update")
@@ -140,21 +140,21 @@ func (f *fakeCharges) find(match func(payment.Charge) bool) (payment.Charge, err
 	return payment.Charge{}, payment.ErrChargeNotFound
 }
 
-func (f *fakeCharges) FindByID(_ context.Context, id payment.ChargeID) (payment.Charge, error) {
+func (f *fakeCharges) FindByID(_ context.Context, id string) (payment.Charge, error) {
 	if err := f.store.record("charge.find"); err != nil {
 		return payment.Charge{}, err
 	}
-	return f.find(func(c payment.Charge) bool { return c.ID() == id })
+	return f.find(func(charge payment.Charge) bool { return charge.ID() == id })
 }
 
 func (f *fakeCharges) FindByProviderID(_ context.Context, providerID string) (payment.Charge, error) {
 	if err := f.store.record("charge.byProvider"); err != nil {
 		return payment.Charge{}, err
 	}
-	return f.find(func(c payment.Charge) bool { return c.Reference().ProviderID == providerID })
+	return f.find(func(charge payment.Charge) bool { return charge.Reference().ProviderID == providerID })
 }
 
-func (f *fakeCharges) FindByIdempotencyKey(context.Context, apikey.OwnerID, transfer.IdempotencyKey) (payment.Charge, transfer.Fingerprint, error) {
+func (f *fakeCharges) FindByIdempotencyKey(context.Context, apikey.OwnerID, transfer.IdempotencyKey) (payment.Charge, string, error) {
 	if err := f.store.record("charge.byKey"); err != nil {
 		return payment.Charge{}, "", err
 	}
@@ -183,11 +183,11 @@ func (f *fakeCharges) ListPending(context.Context, time.Time, int) ([]payment.Ch
 type fakePayouts struct {
 	store       *fakeStore
 	items       []payment.Payout
-	fingerprint transfer.Fingerprint
+	fingerprint string
 	hasKey      bool
 }
 
-func (f *fakePayouts) Save(_ context.Context, payout payment.Payout, _ transfer.IdempotencyKey, fingerprint transfer.Fingerprint) error {
+func (f *fakePayouts) Save(_ context.Context, payout payment.Payout, _ transfer.IdempotencyKey, fingerprint string) error {
 	f.items = append(f.items, payout)
 	f.fingerprint = fingerprint
 	f.hasKey = true
@@ -195,9 +195,9 @@ func (f *fakePayouts) Save(_ context.Context, payout payment.Payout, _ transfer.
 }
 
 func (f *fakePayouts) Update(_ context.Context, payout payment.Payout) error {
-	for i, item := range f.items {
+	for index, item := range f.items {
 		if item.ID() == payout.ID() {
-			f.items[i] = payout
+			f.items[index] = payout
 		}
 	}
 	return f.store.record("payout.update")
@@ -212,21 +212,21 @@ func (f *fakePayouts) find(match func(payment.Payout) bool) (payment.Payout, err
 	return payment.Payout{}, payment.ErrPayoutNotFound
 }
 
-func (f *fakePayouts) FindByID(_ context.Context, id payment.PayoutID) (payment.Payout, error) {
+func (f *fakePayouts) FindByID(_ context.Context, id string) (payment.Payout, error) {
 	if err := f.store.record("payout.find"); err != nil {
 		return payment.Payout{}, err
 	}
-	return f.find(func(p payment.Payout) bool { return p.ID() == id })
+	return f.find(func(payout payment.Payout) bool { return payout.ID() == id })
 }
 
 func (f *fakePayouts) FindByProviderID(_ context.Context, providerID string) (payment.Payout, error) {
 	if err := f.store.record("payout.byProvider"); err != nil {
 		return payment.Payout{}, err
 	}
-	return f.find(func(p payment.Payout) bool { return p.Reference().ProviderID == providerID })
+	return f.find(func(payout payment.Payout) bool { return payout.Reference().ProviderID == providerID })
 }
 
-func (f *fakePayouts) FindByIdempotencyKey(context.Context, apikey.OwnerID, transfer.IdempotencyKey) (payment.Payout, transfer.Fingerprint, error) {
+func (f *fakePayouts) FindByIdempotencyKey(context.Context, apikey.OwnerID, transfer.IdempotencyKey) (payment.Payout, string, error) {
 	if err := f.store.record("payout.byKey"); err != nil {
 		return payment.Payout{}, "", err
 	}
@@ -274,8 +274,8 @@ type spyProvider struct {
 	payoutErr      error
 	chargeRequests []service.ChargeRequest
 	payoutRequests []service.PayoutRequest
-	kinds          map[string]payment.EventKind
-	statusFailures     map[string]error
+	kinds          map[string]string
+	statusFailures map[string]error
 	parsed         payment.ProviderEvent
 	parseErr       error
 }
@@ -294,11 +294,11 @@ func (s *spyProvider) SendPixPayout(_ context.Context, request service.PayoutReq
 	return s.payoutResult, s.payoutErr
 }
 
-func (s *spyProvider) FetchCharge(_ context.Context, providerID string) (payment.EventKind, error) {
+func (s *spyProvider) FetchCharge(_ context.Context, providerID string) (string, error) {
 	return s.kinds[providerID], s.statusFailures[providerID]
 }
 
-func (s *spyProvider) FetchPayout(_ context.Context, providerID string) (payment.EventKind, error) {
+func (s *spyProvider) FetchPayout(_ context.Context, providerID string) (string, error) {
 	return s.kinds[providerID], s.statusFailures[providerID]
 }
 

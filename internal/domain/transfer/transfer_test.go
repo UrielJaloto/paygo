@@ -36,9 +36,9 @@ func request() transfer.Request {
 
 func newTransfer(t *testing.T) transfer.Transfer {
 	t.Helper()
-	created, err := transfer.NewMoney("t1", request(), createdAt)
+	created, err := transfer.NewTransfer("t1", request(), createdAt)
 	if err != nil {
-		t.Fatalf("New: %v", err)
+		t.Fatalf("NewTransfer: %v", err)
 	}
 	return created
 }
@@ -66,7 +66,7 @@ func TestNewTransfer_Valid_KeepsMovement(t *testing.T) {
 func TestNewTransfer_SameAccount_ReturnsErrSameAccount(t *testing.T) {
 	same := request()
 	same.To = same.From
-	if _, err := transfer.NewMoney("t1", same, createdAt); !errors.Is(err, transfer.ErrSameAccount) {
+	if _, err := transfer.NewTransfer("t1", same, createdAt); !errors.Is(err, transfer.ErrSameAccount) {
 		t.Fatalf("error = %v, want ErrSameAccount", err)
 	}
 }
@@ -95,7 +95,7 @@ func TestParseIdempotencyKey_ValidatesFormat(t *testing.T) {
 
 func TestRequest_CalculateFingerprint_IsExactAndStable(t *testing.T) {
 	sum := sha256.Sum256([]byte("transfer|A|B|100|BRL"))
-	want := transfer.Fingerprint(hex.EncodeToString(sum[:]))
+	want := hex.EncodeToString(sum[:])
 	if got := request().CalculateFingerprint(); got != want {
 		t.Fatalf("got %s, want %s", got, want)
 	}
@@ -140,7 +140,7 @@ func TestReverse_Reversal_ReturnsErrReversalNotReversible(t *testing.T) {
 func TestTransfer_BuildReversalRequest_SwapsAccountsAndLinksOriginal(t *testing.T) {
 	got, err := newTransfer(t).BuildReversalRequest("key-2")
 	if err != nil {
-		t.Fatalf("ReversalRequest: %v", err)
+		t.Fatalf("BuildReversalRequest: %v", err)
 	}
 	want := transfer.Request{
 		OwnerID:    owner,
@@ -166,7 +166,7 @@ func TestTransfer_BuildReversalRequest_OnReversal_ReturnsErrReversalNotReversibl
 func TestBuildJournal_UsesTransferIDAndDirections(t *testing.T) {
 	journal, err := newTransfer(t).BuildJournal([2]string{"e1", "e2"})
 	if err != nil {
-		t.Fatalf("Journal: %v", err)
+		t.Fatalf("BuildJournal: %v", err)
 	}
 	entries := journal.Entries()
 	if journal.ID() != "t1" || entries[0].AccountID() != accountA || entries[0].Direction() != ledger.Debit {

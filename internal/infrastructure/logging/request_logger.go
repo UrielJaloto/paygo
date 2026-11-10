@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"time"
 )
 
@@ -32,9 +33,9 @@ func (l RequestLogger) LogRequest(ctx context.Context, method, route string) fun
 
 func resolveStatusLevel(status int) slog.Level {
 	switch {
-	case status >= 500:
+	case status >= http.StatusInternalServerError:
 		return slog.LevelError
-	case status >= 400:
+	case status >= http.StatusBadRequest:
 		return slog.LevelWarn
 	default:
 		return slog.LevelInfo

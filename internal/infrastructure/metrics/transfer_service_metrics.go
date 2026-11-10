@@ -32,25 +32,25 @@ func NewTransferServiceMetrics(next transferService, registry *Registry) *Transf
 
 func (m *TransferServiceMetrics) Transfer(ctx context.Context, input transfer.TransferInput) (transfer.TransferOutput, error) {
 	output, err := m.next.Transfer(ctx, input)
-	m.count("transfer", output, err)
+	m.countTransfer("transfer", output, err)
 	return output, err
 }
 
 func (m *TransferServiceMetrics) Deposit(ctx context.Context, input transfer.FundingInput) (transfer.TransferOutput, error) {
 	output, err := m.next.Deposit(ctx, input)
-	m.count("deposit", output, err)
+	m.countTransfer("deposit", output, err)
 	return output, err
 }
 
 func (m *TransferServiceMetrics) Withdraw(ctx context.Context, input transfer.FundingInput) (transfer.TransferOutput, error) {
 	output, err := m.next.Withdraw(ctx, input)
-	m.count("withdrawal", output, err)
+	m.countTransfer("withdrawal", output, err)
 	return output, err
 }
 
 func (m *TransferServiceMetrics) Reverse(ctx context.Context, input transfer.ReverseInput) (transfer.TransferOutput, error) {
 	output, err := m.next.Reverse(ctx, input)
-	m.count("reversal", output, err)
+	m.countTransfer("reversal", output, err)
 	return output, err
 }
 
@@ -62,7 +62,7 @@ func (m *TransferServiceMetrics) List(ctx context.Context, input transfer.ListIn
 	return m.next.List(ctx, input)
 }
 
-func (m *TransferServiceMetrics) count(kind string, output transfer.TransferOutput, err error) {
+func (m *TransferServiceMetrics) countTransfer(kind string, output transfer.TransferOutput, err error) {
 	m.registry.transfers.WithLabelValues(kind, resolveTransferResult(output, err)).Inc()
 }
 

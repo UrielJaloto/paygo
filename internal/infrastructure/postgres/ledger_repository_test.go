@@ -44,9 +44,9 @@ func newLedgerFixture(t *testing.T) (*pgxpool.Pool, *postgres.LedgerRepository, 
 
 func assertBalance(t *testing.T, repository *postgres.LedgerRepository, id account.ID, want int64) {
 	t.Helper()
-	balance, err := repository.CalculateBalance(context.Background(), id)
+	balance, err := repository.FindBalance(context.Background(), id)
 	if err != nil {
-		t.Fatalf("CalculateBalance() error = %v", err)
+		t.Fatalf("FindBalance() error = %v", err)
 	}
 	if balance.Minor() != want || balance.Currency() != money.BRL {
 		t.Fatalf("balance = %s, want %d BRL", balance, want)
@@ -61,7 +61,7 @@ func TestLedgerAppend_Transfer_UpdatesBalancesAndStoresEntries(t *testing.T) {
 	assertBalance(t, repository, to, 100)
 	entries, err := repository.ListStatement(context.Background(), to, page.Cursor{}, 10)
 	if err != nil {
-		t.Fatalf("Statement() error = %v", err)
+		t.Fatalf("ListStatement() error = %v", err)
 	}
 	if len(entries) != 1 {
 		t.Fatalf("entries = %d, want 1", len(entries))
@@ -93,9 +93,9 @@ func TestLedgerAppend_SameAccountTwice_AppliesEveryEntry(t *testing.T) {
 
 func TestLedgerFindBalance_Missing_ReturnsNotFound(t *testing.T) {
 	_, repository, _, _ := newLedgerFixture(t)
-	_, err := repository.CalculateBalance(context.Background(), account.ID(testID(9)))
+	_, err := repository.FindBalance(context.Background(), account.ID(testID(9)))
 	if !errors.Is(err, account.ErrAccountNotFound) {
-		t.Fatalf("CalculateBalance() error = %v, want %v", err, account.ErrAccountNotFound)
+		t.Fatalf("FindBalance() error = %v, want %v", err, account.ErrAccountNotFound)
 	}
 }
 
@@ -107,14 +107,14 @@ func TestLedgerListStatement_Pages_NewestFirst(t *testing.T) {
 	}
 	first, err := repository.ListStatement(ctx, to, page.Cursor{}, 2)
 	if err != nil {
-		t.Fatalf("Statement() error = %v", err)
+		t.Fatalf("ListStatement() error = %v", err)
 	}
 	if want := []string{testID(302), testID(202)}; !slices.Equal(entryIDs(first), want) {
 		t.Fatalf("first page = %v, want %v", entryIDs(first), want)
 	}
 	second, err := repository.ListStatement(ctx, to, page.NewCursor(testID(202)), 2)
 	if err != nil {
-		t.Fatalf("Statement() error = %v", err)
+		t.Fatalf("ListStatement() error = %v", err)
 	}
 	if want := []string{testID(102)}; !slices.Equal(entryIDs(second), want) {
 		t.Fatalf("second page = %v, want %v", entryIDs(second), want)
@@ -135,17 +135,17 @@ func TestLedgerListBalanceMismatches_Tampered_ReportsMismatch(t *testing.T) {
 	appendTransfer(t, repository, 100, from, to)
 	mismatches, accounts, err := repository.ListBalanceMismatches(ctx)
 	if err != nil {
-		t.Fatalf("CheckBalances() error = %v", err)
+		t.Fatalf("ListBalanceMismatches() error = %v", err)
 	}
 	if len(mismatches) != 0 || accounts != 7 {
-		t.Fatalf("CheckBalances() = %v, %d, want no mismatch and 7 accounts", mismatches, accounts)
+		t.Fatalf("ListBalanceMismatches() = %v, %d, want no mismatch and 7 accounts", mismatches, accounts)
 	}
 	if _, err := pool.Exec(ctx, "UPDATE accounts SET balance_minor = 1 WHERE id = $1", to); err != nil {
 		t.Fatalf("tampering balance: %v", err)
 	}
 	mismatches, _, err = repository.ListBalanceMismatches(ctx)
 	if err != nil {
-		t.Fatalf("CheckBalances() error = %v", err)
+		t.Fatalf("ListBalanceMismatches() error = %v", err)
 	}
 	if len(mismatches) != 1 || mismatches[0].AccountID != string(to) || mismatches[0].StoredMinor != 1 || mismatches[0].CalculatedMinor != 100 {
 		t.Fatalf("mismatches = %+v", mismatches)
@@ -157,10 +157,10 @@ func TestLedgerCalculateTotalsByCurrency_BalancedJournal_IsZero(t *testing.T) {
 	appendTransfer(t, repository, 100, from, to)
 	totals, err := repository.CalculateTotalsByCurrency(context.Background())
 	if err != nil {
-		t.Fatalf("SumByCurrency() error = %v", err)
+		t.Fatalf("CalculateTotalsByCurrency() error = %v", err)
 	}
 	if sum, found := totals["BRL"]; !found || sum != 0 || len(totals) != 1 {
-		t.Fatalf("sums = %v, want only BRL at zero", totals)
+		t.Fatalf("totals = %v, want only BRL at zero", totals)
 	}
 }
 
@@ -171,7 +171,7 @@ func TestLedgerRepository_ClosedPool_ReturnsErrors(t *testing.T) {
 	_, statementErr := repository.ListStatement(ctx, from, page.Cursor{}, 1)
 	_, _, checkErr := repository.ListBalanceMismatches(ctx)
 	_, totalsErr := repository.CalculateTotalsByCurrency(ctx)
-	for name, err := range map[string]error{"Statement": statementErr, "CheckBalances": checkErr, "SumByCurrency": totalsErr} {
+	for name, err := range map[string]error{"Statement": statementErr, "ListBalanceMismatches": checkErr, "CalculateTotalsByCurrency": totalsErr} {
 		if err == nil {
 			t.Errorf("%s() error = nil, want an error", name)
 		}

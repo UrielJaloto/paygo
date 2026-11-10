@@ -81,27 +81,8 @@ func TestNewSecret_ReaderFails_WrapsError(t *testing.T) {
 
 func TestHashToken_KnownVector_ReturnsDigest(t *testing.T) {
 	want := "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-	if got := (secret.TokenHasher{}).Hash("abc"); got != want {
+	if got := secret.HashToken("abc"); got != want {
 		t.Fatalf("hash = %q, want %q", got, want)
-	}
-}
-
-func TestMatches_Candidates_ComparesHash(t *testing.T) {
-	hashToken := secret.TokenHasher{}
-	tests := []struct {
-		name  string
-		token string
-		want  bool
-	}{
-		{name: "same token", token: "abc", want: true},
-		{name: "other token", token: "abd", want: false},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := hashToken.Matches(test.token, hashToken.Hash("abc")); got != test.want {
-				t.Fatalf("Matches() = %v, want %v", got, test.want)
-			}
-		})
 	}
 }
 
@@ -131,7 +112,7 @@ func TestSignWebhook_KnownVector_ReturnsVersionedHMAC(t *testing.T) {
 	authenticationCode.Write([]byte(`1700000000.{"a":1}`))
 	want := "v1=" + hex.EncodeToString(authenticationCode.Sum(nil))
 
-	got := secret.WebhookSigner{}.SignWebhook("whsec_test", 1700000000, []byte(`{"a":1}`))
+	got := secret.SignWebhook("whsec_test", 1700000000, []byte(`{"a":1}`))
 
 	if got != want {
 		t.Fatalf("signature = %q, want %q", got, want)

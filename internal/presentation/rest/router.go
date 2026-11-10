@@ -11,7 +11,7 @@ type Observability struct {
 	Logger   RequestLogger
 	Observer RequestObserver
 	Spans    SpanStarter
-	Clock    Clock
+	Now      func() time.Time
 }
 
 type Middleware struct {
@@ -52,8 +52,8 @@ func NewRouter(dependencies Dependencies) *gin.Engine {
 	engine.Use(
 		NewRequestIDMiddleware(dependencies.Middleware.IDs, dependencies.Middleware.RequestContext),
 		NewTracingMiddleware(observability.Spans),
-		NewAccessLogMiddleware(observability.Logger, observability.Clock),
-		NewMetricsMiddleware(observability.Observer, observability.Clock),
+		NewAccessLogMiddleware(observability.Logger, observability.Now),
+		NewMetricsMiddleware(observability.Observer, observability.Now),
 		NewRecoveryMiddleware(dependencies.Middleware.Panics),
 		NewTimeoutMiddleware(dependencies.Middleware.RequestTimeout),
 	)
@@ -79,6 +79,6 @@ func newAdminGroup(engine *gin.Engine, access Access) *gin.RouterGroup {
 	return engine.Group("/admin/v1", NewAdminAuthMiddleware(access.Admin))
 }
 
-func presentRouteNotFound(c *gin.Context) {
-	presentProblem(c, problemKind{http.StatusNotFound, "not-found", "Not found"}, "route not found")
+func presentRouteNotFound(ginContext *gin.Context) {
+	presentProblem(ginContext, problemKind{http.StatusNotFound, "not-found", "Not found"}, "route not found")
 }

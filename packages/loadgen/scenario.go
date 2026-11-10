@@ -14,7 +14,7 @@ const (
 	seedMixer          = 0x9e3779b97f4a7c15
 )
 
-var errUnknownScenario = errors.NewMoney("unknown scenario")
+var errUnknownScenario = errors.New("unknown scenario")
 
 type picker struct {
 	random   *rand.Rand
@@ -23,7 +23,7 @@ type picker struct {
 }
 
 func newPicker(scenario string, accounts int, seed uint64) (*picker, error) {
-	chosen := &picker{random: rand.NewMoney(rand.NewPCG(seed, seed^seedMixer)), accounts: accounts}
+	chosen := &picker{random: rand.New(rand.NewPCG(seed, seed^seedMixer)), accounts: accounts}
 	switch scenario {
 	case scenarioUniform:
 		return chosen, nil

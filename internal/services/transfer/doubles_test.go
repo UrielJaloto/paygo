@@ -18,7 +18,7 @@ import (
 
 type savedTransfer struct {
 	transfer    transfer.Transfer
-	fingerprint transfer.Fingerprint
+	fingerprint string
 }
 
 type fakeStore struct {
@@ -27,25 +27,25 @@ type fakeStore struct {
 	accounts          map[account.ID]account.Account
 	balances          map[account.ID]money.Money
 	existing          *savedTransfer
-	originals         map[transfer.ID]transfer.Transfer
+	originals         map[string]transfer.Transfer
 	locked            []account.ID
 	journals          []ledger.JournalTransaction
 	saved             []savedTransfer
 	events            []event.Event
 	marked            []transfer.Transfer
 	calls             []string
-	failures              map[string]error
+	failures          map[string]error
 }
 
 func newFakeStore(accounts ...account.Account) *fakeStore {
 	store := &fakeStore{
 		accounts:  map[account.ID]account.Account{},
 		balances:  map[account.ID]money.Money{},
-		originals: map[transfer.ID]transfer.Transfer{},
-		failures:      map[string]error{},
+		originals: map[string]transfer.Transfer{},
+		failures:  map[string]error{},
 	}
-	for _, acc := range accounts {
-		store.accounts[acc.ID()] = acc
+	for _, account := range accounts {
+		store.accounts[account.ID()] = account
 	}
 	return store
 }
@@ -77,7 +77,7 @@ func (f *fakeStore) LockByIDs(_ context.Context, ids []account.ID) ([]account.Ac
 	return locked, nil
 }
 
-func (f *fakeStore) CalculateBalance(_ context.Context, id account.ID) (money.Money, error) {
+func (f *fakeStore) FindBalance(_ context.Context, id account.ID) (money.Money, error) {
 	return f.balances[id], f.record("balance")
 }
 
@@ -86,7 +86,7 @@ func (f *fakeStore) Append(_ context.Context, journal ledger.JournalTransaction)
 	return f.record("append")
 }
 
-func (f *fakeStore) FindByIdempotencyKey(context.Context, apikey.OwnerID, transfer.IdempotencyKey) (transfer.Transfer, transfer.Fingerprint, error) {
+func (f *fakeStore) FindByIdempotencyKey(context.Context, apikey.OwnerID, transfer.IdempotencyKey) (transfer.Transfer, string, error) {
 	if err := f.record("find"); err != nil {
 		return transfer.Transfer{}, "", err
 	}
@@ -96,7 +96,7 @@ func (f *fakeStore) FindByIdempotencyKey(context.Context, apikey.OwnerID, transf
 	return f.existing.transfer, f.existing.fingerprint, nil
 }
 
-func (f *fakeStore) FindByIDForUpdate(_ context.Context, id transfer.ID) (transfer.Transfer, error) {
+func (f *fakeStore) FindByIDForUpdate(_ context.Context, id string) (transfer.Transfer, error) {
 	if err := f.record("original"); err != nil {
 		return transfer.Transfer{}, err
 	}
@@ -107,18 +107,18 @@ func (f *fakeStore) FindByIDForUpdate(_ context.Context, id transfer.ID) (transf
 	return found, nil
 }
 
-func (f *fakeStore) Save(_ context.Context, t transfer.Transfer, fingerprint transfer.Fingerprint) error {
-	f.saved = append(f.saved, savedTransfer{transfer: t, fingerprint: fingerprint})
+func (f *fakeStore) Save(_ context.Context, transfer transfer.Transfer, fingerprint string) error {
+	f.saved = append(f.saved, savedTransfer{transfer: transfer, fingerprint: fingerprint})
 	return f.record("save")
 }
 
-func (f *fakeStore) MarkReversed(_ context.Context, t transfer.Transfer) error {
-	f.marked = append(f.marked, t)
+func (f *fakeStore) MarkReversed(_ context.Context, transfer transfer.Transfer) error {
+	f.marked = append(f.marked, transfer)
 	return f.record("mark")
 }
 
-func (f *fakeStore) Add(_ context.Context, e event.Event) error {
-	f.events = append(f.events, e)
+func (f *fakeStore) Add(_ context.Context, event event.Event) error {
+	f.events = append(f.events, event)
 	return f.record("outbox")
 }
 
@@ -141,14 +141,14 @@ func (f *fakeUnitOfWork) Run(ctx context.Context, work func(ctx context.Context,
 }
 
 type fakeReader struct {
-	found   map[transfer.ID]transfer.Transfer
+	found   map[string]transfer.Transfer
 	listed  []transfer.Transfer
 	limit   page.Limit
 	findErr error
 	listErr error
 }
 
-func (f *fakeReader) FindByID(_ context.Context, id transfer.ID) (transfer.Transfer, error) {
+func (f *fakeReader) FindByID(_ context.Context, id string) (transfer.Transfer, error) {
 	if f.findErr != nil {
 		return transfer.Transfer{}, f.findErr
 	}

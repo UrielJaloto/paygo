@@ -89,9 +89,9 @@ func TestParseOwnerID_ReturnsOwnerOrErrInvalidOwner(t *testing.T) {
 }
 
 func TestNewAPIKey_ValidHash_ExposesFields(t *testing.T) {
-	key, err := apikey.NewMoney("key-1", validOwner, validPrefix, validHash, createdAt)
+	key, err := apikey.NewAPIKey("key-1", validOwner, validPrefix, validHash, createdAt)
 	if err != nil {
-		t.Fatalf("New: %v", err)
+		t.Fatalf("NewAPIKey: %v", err)
 	}
 	if key.ID() != "key-1" || key.OwnerID() != validOwner || key.Prefix() != validPrefix {
 		t.Fatalf("unexpected identity: %+v", key)
@@ -102,13 +102,13 @@ func TestNewAPIKey_ValidHash_ExposesFields(t *testing.T) {
 }
 
 func TestNewAPIKey_InvalidHash_ReturnsErrInvalidToken(t *testing.T) {
-	if _, err := apikey.NewMoney("key-1", validOwner, validPrefix, "xyz", createdAt); !errors.Is(err, apikey.ErrInvalidToken) {
+	if _, err := apikey.NewAPIKey("key-1", validOwner, validPrefix, "xyz", createdAt); !errors.Is(err, apikey.ErrInvalidToken) {
 		t.Fatalf("error = %v, want ErrInvalidToken", err)
 	}
 }
 
 func TestRevoke_Active_RecordsTime(t *testing.T) {
-	key, _ := apikey.NewMoney("key-1", validOwner, validPrefix, validHash, createdAt)
+	key, _ := apikey.NewAPIKey("key-1", validOwner, validPrefix, validHash, createdAt)
 	revokedAt := createdAt.Add(time.Hour)
 	if err := key.Revoke(revokedAt); err != nil {
 		t.Fatalf("Revoke: %v", err)
@@ -119,7 +119,7 @@ func TestRevoke_Active_RecordsTime(t *testing.T) {
 }
 
 func TestRevoke_Twice_ReturnsErrAPIKeyAlreadyRevoked(t *testing.T) {
-	key, _ := apikey.NewMoney("key-1", validOwner, validPrefix, validHash, createdAt)
+	key, _ := apikey.NewAPIKey("key-1", validOwner, validPrefix, validHash, createdAt)
 	first := createdAt.Add(time.Hour)
 	_ = key.Revoke(first)
 	if err := key.Revoke(first.Add(time.Hour)); !errors.Is(err, apikey.ErrAPIKeyAlreadyRevoked) {
@@ -131,7 +131,7 @@ func TestRevoke_Twice_ReturnsErrAPIKeyAlreadyRevoked(t *testing.T) {
 }
 
 func TestRestore_KeepsRevocation(t *testing.T) {
-	key, _ := apikey.NewMoney("key-1", validOwner, validPrefix, validHash, createdAt)
+	key, _ := apikey.NewAPIKey("key-1", validOwner, validPrefix, validHash, createdAt)
 	restored := apikey.Restore(key, createdAt)
 	if restored.IsActive() || !restored.RevokedAt().Equal(createdAt) {
 		t.Fatalf("got %+v", restored)

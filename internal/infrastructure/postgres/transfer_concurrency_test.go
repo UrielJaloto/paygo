@@ -20,14 +20,14 @@ import (
 )
 
 const (
-	initialDeposit   = "100.00"
-	initialMinor     = int64(10000)
-	randomWorkers    = 50
-	transfersByEach  = 20
-	maximumRandomMinor   = 5000
-	oppositeWorkers  = 200
-	sameKeyWorkers   = 100
-	customerAccounts = 10
+	initialDeposit     = "100.00"
+	initialMinor       = int64(10000)
+	randomWorkers      = 50
+	transfersByEach    = 20
+	maximumRandomMinor = 5000
+	oppositeWorkers    = 200
+	sameKeyWorkers     = 100
+	customerAccounts   = 10
 )
 
 type concurrencyFixture struct {
@@ -40,7 +40,7 @@ func newConcurrencyFixture(t *testing.T, accounts int) concurrencyFixture {
 	t.Helper()
 	pool := newTestPool(t)
 	repository := postgres.NewAccountRepository(pool)
-	service := transferservice.NewMoney(postgres.NewTransferUnitOfWork(pool), postgres.NewTransferRepository(pool), fixedClock{}, &sequentialIDs{})
+	service := transferservice.NewService(postgres.NewTransferUnitOfWork(pool), postgres.NewTransferRepository(pool), fixedClock{}.Now, &sequentialIDs{})
 	fixture := concurrencyFixture{pool: pool, service: service}
 	for sequence := range accounts {
 		id := saveCustomer(t, repository, sequence, testOwner).ID()
@@ -109,9 +109,9 @@ func (f concurrencyFixture) assertInvariants(t *testing.T, successes int64) {
 	ledgerRepository := postgres.NewLedgerRepository(f.pool)
 	var total int64
 	for _, id := range f.accounts {
-		balance, err := ledgerRepository.CalculateBalance(ctx, id)
+		balance, err := ledgerRepository.FindBalance(ctx, id)
 		if err != nil {
-			t.Fatalf("CalculateBalance() error = %v", err)
+			t.Fatalf("FindBalance() error = %v", err)
 		}
 		if balance.Minor() < 0 {
 			t.Errorf("balance of %s = %d, want it not negative", id, balance.Minor())
@@ -124,7 +124,7 @@ func (f concurrencyFixture) assertInvariants(t *testing.T, successes int64) {
 	}
 	mismatches, _, err := ledgerRepository.ListBalanceMismatches(ctx)
 	if err != nil {
-		t.Fatalf("CheckBalances() error = %v", err)
+		t.Fatalf("ListBalanceMismatches() error = %v", err)
 	}
 	if len(mismatches) != 0 {
 		t.Errorf("mismatches = %+v, want none", mismatches)
@@ -149,7 +149,7 @@ func (f concurrencyFixture) sendRandomly(worker int, results *outcomes) {
 	}
 }
 
-func TestPosting_BuildJournalConcurrency_RandomTransfers_KeepInvariants(t *testing.T) {
+func TestTransferConcurrency_RandomTransfers_KeepInvariants(t *testing.T) {
 	fixture := newConcurrencyFixture(t, customerAccounts)
 	results := newOutcomes(randomWorkers * transfersByEach)
 	var workers sync.WaitGroup
@@ -161,7 +161,7 @@ func TestPosting_BuildJournalConcurrency_RandomTransfers_KeepInvariants(t *testi
 	fixture.assertInvariants(t, results.successes.Load())
 }
 
-func TestPosting_BuildJournalConcurrency_OppositeDirections_NoDeadlockSurfaces(t *testing.T) {
+func TestTransferConcurrency_OppositeDirections_NoDeadlockSurfaces(t *testing.T) {
 	fixture := newConcurrencyFixture(t, 2)
 	results := newOutcomes(oppositeWorkers)
 	var workers sync.WaitGroup
@@ -174,7 +174,7 @@ func TestPosting_BuildJournalConcurrency_OppositeDirections_NoDeadlockSurfaces(t
 	fixture.assertInvariants(t, results.successes.Load())
 }
 
-func TestPosting_BuildJournalConcurrency_SameKeyStorm_CreatesOneTransfer(t *testing.T) {
+func TestTransferConcurrency_SameKeyStorm_CreatesOneTransfer(t *testing.T) {
 	fixture := newConcurrencyFixture(t, 2)
 	ids := make([]string, sameKeyWorkers)
 	failures := make([]error, sameKeyWorkers)

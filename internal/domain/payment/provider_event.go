@@ -1,18 +1,16 @@
 package payment
 
 const (
-	EventChargePaid    EventKind = "charge_paid"
-	EventChargeExpired EventKind = "charge_expired"
-	EventPayoutDone    EventKind = "payout_done"
-	EventPayoutFailed  EventKind = "payout_failed"
-	EventIgnored       EventKind = "ignored"
+	EventChargePaid    = "charge_paid"
+	EventChargeExpired = "charge_expired"
+	EventPayoutDone    = "payout_done"
+	EventPayoutFailed  = "payout_failed"
+	EventIgnored       = "ignored"
 )
-
-type EventKind string
 
 type ProviderEvent struct {
 	Provider   string
 	EventID    string
 	ProviderID string
-	Kind       EventKind
+	Kind       string
 }

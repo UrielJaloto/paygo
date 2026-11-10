@@ -24,8 +24,6 @@ var (
 	hashPattern   = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
-type ID string
-
 type OwnerID string
 
 func ParseOwnerID(text string) (OwnerID, error) {
@@ -35,10 +33,8 @@ func ParseOwnerID(text string) (OwnerID, error) {
 	return OwnerID(text), nil
 }
 
-type Prefix string
-
 type Token struct {
-	prefix Prefix
+	prefix string
 	secret string
 }
 
@@ -46,7 +42,7 @@ func NewToken(prefix, secret string) (Token, error) {
 	if !prefixPattern.MatchString(prefix) || !secretPattern.MatchString(secret) {
 		return Token{}, ErrInvalidToken
 	}
-	return Token{prefix: Prefix(prefix), secret: secret}, nil
+	return Token{prefix: prefix, secret: secret}, nil
 }
 
 func ParseToken(text string) (Token, error) {
@@ -54,27 +50,27 @@ func ParseToken(text string) (Token, error) {
 	if parts == nil {
 		return Token{}, ErrInvalidToken
 	}
-	return Token{prefix: Prefix(parts[1]), secret: parts[2]}, nil
+	return Token{prefix: parts[1], secret: parts[2]}, nil
 }
 
 func (t Token) String() string {
 	return "pgk_" + string(t.prefix) + "_" + t.secret
 }
 
-func (t Token) Prefix() Prefix {
+func (t Token) Prefix() string {
 	return t.prefix
 }
 
 type APIKey struct {
-	id        ID
+	id        string
 	ownerID   OwnerID
-	prefix    Prefix
+	prefix    string
 	hash      string
 	createdAt time.Time
 	revokedAt time.Time
 }
 
-func NewMoney(id ID, owner OwnerID, prefix Prefix, hash string, createdAt time.Time) (APIKey, error) {
+func NewAPIKey(id string, owner OwnerID, prefix string, hash string, createdAt time.Time) (APIKey, error) {
 	if !hashPattern.MatchString(hash) {
 		return APIKey{}, ErrInvalidToken
 	}
@@ -86,7 +82,7 @@ func Restore(key APIKey, revokedAt time.Time) APIKey {
 	return key
 }
 
-func (k APIKey) ID() ID {
+func (k APIKey) ID() string {
 	return k.id
 }
 
@@ -94,7 +90,7 @@ func (k APIKey) OwnerID() OwnerID {
 	return k.ownerID
 }
 
-func (k APIKey) Prefix() Prefix {
+func (k APIKey) Prefix() string {
 	return k.prefix
 }
 

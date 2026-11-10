@@ -12,10 +12,10 @@ import (
 
 const clientTimeout = 30 * time.Second
 
-func NewMoney(settings config.Payments, customers asaas.CustomerCache, ids fake.IDGenerator) payment.PaymentProvider {
+func NewSelectedProvider(settings config.Payments, customers asaas.CustomerCache, ids fake.IDGenerator) payment.PaymentProvider {
 	if settings.Provider == config.ProviderAsaas {
 		client := &http.Client{Timeout: clientTimeout}
-		return asaas.NewMoney(settings.Asaas.BaseURL, settings.Asaas.APIKey, settings.Asaas.WebhookToken, customers, client)
+		return asaas.NewProvider(settings.Asaas.BaseURL, settings.Asaas.APIKey, settings.Asaas.WebhookToken, customers, client)
 	}
-	return fake.NewMoney(settings.FakeWebhookToken, ids)
+	return fake.NewProvider(settings.FakeWebhookToken, ids)
 }

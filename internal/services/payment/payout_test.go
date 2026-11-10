@@ -37,7 +37,7 @@ func fundedStore(t *testing.T) *fakeStore {
 func seedPayout(t *testing.T, store *fakeStore, id, providerID string) {
 	t.Helper()
 	store.payouts.items = append(store.payouts.items, payment.RestorePayout(payment.PayoutSnapshot{
-		ID:        payment.PayoutID(id),
+		ID:        id,
 		OwnerID:   ownerID,
 		AccountID: customerID,
 		Amount:    brl(t, 1000),
@@ -48,7 +48,7 @@ func seedPayout(t *testing.T, store *fakeStore, id, providerID string) {
 	}))
 }
 
-func payoutEvent(kind payment.EventKind, eventID string) *spyProvider {
+func payoutEvent(kind string, eventID string) *spyProvider {
 	return &spyProvider{parsed: payment.ProviderEvent{Provider: "fake", EventID: eventID, Kind: kind, ProviderID: providerReference}}
 }
 
@@ -86,13 +86,13 @@ func TestCreatePayout_InvalidInput_ReturnsErrorWithoutCallingProvider(t *testing
 		mutate func(*service.PayoutInput)
 		want   error
 	}{
-		{name: "owner", mutate: func(i *service.PayoutInput) { i.OwnerID = "nope" }, want: apikey.ErrInvalidOwner},
-		{name: "key", mutate: func(i *service.PayoutInput) { i.IdempotencyKey = "" }, want: transfer.ErrInvalidIdempotencyKey},
-		{name: "account", mutate: func(i *service.PayoutInput) { i.AccountID = "nope" }, want: account.ErrInvalidAccountID},
-		{name: "currency code", mutate: func(i *service.PayoutInput) { i.Currency = "XXX" }, want: money.ErrUnsupportedCurrency},
-		{name: "currency not accepted", mutate: func(i *service.PayoutInput) { i.Currency = "USD" }, want: money.ErrUnsupportedCurrency},
-		{name: "amount", mutate: func(i *service.PayoutInput) { i.Amount = "abc" }, want: money.ErrInvalidAmount},
-		{name: "pix key", mutate: func(i *service.PayoutInput) { i.PixKey = "" }, want: payment.ErrInvalidPixKey},
+		{name: "owner", mutate: func(input *service.PayoutInput) { input.OwnerID = "nope" }, want: apikey.ErrInvalidOwner},
+		{name: "key", mutate: func(input *service.PayoutInput) { input.IdempotencyKey = "" }, want: transfer.ErrInvalidIdempotencyKey},
+		{name: "account", mutate: func(input *service.PayoutInput) { input.AccountID = "nope" }, want: account.ErrInvalidAccountID},
+		{name: "currency code", mutate: func(input *service.PayoutInput) { input.Currency = "XXX" }, want: money.ErrUnsupportedCurrency},
+		{name: "currency not accepted", mutate: func(input *service.PayoutInput) { input.Currency = "USD" }, want: money.ErrUnsupportedCurrency},
+		{name: "amount", mutate: func(input *service.PayoutInput) { input.Amount = "abc" }, want: money.ErrInvalidAmount},
+		{name: "pix key", mutate: func(input *service.PayoutInput) { input.PixKey = "" }, want: payment.ErrInvalidPixKey},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -246,19 +246,19 @@ func TestCreatePayout_StoreCallFails_ReturnsError(t *testing.T) {
 
 func TestCreatePayout_SameKey_ReplaysOrConflicts(t *testing.T) {
 	store := fundedStore(t)
-	svc := newService(store, &spyProvider{payoutResult: service.PayoutResult{ProviderID: providerReference}})
-	if _, err := svc.CreatePayout(context.Background(), payoutInput()); err != nil {
+	service := newService(store, &spyProvider{payoutResult: service.PayoutResult{ProviderID: providerReference}})
+	if _, err := service.CreatePayout(context.Background(), payoutInput()); err != nil {
 		t.Fatalf("CreatePayout() error = %v", err)
 	}
 
-	replayed, err := svc.CreatePayout(context.Background(), payoutInput())
+	replayed, err := service.CreatePayout(context.Background(), payoutInput())
 	if err != nil || !replayed.IsReplay {
 		t.Errorf("replay = %+v, %v, want IsReplay", replayed, err)
 	}
 
 	changed := payoutInput()
 	changed.Amount = "9.00"
-	if _, err := svc.CreatePayout(context.Background(), changed); !errors.Is(err, transfer.ErrIdempotencyConflict) {
+	if _, err := service.CreatePayout(context.Background(), changed); !errors.Is(err, transfer.ErrIdempotencyConflict) {
 		t.Errorf("conflict error = %v, want %v", err, transfer.ErrIdempotencyConflict)
 	}
 }
@@ -325,8 +325,8 @@ func TestHandleWebhook_PayoutFailedTwice_RefundsOnce(t *testing.T) {
 func TestHandleWebhook_PayoutDoneThenFailed_IgnoresSecond(t *testing.T) {
 	store := paymentStore()
 	seedPayout(t, store, "payout-1", providerReference)
-	svc := newService(store, payoutEvent(payment.EventPayoutDone, "e1"))
-	if err := svc.HandleWebhook(context.Background(), webhook()); err != nil {
+	service := newService(store, payoutEvent(payment.EventPayoutDone, "e1"))
+	if err := service.HandleWebhook(context.Background(), webhook()); err != nil {
 		t.Fatalf("HandleWebhook() error = %v", err)
 	}
 
@@ -378,7 +378,7 @@ func TestSync_ProviderReportsChanges_AppliesThem(t *testing.T) {
 	store := paymentStore()
 	seedCharge(t, store, payment.ChargePending)
 	seedPayout(t, store, "payout-1", "payout_ref")
-	provider := &spyProvider{kinds: map[string]payment.EventKind{providerReference: payment.EventChargePaid, "payout_ref": payment.EventPayoutDone}}
+	provider := &spyProvider{kinds: map[string]string{providerReference: payment.EventChargePaid, "payout_ref": payment.EventPayoutDone}}
 
 	got, err := newService(store, provider).Sync(context.Background(), 10)
 	if err != nil {
@@ -397,7 +397,7 @@ func TestSync_NothingNew_ChangesNothing(t *testing.T) {
 	store := paymentStore()
 	seedCharge(t, store, payment.ChargePending)
 	seedPayout(t, store, "payout-1", "payout_ref")
-	provider := &spyProvider{kinds: map[string]payment.EventKind{providerReference: payment.EventIgnored, "payout_ref": payment.EventIgnored}}
+	provider := &spyProvider{kinds: map[string]string{providerReference: payment.EventIgnored, "payout_ref": payment.EventIgnored}}
 
 	got, err := newService(store, provider).Sync(context.Background(), 10)
 	if err != nil {
@@ -412,10 +412,10 @@ func TestSync_NothingNew_ChangesNothing(t *testing.T) {
 func TestSync_ChargePastGrace_Expires(t *testing.T) {
 	store := paymentStore()
 	seedCharge(t, store, payment.ChargePending)
-	provider := &spyProvider{kinds: map[string]payment.EventKind{providerReference: payment.EventIgnored}}
-	svc := service.NewMoney(&fakeUnitOfWork{store: store}, provider, stubClock{now: testNow.Add(25*time.Hour + time.Second)}, &sequenceIDs{})
+	provider := &spyProvider{kinds: map[string]string{providerReference: payment.EventIgnored}}
+	service := service.NewService(&fakeUnitOfWork{store: store}, provider, stubClock{now: testNow.Add(25*time.Hour + time.Second)}.Now, &sequenceIDs{})
 
-	got, err := svc.Sync(context.Background(), 10)
+	got, err := service.Sync(context.Background(), 10)
 	if err != nil {
 		t.Fatalf("Sync() error = %v", err)
 	}
@@ -425,16 +425,32 @@ func TestSync_ChargePastGrace_Expires(t *testing.T) {
 	}
 }
 
+func TestSync_ApplyingReportedChangeFails_CountsNothingAndReturnsError(t *testing.T) {
+	store := paymentStore()
+	seedCharge(t, store, payment.ChargePending)
+	store.failures["charge.update"] = errBoom
+	provider := &spyProvider{kinds: map[string]string{providerReference: payment.EventChargePaid}}
+
+	got, err := newService(store, provider).Sync(context.Background(), 10)
+
+	if !errors.Is(err, errBoom) {
+		t.Fatalf("Sync() error = %v, want %v", err, errBoom)
+	}
+	if want := (service.SyncResult{Checked: 1}); got != want {
+		t.Errorf("Sync() = %+v, want %+v", got, want)
+	}
+}
+
 func TestSync_ExpiryFails_ReturnsError(t *testing.T) {
 	for _, call := range []string{"charge.find", "charge.update"} {
 		t.Run(call, func(t *testing.T) {
 			store := paymentStore()
 			seedCharge(t, store, payment.ChargePending)
 			store.failures[call] = errBoom
-			provider := &spyProvider{kinds: map[string]payment.EventKind{providerReference: payment.EventIgnored}}
-			svc := service.NewMoney(&fakeUnitOfWork{store: store}, provider, stubClock{now: testNow.Add(26 * time.Hour)}, &sequenceIDs{})
+			provider := &spyProvider{kinds: map[string]string{providerReference: payment.EventIgnored}}
+			service := service.NewService(&fakeUnitOfWork{store: store}, provider, stubClock{now: testNow.Add(26 * time.Hour)}.Now, &sequenceIDs{})
 
-			_, err := svc.Sync(context.Background(), 10)
+			_, err := service.Sync(context.Background(), 10)
 
 			if !errors.Is(err, errBoom) {
 				t.Errorf("Sync() error = %v, want %v", err, errBoom)
@@ -449,7 +465,7 @@ func TestSync_OneItemFails_ProcessesOthersAndJoinsError(t *testing.T) {
 	seedPayout(t, store, "payout-1", "bad_ref")
 	seedPayout(t, store, "payout-2", "good_ref")
 	provider := &spyProvider{
-		kinds:      map[string]payment.EventKind{providerReference: payment.EventIgnored, "good_ref": payment.EventPayoutDone},
+		kinds:          map[string]string{providerReference: payment.EventIgnored, "good_ref": payment.EventPayoutDone},
 		statusFailures: map[string]error{"bad_ref": errBoom},
 	}
 
@@ -528,10 +544,10 @@ func TestSync_ChargePaidAfterListing_KeepsItPaid(t *testing.T) {
 	if _, err := store.charges.items[0].MarkPaid("transfer-1", testNow); err != nil {
 		t.Fatalf("MarkPaid() error = %v", err)
 	}
-	provider := &spyProvider{kinds: map[string]payment.EventKind{providerReference: payment.EventIgnored}}
-	svc := service.NewMoney(&fakeUnitOfWork{store: store}, provider, stubClock{now: testNow.Add(26 * time.Hour)}, &sequenceIDs{})
+	provider := &spyProvider{kinds: map[string]string{providerReference: payment.EventIgnored}}
+	service := service.NewService(&fakeUnitOfWork{store: store}, provider, stubClock{now: testNow.Add(26 * time.Hour)}.Now, &sequenceIDs{})
 
-	_, err := svc.Sync(context.Background(), 10)
+	_, err := service.Sync(context.Background(), 10)
 
 	if err != nil {
 		t.Fatalf("Sync() error = %v, want nil", err)
@@ -544,15 +560,15 @@ func TestSync_ChargePaidAfterListing_KeepsItPaid(t *testing.T) {
 func TestCreatePayout_SameKeyCommittedWhileWaitingForLock_Replays(t *testing.T) {
 	store := fundedStore(t)
 	provider := &spyProvider{payoutResult: service.PayoutResult{ProviderID: providerReference}}
-	svc := newService(store, provider)
-	first, err := svc.CreatePayout(context.Background(), payoutInput())
+	service := newService(store, provider)
+	first, err := service.CreatePayout(context.Background(), payoutInput())
 	if err != nil {
 		t.Fatalf("CreatePayout() error = %v", err)
 	}
 	store.payouts.hasKey = false
 	store.onLock = func() { store.payouts.hasKey = true }
 
-	second, err := svc.CreatePayout(context.Background(), payoutInput())
+	second, err := service.CreatePayout(context.Background(), payoutInput())
 	if err != nil {
 		t.Fatalf("second CreatePayout() error = %v", err)
 	}
@@ -565,9 +581,9 @@ func TestCreatePayout_SameKeyCommittedWhileWaitingForLock_Replays(t *testing.T) 
 func TestCreatePayout_ReplayLookupFailsAfterLock_ReturnsError(t *testing.T) {
 	store := fundedStore(t)
 	store.onLock = func() { store.failures["payout.byKey"] = errBoom }
-	svc := newService(store, &spyProvider{payoutResult: service.PayoutResult{ProviderID: providerReference}})
+	service := newService(store, &spyProvider{payoutResult: service.PayoutResult{ProviderID: providerReference}})
 
-	_, err := svc.CreatePayout(context.Background(), payoutInput())
+	_, err := service.CreatePayout(context.Background(), payoutInput())
 
 	if !errors.Is(err, errBoom) || len(store.payouts.items) != 0 {
 		t.Errorf("err = %v, payouts = %d", err, len(store.payouts.items))

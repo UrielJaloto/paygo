@@ -10,26 +10,22 @@ import (
 )
 
 const (
-	TypeTransferCompleted Type = "transfer.completed"
-	TypeTransferReversed  Type = "transfer.reversed"
-	TypeChargePaid        Type = "charge.paid"
-	TypeChargeExpired     Type = "charge.expired"
-	TypePayoutCompleted   Type = "payout.completed"
-	TypePayoutFailed      Type = "payout.failed"
+	TypeTransferCompleted = "transfer.completed"
+	TypeTransferReversed  = "transfer.reversed"
+	TypeChargePaid        = "charge.paid"
+	TypeChargeExpired     = "charge.expired"
+	TypePayoutCompleted   = "payout.completed"
+	TypePayoutFailed      = "payout.failed"
 )
 
-type ID string
-
-type Type string
-
 type Metadata struct {
-	ID ID
+	ID string
 	At time.Time
 }
 
 type Event struct {
-	metadata       Metadata
-	eventType  Type
+	metadata   Metadata
+	eventType  string
 	transfer   transfer.Transfer
 	charge     payment.Charge
 	payout     payment.Payout
@@ -37,23 +33,23 @@ type Event struct {
 	ownerIDs   []apikey.OwnerID
 }
 
-func NewTransferEvent(metadata Metadata, t transfer.Transfer, owners []apikey.OwnerID) Event {
-	return Event{metadata: metadata, eventType: resolveTransferType(t), transfer: t, transferID: string(t.ID()), ownerIDs: removeDuplicateRecipients(owners)}
+func NewTransferEvent(metadata Metadata, transfer transfer.Transfer, owners []apikey.OwnerID) Event {
+	return Event{metadata: metadata, eventType: resolveTransferType(transfer), transfer: transfer, transferID: string(transfer.ID()), ownerIDs: removeDuplicateRecipients(owners)}
 }
 
-func NewChargeEvent(metadata Metadata, eventType Type, charge payment.Charge) Event {
+func NewChargeEvent(metadata Metadata, eventType string, charge payment.Charge) Event {
 	owners := removeDuplicateRecipients([]apikey.OwnerID{charge.OwnerID()})
 	return Event{metadata: metadata, eventType: eventType, charge: charge, transferID: charge.TransferID(), ownerIDs: owners}
 }
 
-func NewPayoutEvent(metadata Metadata, eventType Type, payout payment.Payout) Event {
+func NewPayoutEvent(metadata Metadata, eventType string, payout payment.Payout) Event {
 	owners := removeDuplicateRecipients([]apikey.OwnerID{payout.OwnerID()})
 	return Event{metadata: metadata, eventType: eventType, payout: payout, transferID: payout.Transfers().Final, ownerIDs: owners}
 }
 
 type Snapshot struct {
-	Metadata       Metadata
-	Type       Type
+	Metadata   Metadata
+	Type       string
 	Transfer   transfer.Transfer
 	TransferID string
 	OwnerIDs   []apikey.OwnerID
@@ -61,7 +57,7 @@ type Snapshot struct {
 
 func Restore(snapshot Snapshot) Event {
 	return Event{
-		metadata:       snapshot.Metadata,
+		metadata:   snapshot.Metadata,
 		eventType:  snapshot.Type,
 		transfer:   snapshot.Transfer,
 		transferID: snapshot.TransferID,
@@ -69,8 +65,8 @@ func Restore(snapshot Snapshot) Event {
 	}
 }
 
-func resolveTransferType(t transfer.Transfer) Type {
-	if t.Kind() == transfer.KindReversal {
+func resolveTransferType(moved transfer.Transfer) string {
+	if moved.Kind() == transfer.KindReversal {
 		return TypeTransferReversed
 	}
 	return TypeTransferCompleted
@@ -86,11 +82,11 @@ func removeDuplicateRecipients(owners []apikey.OwnerID) []apikey.OwnerID {
 	return unique
 }
 
-func (e Event) ID() ID {
+func (e Event) ID() string {
 	return e.metadata.ID
 }
 
-func (e Event) Type() Type {
+func (e Event) Type() string {
 	return e.eventType
 }
 

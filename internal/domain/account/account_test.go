@@ -112,7 +112,7 @@ func TestCanMoveMoney_FollowsStatus(t *testing.T) {
 
 func TestAllowsNegativeBalance_FollowsKind(t *testing.T) {
 	cases := []struct {
-		kind account.Kind
+		kind string
 		want bool
 	}{
 		{kind: account.KindCustomer, want: false},

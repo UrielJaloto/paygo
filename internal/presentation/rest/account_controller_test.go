@@ -13,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const accountJSON = `{"id":"acc-1","owner_id":"owner-1","currency":"BRL","kind":"customer","status":"active","created_at":"2026-01-02T03:04:05.678Z"}`
+const accountJSON = `{"id":"account-1","owner_id":"owner-1","currency":"BRL","kind":"customer","status":"active","created_at":"2026-01-02T03:04:05.678Z"}`
 
 var accountCreatedAt = time.Date(2026, 1, 2, 0, 4, 5, 678_000_000, time.FixedZone("BRT", -3*60*60))
 
@@ -29,7 +29,7 @@ type stubAccounts struct {
 
 func accountOutput() accountservice.AccountOutput {
 	return accountservice.AccountOutput{
-		ID:        "acc-1",
+		ID:        "account-1",
 		OwnerID:   ownerID,
 		Currency:  "BRL",
 		Kind:      "customer",
@@ -54,7 +54,7 @@ func (s *stubAccounts) List(_ context.Context, input accountservice.ListInput) (
 	return s.page, s.err
 }
 
-func (s *stubAccounts) CalculateBalance(_ context.Context, query accountservice.AccountQuery) (accountservice.BalanceOutput, error) {
+func (s *stubAccounts) FindBalance(_ context.Context, query accountservice.AccountQuery) (accountservice.BalanceOutput, error) {
 	s.query = query
 	return accountservice.BalanceOutput{AccountID: query.AccountID, AmountMinor: 300, Currency: "BRL"}, s.err
 }
@@ -75,7 +75,7 @@ func (s *stubAccounts) Unfreeze(_ context.Context, query accountservice.AccountQ
 }
 
 func accountRouter(accounts *stubAccounts) *gin.Engine {
-	controller := rest.NewAccountController(accounts, accounts, accounts, rest.AccountPresenter{})
+	controller := rest.NewAccountController(accounts, accounts, accounts)
 	return apiRouter(rest.Controllers{Account: controller})
 }
 
@@ -112,9 +112,9 @@ func TestAccountOpen_MalformedBody_Returns400WithoutCallingService(t *testing.T)
 
 func TestAccountFind_Existing_Returns200(t *testing.T) {
 	accounts := &stubAccounts{}
-	recorder := call(accountRouter(accounts), http.MethodGet, "/v1/accounts/acc-1", "")
+	recorder := call(accountRouter(accounts), http.MethodGet, "/v1/accounts/account-1", "")
 	assertResponse(t, recorder, http.StatusOK, accountJSON)
-	if want := (accountservice.AccountQuery{OwnerID: ownerID, AccountID: "acc-1"}); accounts.query != want {
+	if want := (accountservice.AccountQuery{OwnerID: ownerID, AccountID: "account-1"}); accounts.query != want {
 		t.Fatalf("query = %+v", accounts.query)
 	}
 }
@@ -137,8 +137,8 @@ func TestAccountList_LastPage_OmitsCursorAndKeepsEmptyItems(t *testing.T) {
 }
 
 func TestAccountFindBalance_Existing_ReturnsDecimalAmount(t *testing.T) {
-	recorder := call(accountRouter(&stubAccounts{}), http.MethodGet, "/v1/accounts/acc-1/balance", "")
-	assertResponse(t, recorder, http.StatusOK, `{"account_id":"acc-1","amount":"3.00","currency":"BRL"}`)
+	recorder := call(accountRouter(&stubAccounts{}), http.MethodGet, "/v1/accounts/account-1/balance", "")
+	assertResponse(t, recorder, http.StatusOK, `{"account_id":"account-1","amount":"3.00","currency":"BRL"}`)
 }
 
 func TestAccountListStatement_Lines_ReturnsExactBody(t *testing.T) {
@@ -153,9 +153,9 @@ func TestAccountListStatement_Lines_ReturnsExactBody(t *testing.T) {
 		}},
 		NextCursor: "more",
 	}}
-	recorder := call(accountRouter(accounts), http.MethodGet, "/v1/accounts/acc-1/statement?cursor=c&limit=2", "")
+	recorder := call(accountRouter(accounts), http.MethodGet, "/v1/accounts/account-1/statement?cursor=c&limit=2", "")
 	assertResponse(t, recorder, http.StatusOK, `{"items":[{"entry_id":"entry-1","transfer_id":"transfer-1","direction":"credit","amount":"12.50","currency":"BRL","created_at":"2026-01-02T03:04:05.678Z"}],"next_cursor":"more"}`)
-	if want := (accountservice.PageInput{OwnerID: ownerID, AccountID: "acc-1", Cursor: "c", Limit: "2"}); accounts.statement != want {
+	if want := (accountservice.PageInput{OwnerID: ownerID, AccountID: "account-1", Cursor: "c", Limit: "2"}); accounts.statement != want {
 		t.Fatalf("input = %+v", accounts.statement)
 	}
 }
@@ -165,15 +165,15 @@ func TestAccountFreeze_Success_Returns200(t *testing.T) {
 		name string
 		path string
 	}{
-		{"freeze", "/v1/accounts/acc-1/freeze"},
-		{"unfreeze", "/v1/accounts/acc-1/unfreeze"},
+		{"freeze", "/v1/accounts/account-1/freeze"},
+		{"unfreeze", "/v1/accounts/account-1/unfreeze"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			accounts := &stubAccounts{}
 			recorder := call(accountRouter(accounts), http.MethodPost, testCase.path, "")
 			assertResponse(t, recorder, http.StatusOK, accountJSON)
-			if want := (accountservice.AccountQuery{OwnerID: ownerID, AccountID: "acc-1"}); accounts.query != want {
+			if want := (accountservice.AccountQuery{OwnerID: ownerID, AccountID: "account-1"}); accounts.query != want {
 				t.Fatalf("query = %+v", accounts.query)
 			}
 		})
@@ -189,12 +189,12 @@ func TestAccountRoutes_ServiceError_ReturnsMappedProblem(t *testing.T) {
 		status int
 	}{
 		{"open", http.MethodPost, "/v1/accounts", money.ErrUnsupportedCurrency, http.StatusBadRequest},
-		{"get", http.MethodGet, "/v1/accounts/acc-1", account.ErrAccountNotFound, http.StatusNotFound},
+		{"get", http.MethodGet, "/v1/accounts/account-1", account.ErrAccountNotFound, http.StatusNotFound},
 		{"list", http.MethodGet, "/v1/accounts", errBoom, http.StatusInternalServerError},
-		{"balance", http.MethodGet, "/v1/accounts/acc-1/balance", account.ErrAccountNotFound, http.StatusNotFound},
-		{"statement", http.MethodGet, "/v1/accounts/acc-1/statement", account.ErrAccountNotFound, http.StatusNotFound},
-		{"freeze", http.MethodPost, "/v1/accounts/acc-1/freeze", account.ErrAccountAlreadyFrozen, http.StatusConflict},
-		{"unfreeze", http.MethodPost, "/v1/accounts/acc-1/unfreeze", account.ErrAccountNotFrozen, http.StatusConflict},
+		{"balance", http.MethodGet, "/v1/accounts/account-1/balance", account.ErrAccountNotFound, http.StatusNotFound},
+		{"statement", http.MethodGet, "/v1/accounts/account-1/statement", account.ErrAccountNotFound, http.StatusNotFound},
+		{"freeze", http.MethodPost, "/v1/accounts/account-1/freeze", account.ErrAccountAlreadyFrozen, http.StatusConflict},
+		{"unfreeze", http.MethodPost, "/v1/accounts/account-1/unfreeze", account.ErrAccountNotFrozen, http.StatusConflict},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {

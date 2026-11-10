@@ -63,8 +63,8 @@ func newRouter(panics *spyPanics, ready bool) *gin.Engine {
 }
 
 func routerObservedBy(observability rest.Observability, panics *spyPanics, ready bool) *gin.Engine {
-	metrics := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, "metrics body")
+	metrics := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(writer, "metrics body")
 	})
 	return rest.NewRouter(rest.Dependencies{
 		Middleware: rest.Middleware{
@@ -192,8 +192,8 @@ func TestTimeout_Handler_SeesDeadline(t *testing.T) {
 	router := newRouter(&spyPanics{}, true)
 	var remaining time.Duration
 	var hasDeadline bool
-	router.GET("/deadline", func(c *gin.Context) {
-		deadline, ok := c.Request.Context().Deadline()
+	router.GET("/deadline", func(ginContext *gin.Context) {
+		deadline, ok := ginContext.Request.Context().Deadline()
 		remaining, hasDeadline = time.Until(deadline), ok
 	})
 

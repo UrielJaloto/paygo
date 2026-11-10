@@ -32,8 +32,8 @@ func TestNewClient_InternalDestination_IsRefused(t *testing.T) {
 }
 
 func TestNewClient_LoopbackDestination_IsAllowed(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
 	response, err := webhookhttp.NewClient(time.Second).Get(server.URL)
@@ -47,8 +47,8 @@ func TestNewClient_LoopbackDestination_IsAllowed(t *testing.T) {
 }
 
 func TestNewClient_Redirect_IsNotFollowed(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "http://169.254.169.254/latest/meta-data", http.StatusFound)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		http.Redirect(writer, request, "http://169.254.169.254/latest/meta-data", http.StatusFound)
 	}))
 	defer server.Close()
 	response, err := webhookhttp.NewClient(time.Second).Get(server.URL)

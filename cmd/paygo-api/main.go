@@ -82,12 +82,12 @@ func serveRequests(ctx context.Context, settings config.APISettings, kit toolkit
 	if err != nil {
 		return err
 	}
-	server := httpserver.NewMoney(settings.HTTP.Addr, newRouter(settings.HTTP, services, kit), readHeaderTimeout, settings.HTTP.ShutdownTimeout)
+	server := httpserver.NewServer(settings.HTTP.Addr, newRouter(settings.HTTP, services, kit), readHeaderTimeout, settings.HTTP.ShutdownTimeout)
 	return server.Run(ctx, listener)
 }
 
 type toolkit struct {
-	clock    clock.SystemClock
+	now      func() time.Time
 	ids      *identifier.UUIDv7Generator
 	requests logging.RequestLogger
 	tracer   trace.Tracer
@@ -106,11 +106,10 @@ type serviceSet struct {
 }
 
 func newToolkit(telemetry config.Telemetry, stdout io.Writer, traces *tracing.Provider) toolkit {
-	systemClock := clock.NewMoney()
 	logger := logging.NewTracedJSONLogger(stdout, telemetry.LogLevel, traces)
 	return toolkit{
-		clock:    systemClock,
-		ids:      identifier.NewMoney(systemClock, rand.Reader),
+		now:      clock.Now,
+		ids:      identifier.NewUUIDv7Generator(clock.Now, rand.Reader),
 		requests: logging.NewRequestLogger(logger),
 		tracer:   traces.Tracer(),
 		registry: metrics.NewRegistry(),
@@ -118,7 +117,7 @@ func newToolkit(telemetry config.Telemetry, stdout io.Writer, traces *tracing.Pr
 }
 
 func openServices(ctx context.Context, settings config.APISettings, kit toolkit) (serviceSet, error) {
-	pool, err := postgres.NewTracedPool(ctx, settings.Database.URL, settings.Database.MaxConns, tracing.NewQuerySpanStarter(kit.tracer))
+	pool, err := postgres.NewTracedPool(ctx, settings.Database.URL, settings.Database.MaximumConnections, tracing.NewQuerySpanStarter(kit.tracer))
 	if err != nil {
 		return serviceSet{}, err
 	}
@@ -126,19 +125,19 @@ func openServices(ctx context.Context, settings config.APISettings, kit toolkit)
 	tokens := secret.NewTokenGenerator(rand.Reader)
 	selected := newProvider(settings.Payments, postgres.NewProviderCustomerCache(pool), kit)
 	return serviceSet{
-		accounts:  account.NewMoney(postgres.NewAccountRepository(pool), ledger, kit.clock, kit.ids),
-		keys:      apikey.NewMoney(postgres.NewAPIKeyRepository(pool), tokens, secret.TokenHasher{}, kit.clock, kit.ids),
-		transfers: transfer.NewMoney(postgres.NewTransferUnitOfWork(pool), postgres.NewTransferRepository(pool), kit.clock, kit.ids),
-		webhooks:  webhook.NewMoney(postgres.NewWebhookUnitOfWork(pool), tokens, kit.clock, kit.ids),
-		payments:  payment.NewMoney(postgres.NewPaymentUnitOfWork(pool), selected, kit.clock, kit.ids),
-		ledger:    ledgercheck.NewMoney(ledger),
+		accounts:  account.NewService(postgres.NewAccountRepository(pool), ledger, kit.now, kit.ids),
+		keys:      apikey.NewService(postgres.NewAPIKeyRepository(pool), tokens, secret.HashToken, kit.now, kit.ids),
+		transfers: transfer.NewService(postgres.NewTransferUnitOfWork(pool), postgres.NewTransferRepository(pool), kit.now, kit.ids),
+		webhooks:  webhook.NewService(postgres.NewWebhookUnitOfWork(pool), tokens, kit.now, kit.ids),
+		payments:  payment.NewService(postgres.NewPaymentUnitOfWork(pool), selected, kit.now, kit.ids),
+		ledger:    ledgercheck.NewService(ledger),
 		readiness: postgres.NewHealthChecker(pool),
 		close:     pool.Close,
 	}, nil
 }
 
 func newProvider(settings config.Payments, customers asaas.CustomerCache, kit toolkit) payment.PaymentProvider {
-	selected := provider.NewMoney(settings, customers, kit.ids)
+	selected := provider.NewSelectedProvider(settings, customers, kit.ids)
 	return metrics.NewProviderMetrics(tracing.NewProviderTracer(selected, kit.tracer), kit.registry)
 }
 
@@ -154,12 +153,12 @@ func newRouter(settings config.HTTP, services serviceSet, kit toolkit) http.Hand
 				Logger:   kit.requests,
 				Observer: kit.registry,
 				Spans:    tracing.NewHTTPSpanStarter(kit.tracer),
-				Clock:    kit.clock,
+				Now:      kit.now,
 			},
 		},
 		Access: rest.Access{
 			Authenticator: services.keys,
-			Limiter:       ratelimit.NewMoney(kit.clock, settings.RateLimitPerSecond, settings.RateLimitBurst),
+			Limiter:       ratelimit.NewTokenBucketLimiter(kit.now, settings.RateLimitPerSecond, settings.RateLimitBurst),
 			Admin:         secret.NewAdminTokenChecker(settings.AdminToken),
 		},
 		Controllers: newControllers(services, kit),
@@ -172,16 +171,16 @@ func newControllers(services serviceSet, kit toolkit) rest.Controllers {
 	payments := metrics.NewPaymentServiceMetrics(services.payments, kit.registry)
 	return rest.Controllers{
 		Health:   rest.NewHealthController(services.readiness, kit.registry.Handler()),
-		Account:  rest.NewAccountController(accounts, accounts, accounts, rest.AccountPresenter{}),
-		Transfer: rest.NewTransferController(transfers, transfers, transfers, rest.TransferPresenter{}),
-		Admin:    rest.NewAdminController(keys, keys, transfers, rest.AdminPresenter{}, rest.TransferPresenter{}),
-		Webhook:  rest.NewWebhookController(webhooks, webhooks, webhooks, rest.WebhookPresenter{}),
+		Account:  rest.NewAccountController(accounts, accounts, accounts),
+		Transfer: rest.NewTransferController(transfers, transfers, transfers),
+		Admin:    rest.NewAdminController(keys, keys, transfers),
+		Webhook:  rest.NewWebhookController(webhooks, webhooks, webhooks),
 		Payment: rest.NewPaymentController(rest.PaymentServices{
 			ChargeCreator: payments,
 			ChargeReader:  payments,
 			PayoutCreator: payments,
 			PayoutReader:  payments,
-		}, rest.PaymentPresenter{}),
+		}),
 		ProviderWebhook: rest.NewProviderWebhookController(payments),
 		LedgerCheck:     rest.NewLedgerCheckController(services.ledger),
 	}

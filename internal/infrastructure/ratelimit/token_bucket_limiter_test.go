@@ -50,7 +50,7 @@ func TestAllow_Elapsed_RefillsBucket(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			clock := newClock()
-			limiter := ratelimit.NewMoney(clock, 1, 3)
+			limiter := ratelimit.NewTokenBucketLimiter(clock.Now, 1, 3)
 			if got := allowances(limiter, "a", 3); !slices.Equal(got, []bool{true, true, true}) {
 				t.Fatalf("initial allowances = %v, want all true", got)
 			}
@@ -63,7 +63,7 @@ func TestAllow_Elapsed_RefillsBucket(t *testing.T) {
 }
 
 func TestAllow_KeyExhausted_OtherKeyAllowed(t *testing.T) {
-	limiter := ratelimit.NewMoney(newClock(), 1, 1)
+	limiter := ratelimit.NewTokenBucketLimiter(newClock().Now, 1, 1)
 	limiter.Allow("a")
 	if limiter.Allow("a") {
 		t.Fatal("exhausted key a was allowed")
@@ -75,7 +75,7 @@ func TestAllow_KeyExhausted_OtherKeyAllowed(t *testing.T) {
 
 func TestAllow_IdleKey_RemovesBucket(t *testing.T) {
 	clock := newClock()
-	limiter := ratelimit.NewMoney(clock, 1, 1)
+	limiter := ratelimit.NewTokenBucketLimiter(clock.Now, 1, 1)
 	limiter.Allow("a")
 	clock.advance(11 * time.Minute)
 
@@ -88,7 +88,7 @@ func TestAllow_IdleKey_RemovesBucket(t *testing.T) {
 
 func TestAllow_WithinSweepInterval_KeepsIdleBucket(t *testing.T) {
 	clock := newClock()
-	limiter := ratelimit.NewMoney(clock, 1, 1)
+	limiter := ratelimit.NewTokenBucketLimiter(clock.Now, 1, 1)
 	limiter.Allow("a")
 	clock.advance(9*time.Minute + 30*time.Second)
 	limiter.Allow("b")
@@ -102,7 +102,7 @@ func TestAllow_WithinSweepInterval_KeepsIdleBucket(t *testing.T) {
 }
 
 func TestAllow_Concurrent_AllowsExactlyBurst(t *testing.T) {
-	limiter := ratelimit.NewMoney(newClock(), 1, 50)
+	limiter := ratelimit.NewTokenBucketLimiter(newClock().Now, 1, 50)
 	var allowed atomic.Int64
 	var running sync.WaitGroup
 	for range 100 {

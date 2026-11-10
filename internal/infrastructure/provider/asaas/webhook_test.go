@@ -11,7 +11,7 @@ import (
 )
 
 func newWebhookProvider() *asaas.Provider {
-	return asaas.NewMoney("http://asaas.test", apiKey, webhookToken, emptyCache(), &http.Client{})
+	return asaas.NewProvider("http://asaas.test", apiKey, webhookToken, emptyCache(), &http.Client{})
 }
 
 func tokenHeader(token string) http.Header {
@@ -24,7 +24,7 @@ func TestParseWebhook_Events_MapToKinds(t *testing.T) {
 	tests := []struct {
 		event    string
 		resource string
-		want     payment.EventKind
+		want     string
 	}{
 		{"PAYMENT_RECEIVED", "payment", payment.EventChargePaid},
 		{"PAYMENT_CONFIRMED", "payment", payment.EventChargePaid},

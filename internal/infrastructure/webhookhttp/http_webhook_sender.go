@@ -17,22 +17,14 @@ import (
 
 var ErrUnexpectedStatus = errors.New("unexpected webhook response status")
 
-type Signer interface {
-	SignWebhook(secret string, timestamp int64, body []byte) string
-}
-
-type Clock interface {
-	Now() time.Time
-}
-
 type HTTPWebhookSender struct {
 	client *http.Client
-	signer Signer
-	clock  Clock
+	sign   func(secret string, timestamp int64, body []byte) string
+	now    func() time.Time
 }
 
-func NewMoney(client *http.Client, signer Signer, clock Clock) *HTTPWebhookSender {
-	return &HTTPWebhookSender{client: client, signer: signer, clock: clock}
+func NewHTTPWebhookSender(client *http.Client, sign func(secret string, timestamp int64, body []byte) string, now func() time.Time) *HTTPWebhookSender {
+	return &HTTPWebhookSender{client: client, sign: sign, now: now}
 }
 
 func (s *HTTPWebhookSender) Send(ctx context.Context, endpoint webhook.Endpoint, source event.Event) error {
@@ -53,16 +45,16 @@ func (s *HTTPWebhookSender) Send(ctx context.Context, endpoint webhook.Endpoint,
 }
 
 func (s *HTTPWebhookSender) buildRequest(ctx context.Context, endpoint webhook.Endpoint, source event.Event) (*http.Request, error) {
-	body, _ := json.Marshal(toPayload(source))
+	body, encodeErr := json.Marshal(toPayload(source))
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, string(endpoint.URL()), bytes.NewReader(body))
-	if err != nil {
+	if err := errors.Join(encodeErr, err); err != nil {
 		return nil, err
 	}
-	timestamp := s.clock.Now().Unix()
+	timestamp := s.now().Unix()
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Paygo-Event-Id", string(source.ID()))
 	request.Header.Set("Paygo-Event-Type", string(source.Type()))
 	request.Header.Set("Paygo-Timestamp", strconv.FormatInt(timestamp, 10))
-	request.Header.Set("Paygo-Signature", s.signer.SignWebhook(endpoint.Secret(), timestamp, body))
+	request.Header.Set("Paygo-Signature", s.sign(endpoint.Secret(), timestamp, body))
 	return request, nil
 }

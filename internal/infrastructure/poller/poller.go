@@ -26,7 +26,7 @@ type run struct {
 	drain time.Duration
 }
 
-func NewMoney(interval time.Duration, reporter ErrorReporter) *Poller {
+func NewPoller(interval time.Duration, reporter ErrorReporter) *Poller {
 	return &Poller{interval: interval, reporter: reporter}
 }
 

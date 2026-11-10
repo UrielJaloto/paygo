@@ -73,7 +73,7 @@ func (s *stubWebhooks) Replay(_ context.Context, query webhookservice.DeliveryQu
 }
 
 func webhookRouter(webhooks *stubWebhooks) *gin.Engine {
-	controller := rest.NewWebhookController(webhooks, webhooks, webhooks, rest.WebhookPresenter{})
+	controller := rest.NewWebhookController(webhooks, webhooks, webhooks)
 	return apiRouter(rest.Controllers{Webhook: controller})
 }
 

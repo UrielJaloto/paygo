@@ -31,14 +31,14 @@ type fakeRepository struct {
 
 func newFakeRepository(accounts ...account.Account) *fakeRepository {
 	repository := &fakeRepository{accounts: map[account.ID]account.Account{}}
-	for _, acc := range accounts {
-		repository.accounts[acc.ID()] = acc
+	for _, account := range accounts {
+		repository.accounts[account.ID()] = account
 	}
 	return repository
 }
 
-func (f *fakeRepository) Save(_ context.Context, acc account.Account) error {
-	f.saved = append(f.saved, acc)
+func (f *fakeRepository) Save(_ context.Context, account account.Account) error {
+	f.saved = append(f.saved, account)
 	return f.saveErr
 }
 
@@ -57,8 +57,8 @@ func (f *fakeRepository) ListByOwner(_ context.Context, _ apikey.OwnerID, _ page
 	return f.listed, f.listErr
 }
 
-func (f *fakeRepository) Update(_ context.Context, acc account.Account, expectedVersion int64) error {
-	f.updates = append(f.updates, updateCall{account: acc, expectedVersion: expectedVersion})
+func (f *fakeRepository) Update(_ context.Context, account account.Account, expectedVersion int64) error {
+	f.updates = append(f.updates, updateCall{account: account, expectedVersion: expectedVersion})
 	return f.updateErr
 }
 
@@ -72,7 +72,7 @@ type fakeLedger struct {
 	statementErr error
 }
 
-func (f *fakeLedger) CalculateBalance(context.Context, account.ID) (money.Money, error) {
+func (f *fakeLedger) FindBalance(context.Context, account.ID) (money.Money, error) {
 	f.balances++
 	return f.balance, f.balanceErr
 }

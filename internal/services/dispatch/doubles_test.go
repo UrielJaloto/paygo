@@ -15,7 +15,7 @@ import (
 
 type spyOutbox struct {
 	events    []event.Event
-	published []event.ID
+	published []string
 	claimErr  error
 	markErr   error
 }
@@ -24,7 +24,7 @@ func (s *spyOutbox) ClaimUnpublished(context.Context, int) ([]event.Event, error
 	return s.events, s.claimErr
 }
 
-func (s *spyOutbox) MarkPublished(_ context.Context, ids []event.ID) error {
+func (s *spyOutbox) MarkPublished(_ context.Context, ids []string) error {
 	s.published = ids
 	return s.markErr
 }
@@ -73,7 +73,7 @@ type fakeQueue struct {
 	claims    []service.Claim
 	claimErr  error
 	updated   []webhook.Delivery
-	failingID webhook.DeliveryID
+	failingID string
 }
 
 func (f *fakeQueue) ClaimDue(context.Context, time.Time, time.Duration, int) ([]service.Claim, error) {
@@ -89,8 +89,8 @@ func (f *fakeQueue) Update(_ context.Context, delivery webhook.Delivery) error {
 }
 
 type stubSender struct {
-	failures  map[webhook.EndpointID]error
-	calls atomic.Int32
+	failures map[string]error
+	calls    atomic.Int32
 }
 
 func (s *stubSender) Send(_ context.Context, endpoint webhook.Endpoint, _ event.Event) error {

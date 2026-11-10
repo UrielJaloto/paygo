@@ -19,7 +19,7 @@ type stubTraces struct {
 	id string
 }
 
-func (s stubTraces) TraceID(context.Context) string {
+func (s stubTraces) ReadTraceID(context.Context) string {
 	return s.id
 }
 
@@ -137,7 +137,7 @@ func TestJSONLogger_LevelWarn_HidesDebug(t *testing.T) {
 
 func TestReadRequestID_MissingFromContext_ReturnsEmpty(t *testing.T) {
 	if id := logging.ReadRequestID(context.Background()); id != "" {
-		t.Errorf("RequestID = %q, want empty", id)
+		t.Errorf("ReadRequestID = %q, want empty", id)
 	}
 }
 

@@ -10,14 +10,10 @@ import (
 )
 
 const (
-	PayoutPending   PayoutStatus = "pending"
-	PayoutCompleted PayoutStatus = "completed"
-	PayoutFailed    PayoutStatus = "failed"
+	PayoutPending   = "pending"
+	PayoutCompleted = "completed"
+	PayoutFailed    = "failed"
 )
-
-type PayoutID string
-
-type PayoutStatus string
 
 type PayoutTransfers struct {
 	Hold  string
@@ -34,14 +30,14 @@ type PayoutDraft struct {
 }
 
 type PayoutSnapshot struct {
-	ID        PayoutID
+	ID        string
 	OwnerID   apikey.OwnerID
 	AccountID account.ID
 	Amount    money.Money
 	PixKey    PixKey
 	Reference Reference
 	Transfers PayoutTransfers
-	Status    PayoutStatus
+	Status    string
 	Timeline  Timeline
 }
 
@@ -49,7 +45,7 @@ type Payout struct {
 	state PayoutSnapshot
 }
 
-func NewPayout(id PayoutID, draft PayoutDraft, createdAt time.Time) (Payout, error) {
+func NewPayout(id string, draft PayoutDraft, createdAt time.Time) (Payout, error) {
 	if draft.Amount.Currency() != money.BRL {
 		return Payout{}, fmt.Errorf("%w: %s", money.ErrUnsupportedCurrency, draft.Amount.Currency())
 	}
@@ -70,7 +66,7 @@ func RestorePayout(snapshot PayoutSnapshot) Payout {
 	return Payout{state: snapshot}
 }
 
-func (p Payout) ID() PayoutID {
+func (p Payout) ID() string {
 	return p.state.ID
 }
 
@@ -98,7 +94,7 @@ func (p Payout) Transfers() PayoutTransfers {
 	return p.state.Transfers
 }
 
-func (p Payout) Status() PayoutStatus {
+func (p Payout) Status() string {
 	return p.state.Status
 }
 
@@ -118,7 +114,7 @@ func (p *Payout) MarkFailed(transferID string, now time.Time) (bool, error) {
 	return p.changeStatus(PayoutFailed, transferID, now)
 }
 
-func (p *Payout) changeStatus(target PayoutStatus, transferID string, now time.Time) (bool, error) {
+func (p *Payout) changeStatus(target string, transferID string, now time.Time) (bool, error) {
 	if p.state.Status == target {
 		return false, nil
 	}

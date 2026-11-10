@@ -12,8 +12,8 @@ type PaymentProvider interface {
 	Name() string
 	CreatePixCharge(ctx context.Context, request ChargeRequest) (ChargeResult, error)
 	SendPixPayout(ctx context.Context, request PayoutRequest) (PayoutResult, error)
-	FetchCharge(ctx context.Context, providerID string) (payment.EventKind, error)
-	FetchPayout(ctx context.Context, providerID string) (payment.EventKind, error)
+	FetchCharge(ctx context.Context, providerID string) (string, error)
+	FetchPayout(ctx context.Context, providerID string) (string, error)
 	ParseWebhook(ctx context.Context, header http.Header, body []byte) (payment.ProviderEvent, error)
 }
 

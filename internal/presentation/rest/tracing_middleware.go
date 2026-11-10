@@ -12,10 +12,10 @@ type SpanStarter interface {
 }
 
 func NewTracingMiddleware(spans SpanStarter) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx, end := spans.StartServerSpan(c.Request.Context(), c.Request.Method, readRoute(c), c.Request.Header)
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
-		end(c.Writer.Status())
+	return func(ginContext *gin.Context) {
+		ctx, end := spans.StartServerSpan(ginContext.Request.Context(), ginContext.Request.Method, readRoute(ginContext), ginContext.Request.Header)
+		ginContext.Request = ginContext.Request.WithContext(ctx)
+		ginContext.Next()
+		end(ginContext.Writer.Status())
 	}
 }

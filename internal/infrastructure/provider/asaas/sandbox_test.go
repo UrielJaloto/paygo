@@ -18,7 +18,7 @@ func TestSandbox_CreatePixCharge_ReturnsQRCode(t *testing.T) {
 	if key == "" {
 		t.Fatal("PAYGO_ASAAS_API_KEY is required")
 	}
-	provider := asaas.NewMoney("https://api-sandbox.asaas.com/v3", key, "", emptyCache(), &http.Client{})
+	provider := asaas.New("https://api-sandbox.asaas.com/v3", key, "", emptyCache(), &http.Client{})
 	result, err := provider.CreatePixCharge(context.Background(), paymentservice.ChargeRequest{
 		ExternalReference: "paygo-sandbox",
 		PayerName:         "John Doe",

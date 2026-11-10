@@ -39,18 +39,18 @@ func NewTransferRepository(pool *pgxpool.Pool) *TransferRepository {
 	return &TransferRepository{database: pool}
 }
 
-func (r *TransferRepository) FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (transfer.Transfer, transfer.Fingerprint, error) {
-	var fingerprint transfer.Fingerprint
+func (r *TransferRepository) FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (transfer.Transfer, string, error) {
+	var fingerprint string
 	found, err := scanTransfer(r.database.QueryRow(ctx, selectTransferByKey, owner, key), &fingerprint)
 	return found, fingerprint, mapNotFound(err, transfer.ErrTransferNotFound)
 }
 
-func (r *TransferRepository) FindByIDForUpdate(ctx context.Context, id transfer.ID) (transfer.Transfer, error) {
+func (r *TransferRepository) FindByIDForUpdate(ctx context.Context, id string) (transfer.Transfer, error) {
 	found, err := scanTransfer(r.database.QueryRow(ctx, lockTransfer, id))
 	return found, mapNotFound(err, transfer.ErrTransferNotFound)
 }
 
-func (r *TransferRepository) FindByID(ctx context.Context, id transfer.ID) (transfer.Transfer, error) {
+func (r *TransferRepository) FindByID(ctx context.Context, id string) (transfer.Transfer, error) {
 	found, err := scanTransfer(r.database.QueryRow(ctx, selectTransfer, id))
 	return found, mapNotFound(err, transfer.ErrTransferNotFound)
 }
@@ -62,17 +62,17 @@ func (r *TransferRepository) ListByAccount(ctx context.Context, id account.ID, c
 	})
 }
 
-func (r *TransferRepository) Save(ctx context.Context, t transfer.Transfer, fingerprint transfer.Fingerprint) error {
-	_, err := r.database.Exec(ctx, insertTransfer, t.ID(), t.OwnerID(), t.IdempotencyKey(), fingerprint, t.Kind(), t.From(), t.To(),
-		t.Amount().Minor(), t.Amount().Currency(), t.Status(), t.ReversalOf(), t.CreatedAt())
+func (r *TransferRepository) Save(ctx context.Context, created transfer.Transfer, fingerprint string) error {
+	_, err := r.database.Exec(ctx, insertTransfer, created.ID(), created.OwnerID(), created.IdempotencyKey(), fingerprint, created.Kind(), created.From(), created.To(),
+		created.Amount().Minor(), created.Amount().Currency(), created.Status(), created.ReversalOf(), created.CreatedAt())
 	if isUniqueViolation(err, idempotencyConstraint) {
-		return fmt.Errorf("%w: %s", transfer.ErrIdempotencyConflict, t.IdempotencyKey())
+		return fmt.Errorf("%w: %s", transfer.ErrIdempotencyConflict, created.IdempotencyKey())
 	}
 	return err
 }
 
-func (r *TransferRepository) MarkReversed(ctx context.Context, t transfer.Transfer) error {
-	_, err := r.database.Exec(ctx, updateTransfer, t.ID(), transfer.StatusReversed)
+func (r *TransferRepository) MarkReversed(ctx context.Context, reversed transfer.Transfer) error {
+	_, err := r.database.Exec(ctx, updateTransfer, reversed.ID(), transfer.StatusReversed)
 	return err
 }
 

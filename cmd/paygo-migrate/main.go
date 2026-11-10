@@ -12,6 +12,8 @@ import (
 	"github.com/UrielJaloto/paygo/internal/infrastructure/postgres"
 )
 
+const serviceName = "paygo-migrate"
+
 func main() {
 	os.Exit(run(context.Background(), os.LookupEnv, os.Stdout, os.Stderr))
 }
@@ -29,7 +31,7 @@ func migrate(ctx context.Context, lookup func(string) (string, bool), stdout io.
 	if err != nil {
 		return err
 	}
-	pool, err := postgres.NewPool(ctx, settings.URL, settings.MaxConns)
+	pool, err := postgres.NewPool(ctx, settings.URL, settings.MaximumConnections)
 	if err != nil {
 		return err
 	}

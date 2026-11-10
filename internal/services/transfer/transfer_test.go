@@ -50,7 +50,7 @@ func standardStore() *fakeStore {
 
 func newService(store *fakeStore) (*service.Service, *fakeUnitOfWork) {
 	unitOfWork := &fakeUnitOfWork{store: store}
-	return service.NewMoney(unitOfWork, &fakeReader{}, stubClock{now: now}, &sequenceIDs{}), unitOfWork
+	return service.NewService(unitOfWork, &fakeReader{}, stubClock{now: now}.Now, &sequenceIDs{}), unitOfWork
 }
 
 func validTransfer() service.TransferInput {
@@ -61,9 +61,9 @@ func validFunding() service.FundingInput {
 	return service.FundingInput{OwnerID: ownerTwo, IdempotencyKey: "key-1", AccountID: lowID, Amount: "1.00", Currency: "BRL"}
 }
 
-func TestPosting_BuildJournal_Valid_ReturnsCompletedOutput(t *testing.T) {
-	svc, _ := newService(standardStore())
-	got, err := svc.Transfer(context.Background(), validTransfer())
+func TestTransfer_Valid_ReturnsCompletedOutput(t *testing.T) {
+	transfers, _ := newService(standardStore())
+	got, err := transfers.Transfer(context.Background(), validTransfer())
 	if err != nil {
 		t.Fatalf("Transfer: %v", err)
 	}
@@ -73,10 +73,10 @@ func TestPosting_BuildJournal_Valid_ReturnsCompletedOutput(t *testing.T) {
 	}
 }
 
-func TestPosting_BuildJournal_Valid_AppendsBalancedJournal(t *testing.T) {
+func TestTransfer_Valid_AppendsBalancedJournal(t *testing.T) {
 	store := standardStore()
-	svc, _ := newService(store)
-	if _, err := svc.Transfer(context.Background(), validTransfer()); err != nil {
+	service, _ := newService(store)
+	if _, err := service.Transfer(context.Background(), validTransfer()); err != nil {
 		t.Fatalf("Transfer: %v", err)
 	}
 	entries := store.journals[0].Entries()
@@ -88,10 +88,10 @@ func TestPosting_BuildJournal_Valid_AppendsBalancedJournal(t *testing.T) {
 	}
 }
 
-func TestPosting_BuildJournal_Valid_SavesFingerprintAndNotifiesBothOwners(t *testing.T) {
+func TestTransfer_Valid_SavesFingerprintAndNotifiesBothOwners(t *testing.T) {
 	store := standardStore()
-	svc, _ := newService(store)
-	if _, err := svc.Transfer(context.Background(), validTransfer()); err != nil {
+	service, _ := newService(store)
+	if _, err := service.Transfer(context.Background(), validTransfer()); err != nil {
 		t.Fatalf("Transfer: %v", err)
 	}
 	request := transfer.Request{Kind: transfer.KindTransfer, From: lowID, To: highID, Amount: money.NewMoney(100, money.BRL)}
@@ -103,20 +103,20 @@ func TestPosting_BuildJournal_Valid_SavesFingerprintAndNotifiesBothOwners(t *tes
 	}
 }
 
-func TestPosting_BuildJournal_ExactBalance_LeavesZero(t *testing.T) {
+func TestTransfer_ExactBalance_LeavesZero(t *testing.T) {
 	store := standardStore()
 	store.balances[lowID] = money.NewMoney(100, money.BRL)
-	svc, _ := newService(store)
-	if _, err := svc.Transfer(context.Background(), validTransfer()); err != nil {
+	service, _ := newService(store)
+	if _, err := service.Transfer(context.Background(), validTransfer()); err != nil {
 		t.Fatalf("Transfer: %v", err)
 	}
 }
 
-func TestPosting_BuildJournal_InsufficientFunds_WritesNothing(t *testing.T) {
+func TestTransfer_InsufficientFunds_WritesNothing(t *testing.T) {
 	store := standardStore()
 	store.balances[lowID] = money.NewMoney(99, money.BRL)
-	svc, _ := newService(store)
-	_, err := svc.Transfer(context.Background(), validTransfer())
+	service, _ := newService(store)
+	_, err := service.Transfer(context.Background(), validTransfer())
 	if !errors.Is(err, transfer.ErrInsufficientFunds) {
 		t.Fatalf("error = %v", err)
 	}
@@ -125,7 +125,7 @@ func TestPosting_BuildJournal_InsufficientFunds_WritesNothing(t *testing.T) {
 	}
 }
 
-func TestPosting_BuildJournal_RejectedByAccounts_ReturnsExactError(t *testing.T) {
+func TestTransfer_RejectedByAccounts_ReturnsExactError(t *testing.T) {
 	cases := []struct {
 		name  string
 		store *fakeStore
@@ -138,8 +138,8 @@ func TestPosting_BuildJournal_RejectedByAccounts_ReturnsExactError(t *testing.T)
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			svc, _ := newService(testCase.store)
-			_, err := svc.Transfer(context.Background(), validTransfer())
+			service, _ := newService(testCase.store)
+			_, err := service.Transfer(context.Background(), validTransfer())
 			if !errors.Is(err, testCase.want) {
 				t.Fatalf("error = %v, want %v", err, testCase.want)
 			}
@@ -150,46 +150,46 @@ func TestPosting_BuildJournal_RejectedByAccounts_ReturnsExactError(t *testing.T)
 	}
 }
 
-func TestPosting_BuildJournal_CurrencyMismatch_ReturnsErrCurrencyMismatch(t *testing.T) {
+func TestTransfer_CurrencyMismatch_ReturnsErrCurrencyMismatch(t *testing.T) {
 	input := validTransfer()
 	input.Currency = "USD"
 	store := standardStore()
-	svc, _ := newService(store)
-	_, err := svc.Transfer(context.Background(), input)
+	service, _ := newService(store)
+	_, err := service.Transfer(context.Background(), input)
 	if !errors.Is(err, money.ErrCurrencyMismatch) || store.wasCalled("balance") {
 		t.Fatalf("error = %v, calls = %v", err, store.calls)
 	}
 }
 
-func TestPosting_BuildJournal_BalanceInOtherCurrency_ReturnsErrCurrencyMismatch(t *testing.T) {
+func TestTransfer_BalanceInOtherCurrency_ReturnsErrCurrencyMismatch(t *testing.T) {
 	store := standardStore()
 	store.balances[lowID] = money.NewMoney(500, money.USD)
-	svc, _ := newService(store)
-	if _, err := svc.Transfer(context.Background(), validTransfer()); !errors.Is(err, money.ErrCurrencyMismatch) {
+	service, _ := newService(store)
+	if _, err := service.Transfer(context.Background(), validTransfer()); !errors.Is(err, money.ErrCurrencyMismatch) {
 		t.Fatalf("error = %v", err)
 	}
 }
 
-func TestPosting_BuildJournal_InvalidInput_DoesNotRunUnitOfWork(t *testing.T) {
+func TestTransfer_InvalidInput_DoesNotRunUnitOfWork(t *testing.T) {
 	cases := []struct {
 		name   string
 		change func(*service.TransferInput)
 		want   error
 	}{
-		{name: "same account", change: func(i *service.TransferInput) { i.ToAccountID = i.FromAccountID }, want: transfer.ErrSameAccount},
-		{name: "invalid key", change: func(i *service.TransferInput) { i.IdempotencyKey = "" }, want: transfer.ErrInvalidIdempotencyKey},
-		{name: "invalid amount", change: func(i *service.TransferInput) { i.Amount = "0" }, want: money.ErrInvalidAmount},
-		{name: "invalid currency", change: func(i *service.TransferInput) { i.Currency = "GBP" }, want: money.ErrUnsupportedCurrency},
-		{name: "invalid owner", change: func(i *service.TransferInput) { i.OwnerID = "x" }, want: apikey.ErrInvalidOwner},
-		{name: "invalid source", change: func(i *service.TransferInput) { i.FromAccountID = "1" }, want: account.ErrInvalidAccountID},
-		{name: "invalid destination", change: func(i *service.TransferInput) { i.ToAccountID = "1" }, want: account.ErrInvalidAccountID},
+		{name: "same account", change: func(input *service.TransferInput) { input.ToAccountID = input.FromAccountID }, want: transfer.ErrSameAccount},
+		{name: "invalid key", change: func(input *service.TransferInput) { input.IdempotencyKey = "" }, want: transfer.ErrInvalidIdempotencyKey},
+		{name: "invalid amount", change: func(input *service.TransferInput) { input.Amount = "0" }, want: money.ErrInvalidAmount},
+		{name: "invalid currency", change: func(input *service.TransferInput) { input.Currency = "GBP" }, want: money.ErrUnsupportedCurrency},
+		{name: "invalid owner", change: func(input *service.TransferInput) { input.OwnerID = "x" }, want: apikey.ErrInvalidOwner},
+		{name: "invalid source", change: func(input *service.TransferInput) { input.FromAccountID = "1" }, want: account.ErrInvalidAccountID},
+		{name: "invalid destination", change: func(input *service.TransferInput) { input.ToAccountID = "1" }, want: account.ErrInvalidAccountID},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := validTransfer()
 			testCase.change(&input)
-			svc, unitOfWork := newService(standardStore())
-			if _, err := svc.Transfer(context.Background(), input); !errors.Is(err, testCase.want) {
+			service, unitOfWork := newService(standardStore())
+			if _, err := service.Transfer(context.Background(), input); !errors.Is(err, testCase.want) {
 				t.Fatalf("error = %v, want %v", err, testCase.want)
 			}
 			if unitOfWork.runs != 0 {
@@ -199,13 +199,13 @@ func TestPosting_BuildJournal_InvalidInput_DoesNotRunUnitOfWork(t *testing.T) {
 	}
 }
 
-func TestPosting_BuildJournal_HigherSourceID_LocksInAscendingOrder(t *testing.T) {
+func TestTransfer_HigherSourceID_LocksInAscendingOrder(t *testing.T) {
 	store := newFakeStore(customer(lowID, ownerTwo), customer(highID, ownerOne))
 	store.balances[highID] = money.NewMoney(500, money.BRL)
 	input := validTransfer()
 	input.FromAccountID, input.ToAccountID = highID, lowID
-	svc, _ := newService(store)
-	got, err := svc.Transfer(context.Background(), input)
+	service, _ := newService(store)
+	got, err := service.Transfer(context.Background(), input)
 	if err != nil {
 		t.Fatalf("Transfer: %v", err)
 	}
@@ -214,13 +214,13 @@ func TestPosting_BuildJournal_HigherSourceID_LocksInAscendingOrder(t *testing.T)
 	}
 }
 
-func TestPosting_BuildJournal_SameKeySameRequest_ReturnsReplay(t *testing.T) {
+func TestTransfer_SameKeySameRequest_ReturnsReplay(t *testing.T) {
 	request := transfer.Request{Kind: transfer.KindTransfer, From: lowID, To: highID, Amount: money.NewMoney(100, money.BRL)}
 	original := transfer.Restore(transfer.Snapshot{ID: "t1", Request: request, Status: transfer.StatusCompleted, CreatedAt: now})
 	store := standardStore()
 	store.existing = &savedTransfer{transfer: original, fingerprint: request.CalculateFingerprint()}
-	svc, _ := newService(store)
-	got, err := svc.Transfer(context.Background(), validTransfer())
+	service, _ := newService(store)
+	got, err := service.Transfer(context.Background(), validTransfer())
 	if err != nil {
 		t.Fatalf("Transfer: %v", err)
 	}
@@ -229,11 +229,11 @@ func TestPosting_BuildJournal_SameKeySameRequest_ReturnsReplay(t *testing.T) {
 	}
 }
 
-func TestPosting_BuildJournal_SameKeyOtherRequest_ReturnsConflict(t *testing.T) {
+func TestTransfer_SameKeyOtherRequest_ReturnsConflict(t *testing.T) {
 	store := standardStore()
 	store.existing = &savedTransfer{fingerprint: "other"}
-	svc, _ := newService(store)
-	_, err := svc.Transfer(context.Background(), validTransfer())
+	service, _ := newService(store)
+	_, err := service.Transfer(context.Background(), validTransfer())
 	if !errors.Is(err, transfer.ErrIdempotencyConflict) || store.wasCalled("lock") {
 		t.Fatalf("error = %v, calls = %v", err, store.calls)
 	}
@@ -241,8 +241,8 @@ func TestPosting_BuildJournal_SameKeyOtherRequest_ReturnsConflict(t *testing.T) 
 
 func TestDeposit_Valid_MovesFromSettlement(t *testing.T) {
 	store := standardStore()
-	svc, _ := newService(store)
-	got, err := svc.Deposit(context.Background(), validFunding())
+	service, _ := newService(store)
+	got, err := service.Deposit(context.Background(), validFunding())
 	if err != nil {
 		t.Fatalf("Deposit: %v", err)
 	}
@@ -263,18 +263,18 @@ func TestDeposit_Rejected_ReturnsExactError(t *testing.T) {
 		change func(*service.FundingInput)
 		want   error
 	}{
-		{name: "settlement account", change: func(i *service.FundingInput) { i.AccountID = settlement }, want: account.ErrAccountNotFound},
-		{name: "invalid owner", change: func(i *service.FundingInput) { i.OwnerID = "x" }, want: apikey.ErrInvalidOwner},
-		{name: "invalid key", change: func(i *service.FundingInput) { i.IdempotencyKey = "" }, want: transfer.ErrInvalidIdempotencyKey},
-		{name: "invalid account", change: func(i *service.FundingInput) { i.AccountID = "1" }, want: account.ErrInvalidAccountID},
-		{name: "invalid amount", change: func(i *service.FundingInput) { i.Amount = "0" }, want: money.ErrInvalidAmount},
+		{name: "settlement account", change: func(input *service.FundingInput) { input.AccountID = settlement }, want: account.ErrAccountNotFound},
+		{name: "invalid owner", change: func(input *service.FundingInput) { input.OwnerID = "x" }, want: apikey.ErrInvalidOwner},
+		{name: "invalid key", change: func(input *service.FundingInput) { input.IdempotencyKey = "" }, want: transfer.ErrInvalidIdempotencyKey},
+		{name: "invalid account", change: func(input *service.FundingInput) { input.AccountID = "1" }, want: account.ErrInvalidAccountID},
+		{name: "invalid amount", change: func(input *service.FundingInput) { input.Amount = "0" }, want: money.ErrInvalidAmount},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := validFunding()
 			testCase.change(&input)
-			svc, unitOfWork := newService(standardStore())
-			if _, err := svc.Deposit(context.Background(), input); !errors.Is(err, testCase.want) {
+			service, unitOfWork := newService(standardStore())
+			if _, err := service.Deposit(context.Background(), input); !errors.Is(err, testCase.want) {
 				t.Fatalf("error = %v, want %v", err, testCase.want)
 			}
 			if unitOfWork.runs != 0 {
@@ -286,15 +286,15 @@ func TestDeposit_Rejected_ReturnsExactError(t *testing.T) {
 
 func TestDeposit_NonCustomerAccount_ReturnsErrAccountNotFound(t *testing.T) {
 	clearing := account.Restore(account.Snapshot{ID: lowID, Currency: money.BRL, Kind: account.KindProviderClearing, Status: account.StatusActive})
-	svc, _ := newService(newFakeStore(clearing, settlementAccount()))
-	if _, err := svc.Deposit(context.Background(), validFunding()); !errors.Is(err, account.ErrAccountNotFound) {
+	service, _ := newService(newFakeStore(clearing, settlementAccount()))
+	if _, err := service.Deposit(context.Background(), validFunding()); !errors.Is(err, account.ErrAccountNotFound) {
 		t.Fatalf("error = %v", err)
 	}
 }
 
 func TestWithdraw_Valid_MovesToSettlement(t *testing.T) {
-	svc, _ := newService(standardStore())
-	got, err := svc.Withdraw(context.Background(), validFunding())
+	service, _ := newService(standardStore())
+	got, err := service.Withdraw(context.Background(), validFunding())
 	if err != nil {
 		t.Fatalf("Withdraw: %v", err)
 	}
@@ -306,8 +306,8 @@ func TestWithdraw_Valid_MovesToSettlement(t *testing.T) {
 func TestWithdraw_InsufficientFunds_ReturnsErrInsufficientFunds(t *testing.T) {
 	store := standardStore()
 	store.balances[lowID] = money.NewMoney(99, money.BRL)
-	svc, _ := newService(store)
-	if _, err := svc.Withdraw(context.Background(), validFunding()); !errors.Is(err, transfer.ErrInsufficientFunds) {
+	service, _ := newService(store)
+	if _, err := service.Withdraw(context.Background(), validFunding()); !errors.Is(err, transfer.ErrInsufficientFunds) {
 		t.Fatalf("error = %v", err)
 	}
 }
@@ -315,17 +315,17 @@ func TestWithdraw_InsufficientFunds_ReturnsErrInsufficientFunds(t *testing.T) {
 func TestWithdraw_InvalidInput_DoesNotRunUnitOfWork(t *testing.T) {
 	input := validFunding()
 	input.Amount = "0"
-	svc, unitOfWork := newService(standardStore())
-	if _, err := svc.Withdraw(context.Background(), input); !errors.Is(err, money.ErrInvalidAmount) || unitOfWork.runs != 0 {
+	service, unitOfWork := newService(standardStore())
+	if _, err := service.Withdraw(context.Background(), input); !errors.Is(err, money.ErrInvalidAmount) || unitOfWork.runs != 0 {
 		t.Fatalf("error = %v, runs = %d", err, unitOfWork.runs)
 	}
 }
 
-func TestPosting_BuildJournal_UnitOfWorkFails_WrapsError(t *testing.T) {
+func TestTransfer_UnitOfWorkFails_WrapsError(t *testing.T) {
 	store := standardStore()
-	svc, unitOfWork := newService(store)
+	service, unitOfWork := newService(store)
 	unitOfWork.err = errBoom
-	if _, err := svc.Transfer(context.Background(), validTransfer()); !errors.Is(err, errBoom) {
+	if _, err := service.Transfer(context.Background(), validTransfer()); !errors.Is(err, errBoom) {
 		t.Fatalf("error = %v", err)
 	}
 	if len(store.calls) != 0 {
@@ -333,30 +333,30 @@ func TestPosting_BuildJournal_UnitOfWorkFails_WrapsError(t *testing.T) {
 	}
 }
 
-func TestPosting_BuildJournal_StoreCallFails_StopsLaterCalls(t *testing.T) {
+func TestTransfer_StoreCallFails_StopsLaterCalls(t *testing.T) {
 	order := []string{"find", "lock", "find", "balance", "append", "save", "outbox"}
-	for i, failing := range order {
-		t.Run(fmt.Sprintf("%d_%s", i, failing), func(t *testing.T) {
+	for index, failing := range order {
+		t.Run(fmt.Sprintf("%d_%s", index, failing), func(t *testing.T) {
 			store := standardStore()
-			store.failOnCall = i + 1
-			svc, _ := newService(store)
-			if _, err := svc.Transfer(context.Background(), validTransfer()); !errors.Is(err, errBoom) {
+			store.failOnCall = index + 1
+			service, _ := newService(store)
+			if _, err := service.Transfer(context.Background(), validTransfer()); !errors.Is(err, errBoom) {
 				t.Fatalf("error = %v", err)
 			}
-			if !slices.Equal(store.calls, order[:i+1]) {
-				t.Fatalf("calls = %v, want %v", store.calls, order[:i+1])
+			if !slices.Equal(store.calls, order[:index+1]) {
+				t.Fatalf("calls = %v, want %v", store.calls, order[:index+1])
 			}
 		})
 	}
 }
 
-func TestPosting_BuildJournal_SameKeyCommittedWhileWaitingForLock_ReturnsReplay(t *testing.T) {
+func TestTransfer_SameKeyCommittedWhileWaitingForLock_ReturnsReplay(t *testing.T) {
 	request := transfer.Request{Kind: transfer.KindTransfer, From: lowID, To: highID, Amount: money.NewMoney(100, money.BRL)}
 	original := transfer.Restore(transfer.Snapshot{ID: "t1", Request: request, Status: transfer.StatusCompleted, CreatedAt: now})
 	store := standardStore()
 	store.existingAfterLock = &savedTransfer{transfer: original, fingerprint: request.CalculateFingerprint()}
-	svc, _ := newService(store)
-	got, err := svc.Transfer(context.Background(), validTransfer())
+	service, _ := newService(store)
+	got, err := service.Transfer(context.Background(), validTransfer())
 	if err != nil {
 		t.Fatalf("Transfer: %v", err)
 	}

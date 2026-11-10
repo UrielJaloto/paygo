@@ -23,7 +23,7 @@ func (fixedIDs) NewID() string {
 }
 
 func newProvider() *fake.Provider {
-	return fake.NewMoney(token, fixedIDs{})
+	return fake.NewProvider(token, fixedIDs{})
 }
 
 func validHeader() http.Header {
@@ -67,11 +67,11 @@ func TestCreatePixCharge_QRCode_IsPNG(t *testing.T) {
 func TestSendPixPayout_MarkPayoutState_ReportsStatus(t *testing.T) {
 	tests := []struct {
 		name string
-		done bool
-		want payment.EventKind
+		mark func(*fake.Provider, string)
+		want string
 	}{
-		{"done", true, payment.EventPayoutDone},
-		{"failed", false, payment.EventPayoutFailed},
+		{"completed", (*fake.Provider).MarkPayoutCompleted, payment.EventPayoutDone},
+		{"failed", (*fake.Provider).MarkPayoutFailed, payment.EventPayoutFailed},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -81,7 +81,7 @@ func TestSendPixPayout_MarkPayoutState_ReportsStatus(t *testing.T) {
 				t.Fatalf("SendPixPayout: %v", err)
 			}
 			assertPayout(t, provider, payout.ProviderID, payment.EventIgnored)
-			provider.MarkPayout(payout.ProviderID, testCase.done)
+			testCase.mark(provider, payout.ProviderID)
 			assertPayout(t, provider, payout.ProviderID, testCase.want)
 		})
 	}
@@ -119,7 +119,7 @@ func TestParseWebhook_MalformedJSON_ReturnsRejected(t *testing.T) {
 func TestParseWebhook_Types_MapToKinds(t *testing.T) {
 	tests := []struct {
 		webhookType string
-		want        payment.EventKind
+		want        string
 	}{
 		{"charge.paid", payment.EventChargePaid},
 		{"payout.done", payment.EventPayoutDone},
@@ -163,7 +163,7 @@ func TestParseWebhook_PayoutEvent_UpdatesState(t *testing.T) {
 	assertPayout(t, provider, "p1", payment.EventPayoutFailed)
 }
 
-func assertCharge(t *testing.T, provider *fake.Provider, id string, want payment.EventKind) {
+func assertCharge(t *testing.T, provider *fake.Provider, id string, want string) {
 	t.Helper()
 	got, err := provider.FetchCharge(context.Background(), id)
 	if err != nil {
@@ -174,7 +174,7 @@ func assertCharge(t *testing.T, provider *fake.Provider, id string, want payment
 	}
 }
 
-func assertPayout(t *testing.T, provider *fake.Provider, id string, want payment.EventKind) {
+func assertPayout(t *testing.T, provider *fake.Provider, id string, want string) {
 	t.Helper()
 	got, err := provider.FetchPayout(context.Background(), id)
 	if err != nil {

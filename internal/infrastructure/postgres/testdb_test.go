@@ -17,7 +17,7 @@ import (
 	"github.com/UrielJaloto/paygo/internal/infrastructure/postgres"
 )
 
-const defaultAdminURL = "postgres://paygo:paygo@localhost:5432/postgres?sslmode=disable"
+const defaultAdminURL = "postgres://paygo:example-postgres-password@localhost:5432/postgres?sslmode=disable"
 
 func adminURL() string {
 	if configured := os.Getenv("PAYGO_TEST_DATABASE_URL"); configured != "" {

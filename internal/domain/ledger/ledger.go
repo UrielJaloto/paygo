@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	Debit  Direction = "debit"
-	Credit Direction = "credit"
+	Debit  = "debit"
+	Credit = "credit"
 
 	minimumEntries = 2
 )
@@ -22,18 +22,16 @@ var (
 	ErrUnbalancedTransaction = errors.New("unbalanced transaction")
 )
 
-type Direction string
-
 type Entry struct {
 	id        string
 	journalID string
 	accountID account.ID
-	direction Direction
+	direction string
 	amount    money.Money
 	createdAt time.Time
 }
 
-func NewEntry(id string, accountID account.ID, direction Direction, amount money.Money, createdAt time.Time) (Entry, error) {
+func NewEntry(id string, accountID account.ID, direction string, amount money.Money, createdAt time.Time) (Entry, error) {
 	if amount.Minor() < 1 {
 		return Entry{}, fmt.Errorf("%w: entry of %s", money.ErrInvalidAmount, amount)
 	}
@@ -57,7 +55,7 @@ func (e Entry) AccountID() account.ID {
 	return e.accountID
 }
 
-func (e Entry) Direction() Direction {
+func (e Entry) Direction() string {
 	return e.direction
 }
 
@@ -93,8 +91,8 @@ func NewJournalTransaction(id string, entries []Entry) (JournalTransaction, erro
 		return JournalTransaction{}, fmt.Errorf("%w: net %s", ErrUnbalancedTransaction, net)
 	}
 	stamped := slices.Clone(entries)
-	for i := range stamped {
-		stamped[i].journalID = id
+	for index := range stamped {
+		stamped[index].journalID = id
 	}
 	return JournalTransaction{id: id, entries: stamped}, nil
 }
@@ -116,13 +114,13 @@ type Posting struct {
 	At       time.Time
 }
 
-func (posting Posting) BuildJournal() (JournalTransaction, error) {
-	debit, err := NewEntry(posting.EntryIDs[0], posting.From, Debit, posting.Amount, posting.At)
+func (p Posting) BuildJournal() (JournalTransaction, error) {
+	debit, err := NewEntry(p.EntryIDs[0], p.From, Debit, p.Amount, p.At)
 	if err != nil {
 		return JournalTransaction{}, err
 	}
-	credit := Entry{id: posting.EntryIDs[1], accountID: posting.To, direction: Credit, amount: posting.Amount, createdAt: posting.At}
-	return NewJournalTransaction(posting.ID, []Entry{debit, credit})
+	credit := Entry{id: p.EntryIDs[1], accountID: p.To, direction: Credit, amount: p.Amount, createdAt: p.At}
+	return NewJournalTransaction(p.ID, []Entry{debit, credit})
 }
 
 func CalculateBalance(currency money.Currency, entries []Entry) (money.Money, error) {

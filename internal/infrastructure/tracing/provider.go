@@ -42,7 +42,7 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 	return p.shutdown(ctx)
 }
 
-func (p *Provider) TraceID(ctx context.Context) string {
+func (p *Provider) ReadTraceID(ctx context.Context) string {
 	spanContext := trace.SpanContextFromContext(ctx)
 	if !spanContext.HasTraceID() {
 		return ""

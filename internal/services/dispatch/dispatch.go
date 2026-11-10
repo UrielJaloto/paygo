@@ -17,7 +17,7 @@ const maximumReasonLength = 500
 
 type OutboxReader interface {
 	ClaimUnpublished(ctx context.Context, limit int) ([]event.Event, error)
-	MarkPublished(ctx context.Context, ids []event.ID) error
+	MarkPublished(ctx context.Context, ids []string) error
 }
 
 type EndpointFinder interface {
@@ -58,20 +58,16 @@ type Sender interface {
 	Send(ctx context.Context, endpoint webhook.Endpoint, occurred event.Event) error
 }
 
-type Clock interface {
-	Now() time.Time
-}
-
 type Jitter interface {
 	Next() float64
 }
 
 type Service struct {
-	unitOfWork    UnitOfWork
-	queue  DeliveryQueue
-	sender Sender
-	clock  Clock
-	jitter Jitter
+	unitOfWork UnitOfWork
+	queue      DeliveryQueue
+	sender     Sender
+	now        func() time.Time
+	jitter     Jitter
 }
 
 type sendOutcome struct {
@@ -79,8 +75,8 @@ type sendOutcome struct {
 	err      error
 }
 
-func NewMoney(unitOfWork UnitOfWork, queue DeliveryQueue, sender Sender, clock Clock, jitter Jitter) *Service {
-	return &Service{unitOfWork: unitOfWork, queue: queue, sender: sender, clock: clock, jitter: jitter}
+func NewService(unitOfWork UnitOfWork, queue DeliveryQueue, sender Sender, now func() time.Time, jitter Jitter) *Service {
+	return &Service{unitOfWork: unitOfWork, queue: queue, sender: sender, now: now, jitter: jitter}
 }
 
 func (s *Service) FanOut(ctx context.Context, limit int) (FanOutResult, error) {
@@ -97,7 +93,7 @@ func (s *Service) FanOut(ctx context.Context, limit int) (FanOutResult, error) {
 }
 
 func (s *Service) DeliverDue(ctx context.Context, input DeliverInput) (DeliverResult, error) {
-	claims, err := s.queue.ClaimDue(ctx, s.clock.Now(), input.Lease, input.Limit)
+	claims, err := s.queue.ClaimDue(ctx, s.now(), input.Lease, input.Limit)
 	if err != nil {
 		return DeliverResult{}, fmt.Errorf("claiming deliveries: %w", err)
 	}
@@ -137,18 +133,38 @@ func (s *Service) fanOutBatch(ctx context.Context, store Store, limit int) (FanO
 }
 
 func (s *Service) buildDeliveries(ids IDGenerator, events []event.Event, endpoints []webhook.Endpoint) []webhook.Delivery {
+	byOwner := groupByOwner(endpoints)
+	var subscriptions []subscription
+	for _, occurred := range events {
+		subscriptions = append(subscriptions, buildSubscriptions(occurred, selectSubscribers(occurred, byOwner))...)
+	}
+	now := s.now()
+	deliveries := make([]webhook.Delivery, 0, len(subscriptions))
+	for _, pair := range subscriptions {
+		deliveries = append(deliveries, webhook.NewDelivery(ids.NewID(), pair.event.ID(), pair.endpoint.ID(), pair.endpoint.OwnerID(), now))
+	}
+	return deliveries
+}
+
+type subscription struct {
+	event    event.Event
+	endpoint webhook.Endpoint
+}
+
+func groupByOwner(endpoints []webhook.Endpoint) map[apikey.OwnerID][]webhook.Endpoint {
 	byOwner := make(map[apikey.OwnerID][]webhook.Endpoint)
 	for _, endpoint := range endpoints {
 		byOwner[endpoint.OwnerID()] = append(byOwner[endpoint.OwnerID()], endpoint)
 	}
-	now := s.clock.Now()
-	var deliveries []webhook.Delivery
-	for _, occurred := range events {
-		for _, endpoint := range selectSubscribers(occurred, byOwner) {
-			deliveries = append(deliveries, webhook.NewDelivery(webhook.DeliveryID(ids.NewID()), occurred.ID(), endpoint.ID(), endpoint.OwnerID(), now))
-		}
+	return byOwner
+}
+
+func buildSubscriptions(occurred event.Event, endpoints []webhook.Endpoint) []subscription {
+	pairs := make([]subscription, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		pairs = append(pairs, subscription{event: occurred, endpoint: endpoint})
 	}
-	return deliveries
+	return pairs
 }
 
 func selectSubscribers(occurred event.Event, byOwner map[apikey.OwnerID][]webhook.Endpoint) []webhook.Endpoint {
@@ -172,7 +188,7 @@ func (s *Service) sendDeliveries(ctx context.Context, claims []Claim) <-chan sen
 	return outcomes
 }
 
-func (s *Service) settleDelivery(ctx context.Context, outcome sendOutcome, policy webhook.RetryPolicy) (webhook.DeliveryStatus, error) {
+func (s *Service) settleDelivery(ctx context.Context, outcome sendOutcome, policy webhook.RetryPolicy) (string, error) {
 	delivery := outcome.delivery
 	if err := s.applySendOutcome(&delivery, outcome.err, policy); err != nil {
 		return "", fmt.Errorf("settling delivery %s: %w", delivery.ID(), err)
@@ -184,7 +200,7 @@ func (s *Service) settleDelivery(ctx context.Context, outcome sendOutcome, polic
 }
 
 func (s *Service) applySendOutcome(delivery *webhook.Delivery, sendErr error, policy webhook.RetryPolicy) error {
-	now := s.clock.Now()
+	now := s.now()
 	if sendErr == nil {
 		return delivery.MarkSucceeded(now)
 	}
@@ -200,8 +216,8 @@ func collectUniqueOwners(events []event.Event) []apikey.OwnerID {
 	return slices.Compact(owners)
 }
 
-func collectEventIDs(events []event.Event) []event.ID {
-	ids := make([]event.ID, 0, len(events))
+func collectEventIDs(events []event.Event) []string {
+	ids := make([]string, 0, len(events))
 	for _, occurred := range events {
 		ids = append(ids, occurred.ID())
 	}

@@ -17,9 +17,9 @@ const (
 	fakeToken   = "fedcba9876543210fedcba9876543210"
 )
 
-func buildLookup(env map[string]string) func(string) (string, bool) {
+func buildLookup(environment map[string]string) func(string) (string, bool) {
 	return func(name string) (string, bool) {
-		value, found := env[name]
+		value, found := environment[name]
 		return value, found
 	}
 }
@@ -27,15 +27,15 @@ func buildLookup(env map[string]string) func(string) (string, bool) {
 func defaultPayments() config.Payments {
 	return config.Payments{
 		Provider: config.ProviderFake, FakeWebhookToken: fakeToken,
-		Asaas:               config.Asaas{Env: "sandbox", BaseURL: "https://api-sandbox.asaas.com/v3"},
+		Asaas:               config.Asaas{Environment: "sandbox", BaseURL: "https://api-sandbox.asaas.com/v3"},
 		PaymentSyncInterval: 30 * time.Second,
 	}
 }
 
 func validEnvironment(overrides map[string]string) func(string) (string, bool) {
-	env := map[string]string{"PAYGO_DATABASE_URL": databaseURL, "PAYGO_ADMIN_TOKEN": adminToken, "PAYGO_FAKE_WEBHOOK_TOKEN": fakeToken}
-	maps.Copy(env, overrides)
-	return buildLookup(env)
+	environment := map[string]string{"PAYGO_DATABASE_URL": databaseURL, "PAYGO_ADMIN_TOKEN": adminToken, "PAYGO_FAKE_WEBHOOK_TOKEN": fakeToken}
+	maps.Copy(environment, overrides)
+	return buildLookup(environment)
 }
 
 func assertInvalid(t *testing.T, err error, wants ...string) {
@@ -53,10 +53,10 @@ func assertInvalid(t *testing.T, err error, wants ...string) {
 func TestReadAPI_OnlyRequired_AppliesDefaults(t *testing.T) {
 	settings, err := config.ReadAPI(validEnvironment(nil))
 	if err != nil {
-		t.Fatalf("LoadAPI: %v", err)
+		t.Fatalf("ReadAPI: %v", err)
 	}
 	want := config.APISettings{
-		Database: config.Database{URL: databaseURL, MaxConns: 20},
+		Database: config.Database{URL: databaseURL, MaximumConnections: 20},
 		HTTP: config.HTTP{
 			Addr: ":8080", RequestTimeout: 10 * time.Second, ShutdownTimeout: 15 * time.Second,
 			AdminToken: adminToken, RateLimitPerSecond: 50, RateLimitBurst: 100,
@@ -72,10 +72,10 @@ func TestReadAPI_OnlyRequired_AppliesDefaults(t *testing.T) {
 func TestReadWorker_OnlyDatabase_AppliesDefaultsWithoutAdminToken(t *testing.T) {
 	settings, err := config.ReadWorker(buildLookup(map[string]string{"PAYGO_DATABASE_URL": databaseURL, "PAYGO_FAKE_WEBHOOK_TOKEN": fakeToken}))
 	if err != nil {
-		t.Fatalf("LoadWorker: %v", err)
+		t.Fatalf("ReadWorker: %v", err)
 	}
 	want := config.WorkerSettings{
-		Database: config.Database{URL: databaseURL, MaxConns: 20},
+		Database: config.Database{URL: databaseURL, MaximumConnections: 20},
 		Worker: config.Worker{
 			Addr: ":8080", PollInterval: time.Second, Concurrency: 8, WebhookTimeout: 5 * time.Second,
 			WebhookMaximumAttempts: 8, ShutdownTimeout: 15 * time.Second,
@@ -95,26 +95,26 @@ func TestReadWorker_InvalidVariable_ReturnsError(t *testing.T) {
 
 func TestReadMigrate_Variables_ReturnsConfig(t *testing.T) {
 	tests := []struct {
-		name string
-		env  map[string]string
-		want config.MigrateSettings
+		name        string
+		environment map[string]string
+		want        config.MigrateSettings
 	}{
 		{
-			name: "defaults",
-			env:  map[string]string{"PAYGO_DATABASE_URL": databaseURL},
-			want: config.MigrateSettings{Database: config.Database{URL: databaseURL, MaxConns: 20}},
+			name:        "defaults",
+			environment: map[string]string{"PAYGO_DATABASE_URL": databaseURL},
+			want:        config.MigrateSettings{Database: config.Database{URL: databaseURL, MaximumConnections: 20}},
 		},
 		{
-			name: "overrides",
-			env:  map[string]string{"PAYGO_DATABASE_URL": databaseURL, "PAYGO_DB_MAX_CONNS": "5"},
-			want: config.MigrateSettings{Database: config.Database{URL: databaseURL, MaxConns: 5}},
+			name:        "overrides",
+			environment: map[string]string{"PAYGO_DATABASE_URL": databaseURL, "PAYGO_DB_MAX_CONNS": "5"},
+			want:        config.MigrateSettings{Database: config.Database{URL: databaseURL, MaximumConnections: 5}},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			settings, err := config.ReadMigrate(buildLookup(test.env))
+			settings, err := config.ReadMigrate(buildLookup(test.environment))
 			if err != nil {
-				t.Fatalf("LoadMigrate: %v", err)
+				t.Fatalf("ReadMigrate: %v", err)
 			}
 			if settings != test.want {
 				t.Fatalf("cfg = %+v, want %+v", settings, test.want)
@@ -130,9 +130,9 @@ func TestReadMigrate_MissingURL_ReturnsError(t *testing.T) {
 
 func TestReadAPI_InvalidRequired_ReturnsError(t *testing.T) {
 	tests := []struct {
-		name string
-		env  map[string]string
-		want string
+		name        string
+		environment map[string]string
+		want        string
 	}{
 		{"missing database url", map[string]string{"PAYGO_ADMIN_TOKEN": adminToken}, "PAYGO_DATABASE_URL required"},
 		{"url not postgres", map[string]string{"PAYGO_ADMIN_TOKEN": adminToken, "PAYGO_DATABASE_URL": "mysql://x"}, "PAYGO_DATABASE_URL must start with postgres://"},
@@ -141,7 +141,7 @@ func TestReadAPI_InvalidRequired_ReturnsError(t *testing.T) {
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			_, err := config.ReadAPI(buildLookup(testCase.env))
+			_, err := config.ReadAPI(buildLookup(testCase.environment))
 			assertInvalid(t, err, testCase.want)
 		})
 	}
@@ -161,7 +161,7 @@ func TestReadAPI_LogLevel_ParsesExactNames(t *testing.T) {
 		t.Run(testCase.raw, func(t *testing.T) {
 			settings, err := config.ReadAPI(validEnvironment(map[string]string{"PAYGO_LOG_LEVEL": testCase.raw}))
 			if err != nil {
-				t.Fatalf("LoadAPI: %v", err)
+				t.Fatalf("ReadAPI: %v", err)
 			}
 			if settings.LogLevel != testCase.want {
 				t.Fatalf("level = %v, want %v", settings.LogLevel, testCase.want)
@@ -181,10 +181,10 @@ func TestReadAPI_UnknownLogLevel_ReturnsError(t *testing.T) {
 
 func TestReadAPI_Boundaries_AcceptsOnlyValuesInRange(t *testing.T) {
 	tests := []struct {
-		name  string
-		env   string
-		value string
-		valid bool
+		name        string
+		environment string
+		value       string
+		valid       bool
 	}{
 		{"timeout minimum", "PAYGO_REQUEST_TIMEOUT", "1s", true},
 		{"timeout maximum", "PAYGO_REQUEST_TIMEOUT", "60s", true},
@@ -207,12 +207,12 @@ func TestReadAPI_Boundaries_AcceptsOnlyValuesInRange(t *testing.T) {
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			_, err := config.ReadAPI(validEnvironment(map[string]string{testCase.env: testCase.value}))
+			_, err := config.ReadAPI(validEnvironment(map[string]string{testCase.environment: testCase.value}))
 			if testCase.valid && err != nil {
-				t.Fatalf("LoadAPI: %v", err)
+				t.Fatalf("ReadAPI: %v", err)
 			}
 			if !testCase.valid {
-				assertInvalid(t, err, testCase.env)
+				assertInvalid(t, err, testCase.environment)
 			}
 		})
 	}
@@ -221,7 +221,7 @@ func TestReadAPI_Boundaries_AcceptsOnlyValuesInRange(t *testing.T) {
 func TestReadAPI_RateLimitAtTopOfRange_Accepted(t *testing.T) {
 	settings, err := config.ReadAPI(validEnvironment(map[string]string{"PAYGO_RATE_LIMIT_RPS": "10000", "PAYGO_RATE_LIMIT_BURST": "10000"}))
 	if err != nil {
-		t.Fatalf("LoadAPI: %v", err)
+		t.Fatalf("ReadAPI: %v", err)
 	}
 	if settings.RateLimitPerSecond != 10000 || settings.RateLimitBurst != 10000 {
 		t.Fatalf("rate limit = %d/%d, want 10000/10000", settings.RateLimitPerSecond, settings.RateLimitBurst)
@@ -258,16 +258,16 @@ func TestReadAPI_InvalidToken_DoesNotLeakValue(t *testing.T) {
 }
 
 func asaasEnvironment(overrides map[string]string) func(string) (string, bool) {
-	env := map[string]string{"PAYGO_PROVIDER": "asaas", "PAYGO_ASAAS_API_KEY": "key", "PAYGO_ASAAS_WEBHOOK_TOKEN": fakeToken}
-	maps.Copy(env, overrides)
-	return validEnvironment(env)
+	environment := map[string]string{"PAYGO_PROVIDER": "asaas", "PAYGO_ASAAS_API_KEY": "key", "PAYGO_ASAAS_WEBHOOK_TOKEN": fakeToken}
+	maps.Copy(environment, overrides)
+	return validEnvironment(environment)
 }
 
 func TestReadAPI_InvalidPayments_NamesVariable(t *testing.T) {
 	tests := []struct {
-		name string
-		env  map[string]string
-		want string
+		name        string
+		environment map[string]string
+		want        string
 	}{
 		{"production not allowed", map[string]string{"PAYGO_ASAAS_ENV": "production"}, "PAYGO_ASAAS_ALLOW_PRODUCTION"},
 		{"allow not boolean", map[string]string{"PAYGO_ASAAS_ALLOW_PRODUCTION": "maybe"}, "PAYGO_ASAAS_ALLOW_PRODUCTION must be true or false"},
@@ -280,7 +280,7 @@ func TestReadAPI_InvalidPayments_NamesVariable(t *testing.T) {
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			_, err := config.ReadAPI(asaasEnvironment(testCase.env))
+			_, err := config.ReadAPI(asaasEnvironment(testCase.environment))
 			assertInvalid(t, err, testCase.want)
 		})
 	}
@@ -294,9 +294,9 @@ func TestReadAPI_FakeProviderShortToken_ReturnsError(t *testing.T) {
 func TestReadAPI_AsaasProduction_UsesProductionURL(t *testing.T) {
 	settings, err := config.ReadAPI(asaasEnvironment(map[string]string{"PAYGO_ASAAS_ENV": "production", "PAYGO_ASAAS_ALLOW_PRODUCTION": "true"}))
 	if err != nil {
-		t.Fatalf("LoadAPI: %v", err)
+		t.Fatalf("ReadAPI: %v", err)
 	}
-	want := config.Asaas{Env: "production", AllowProduction: true, APIKey: "key", WebhookToken: fakeToken, BaseURL: "https://api.asaas.com/v3"}
+	want := config.Asaas{Environment: "production", AllowProduction: true, APIKey: "key", WebhookToken: fakeToken, BaseURL: "https://api.asaas.com/v3"}
 	if settings.Asaas != want {
 		t.Fatalf("asaas = %+v, want %+v", settings.Asaas, want)
 	}

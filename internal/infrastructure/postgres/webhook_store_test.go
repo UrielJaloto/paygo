@@ -72,7 +72,7 @@ func runWebhookContract(t *testing.T, newStores func(t *testing.T) WebhookStores
 func newEndpoint(t *testing.T, sequence int, owner apikey.OwnerID) webhook.Endpoint {
 	t.Helper()
 	secret := "whsec_" + strings.Repeat("a", 43)
-	created, err := webhook.NewEndpoint(webhook.EndpointID(testID(sequence)), owner, "https://example.com/hook", secret, testTime)
+	created, err := webhook.NewEndpoint(testID(sequence), owner, "https://example.com/hook", secret, testTime)
 	noError(t, err)
 	return created
 }
@@ -84,9 +84,9 @@ func (s WebhookStores) saveEndpoint(t *testing.T, sequence int) webhook.Endpoint
 	return saved
 }
 
-func (s WebhookStores) addEvent(t *testing.T, sequence int) event.ID {
+func (s WebhookStores) addEvent(t *testing.T, sequence int) string {
 	t.Helper()
-	charge, err := payment.NewCharge(payment.ChargeID(testID(sequence+1)), payment.ChargeDraft{
+	charge, err := payment.NewCharge(testID(sequence+1), payment.ChargeDraft{
 		OwnerID:   testOwner,
 		AccountID: "01900000-0000-7000-8000-000000000001",
 		Amount:    money.NewMoney(100, money.BRL),
@@ -94,7 +94,7 @@ func (s WebhookStores) addEvent(t *testing.T, sequence int) event.ID {
 		Provider:  "stub",
 	}, testTime.Add(time.Hour), testTime)
 	noError(t, err)
-	id := event.ID(testID(sequence))
+	id := testID(sequence)
 	noError(t, s.Outbox.Add(context.Background(), event.NewChargeEvent(event.Metadata{ID: id, At: testTime}, event.TypeChargeExpired, charge)))
 	return id
 }
@@ -103,29 +103,29 @@ func (s WebhookStores) saveDelivery(t *testing.T, sequence int, due time.Time) w
 	t.Helper()
 	endpoint := s.saveEndpoint(t, sequence+1000)
 	eventID := s.addEvent(t, sequence+2000)
-	saved := webhook.NewDelivery(webhook.DeliveryID(testID(sequence)), eventID, endpoint.ID(), testOwner, due)
+	saved := webhook.NewDelivery(testID(sequence), eventID, endpoint.ID(), testOwner, due)
 	noError(t, s.Deliveries.SaveAll(context.Background(), []webhook.Delivery{saved}))
 	return saved
 }
 
-func endpointIDs(endpoints []webhook.Endpoint) []webhook.EndpointID {
-	ids := make([]webhook.EndpointID, 0, len(endpoints))
+func endpointIDs(endpoints []webhook.Endpoint) []string {
+	ids := make([]string, 0, len(endpoints))
 	for _, endpoint := range endpoints {
 		ids = append(ids, endpoint.ID())
 	}
 	return ids
 }
 
-func deliveryIDs(deliveries []webhook.Delivery) []webhook.DeliveryID {
-	ids := make([]webhook.DeliveryID, 0, len(deliveries))
+func deliveryIDs(deliveries []webhook.Delivery) []string {
+	ids := make([]string, 0, len(deliveries))
 	for _, delivery := range deliveries {
 		ids = append(ids, delivery.ID())
 	}
 	return ids
 }
 
-func eventIDs(events []event.Event) []event.ID {
-	ids := make([]event.ID, 0, len(events))
+func eventIDs(events []event.Event) []string {
+	ids := make([]string, 0, len(events))
 	for _, occurred := range events {
 		ids = append(ids, occurred.ID())
 	}
@@ -141,7 +141,7 @@ func endpointRoundTrip(t *testing.T, stores WebhookStores) {
 	equal(t, found.URL(), saved.URL())
 	equal(t, found.Secret(), saved.Secret())
 	equal(t, found.IsActive(), true)
-	_, err = stores.Endpoints.FindByID(ctx, webhook.EndpointID(testID(9)))
+	_, err = stores.Endpoints.FindByID(ctx, testID(9))
 	errorIs(t, err, webhook.ErrEndpointNotFound)
 }
 
@@ -154,13 +154,13 @@ func endpointListings(t *testing.T, stores WebhookStores) {
 	noError(t, stores.Endpoints.Update(ctx, second))
 	listed, err := stores.Endpoints.ListByOwner(ctx, testOwner)
 	noError(t, err)
-	equalSlices(t, endpointIDs(listed), []webhook.EndpointID{first.ID(), second.ID()})
+	equalSlices(t, endpointIDs(listed), []string{first.ID(), second.ID()})
 	active, err := stores.Endpoints.CountActiveByOwner(ctx, testOwner)
 	noError(t, err)
 	equal(t, active, 1)
 	targets, err := stores.Endpoints.ListActiveByOwners(ctx, []apikey.OwnerID{testOwner, otherOwner})
 	noError(t, err)
-	equalSlices(t, endpointIDs(targets), []webhook.EndpointID{first.ID(), other.ID()})
+	equalSlices(t, endpointIDs(targets), []string{first.ID(), other.ID()})
 }
 
 func endpointRollback(t *testing.T, stores WebhookStores) {
@@ -170,12 +170,12 @@ func endpointRollback(t *testing.T, stores WebhookStores) {
 		return errWorkFailed
 	})
 	errorIs(t, err, errWorkFailed)
-	_, err = stores.Endpoints.FindByID(ctx, webhook.EndpointID(testID(1)))
+	_, err = stores.Endpoints.FindByID(ctx, testID(1))
 	errorIs(t, err, webhook.ErrEndpointNotFound)
 	noError(t, stores.Unit.Run(ctx, func(ctx context.Context, store webhookservice.Store) error {
 		return store.Endpoints.Save(ctx, newEndpoint(t, 1, testOwner))
 	}))
-	_, err = stores.Endpoints.FindByID(ctx, webhook.EndpointID(testID(1)))
+	_, err = stores.Endpoints.FindByID(ctx, testID(1))
 	noError(t, err)
 }
 
@@ -187,17 +187,17 @@ func deliveryListings(t *testing.T, stores WebhookStores) {
 	all := webhookservice.DeliveryFilter{Owner: testOwner}
 	newest, err := stores.Deliveries.ListByOwner(ctx, all, page.Cursor{}, 1)
 	noError(t, err)
-	equalSlices(t, deliveryIDs(newest), []webhook.DeliveryID{second.ID()})
+	equalSlices(t, deliveryIDs(newest), []string{second.ID()})
 	older, err := stores.Deliveries.ListByOwner(ctx, all, page.NewCursor(string(second.ID())), 10)
 	noError(t, err)
-	equalSlices(t, deliveryIDs(older), []webhook.DeliveryID{first.ID()})
+	equalSlices(t, deliveryIDs(older), []string{first.ID()})
 	pendingOnly := webhookservice.DeliveryFilter{Owner: testOwner, Status: webhook.DeliveryPending}
 	pending, err := stores.Deliveries.ListByOwner(ctx, pendingOnly, page.Cursor{}, 10)
 	noError(t, err)
-	equalSlices(t, deliveryIDs(pending), []webhook.DeliveryID{first.ID()})
+	equalSlices(t, deliveryIDs(pending), []string{first.ID()})
 	byEndpoint, err := stores.Deliveries.ListPendingByEndpoint(ctx, first.EndpointID())
 	noError(t, err)
-	equalSlices(t, deliveryIDs(byEndpoint), []webhook.DeliveryID{first.ID()})
+	equalSlices(t, deliveryIDs(byEndpoint), []string{first.ID()})
 }
 
 func deliveryUpdate(t *testing.T, stores WebhookStores) {
@@ -209,7 +209,7 @@ func deliveryUpdate(t *testing.T, stores WebhookStores) {
 	noError(t, err)
 	equal(t, found.Status(), saved.Status())
 	equal(t, found.LastError(), "gone")
-	_, err = stores.Deliveries.FindByID(ctx, webhook.DeliveryID(testID(9)))
+	_, err = stores.Deliveries.FindByID(ctx, testID(9))
 	errorIs(t, err, webhook.ErrDeliveryNotFound)
 }
 
@@ -219,7 +219,7 @@ func updateMissing(t *testing.T, stores WebhookStores) {
 	noError(t, stores.Endpoints.Update(ctx, endpoint))
 	_, err := stores.Endpoints.FindByID(ctx, endpoint.ID())
 	errorIs(t, err, webhook.ErrEndpointNotFound)
-	delivery := webhook.NewDelivery(webhook.DeliveryID(testID(2)), event.ID(testID(3)), endpoint.ID(), testOwner, testTime)
+	delivery := webhook.NewDelivery(testID(2), testID(3), endpoint.ID(), testOwner, testTime)
 	noError(t, stores.Deliveries.Update(ctx, delivery))
 	_, err = stores.Deliveries.FindByID(ctx, delivery.ID())
 	errorIs(t, err, webhook.ErrDeliveryNotFound)
@@ -264,13 +264,13 @@ func outboxClaim(t *testing.T, stores WebhookStores) {
 	first := stores.addEvent(t, 1)
 	claimed, err := stores.Outbox.ClaimUnpublished(ctx, 1)
 	noError(t, err)
-	equalSlices(t, eventIDs(claimed), []event.ID{first})
+	equalSlices(t, eventIDs(claimed), []string{first})
 	equal(t, claimed[0].Type(), event.TypeChargeExpired)
 	equalSlices(t, claimed[0].OwnerIDs(), []apikey.OwnerID{testOwner})
-	noError(t, stores.Outbox.MarkPublished(ctx, []event.ID{first}))
+	noError(t, stores.Outbox.MarkPublished(ctx, []string{first}))
 	rest, err := stores.Outbox.ClaimUnpublished(ctx, 10)
 	noError(t, err)
-	equalSlices(t, eventIDs(rest), []event.ID{second})
+	equalSlices(t, eventIDs(rest), []string{second})
 }
 
 func outboxSkipLocked(t *testing.T, stores WebhookStores) {
@@ -278,10 +278,10 @@ func outboxSkipLocked(t *testing.T, stores WebhookStores) {
 	noError(t, stores.Dispatch.Run(context.Background(), func(ctx context.Context, store dispatch.Store) error {
 		claimed, err := store.Outbox.ClaimUnpublished(ctx, 10)
 		noError(t, err)
-		equalSlices(t, eventIDs(claimed), []event.ID{id})
+		equalSlices(t, eventIDs(claimed), []string{id})
 		repeated, err := store.Outbox.ClaimUnpublished(ctx, 10)
 		noError(t, err)
-		equalSlices(t, eventIDs(repeated), []event.ID{id})
+		equalSlices(t, eventIDs(repeated), []string{id})
 		return stores.Dispatch.Run(ctx, func(ctx context.Context, other dispatch.Store) error {
 			skipped, err := other.Outbox.ClaimUnpublished(ctx, 10)
 			noError(t, err)
@@ -295,11 +295,11 @@ func dispatchRollback(t *testing.T, stores WebhookStores) {
 	ctx := context.Background()
 	id := stores.addEvent(t, 1)
 	err := stores.Dispatch.Run(ctx, func(ctx context.Context, store dispatch.Store) error {
-		noError(t, store.Outbox.MarkPublished(ctx, []event.ID{id}))
+		noError(t, store.Outbox.MarkPublished(ctx, []string{id}))
 		return errWorkFailed
 	})
 	errorIs(t, err, errWorkFailed)
 	claimed, err := stores.Outbox.ClaimUnpublished(ctx, 10)
 	noError(t, err)
-	equalSlices(t, eventIDs(claimed), []event.ID{id})
+	equalSlices(t, eventIDs(claimed), []string{id})
 }

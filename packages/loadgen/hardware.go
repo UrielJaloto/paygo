@@ -7,8 +7,8 @@ import (
 )
 
 var (
-	errUnsupportedPlatform = errors.NewMoney("hardware detection is not supported on this platform")
-	errCPUModelNotFound    = errors.NewMoney("cpu model not found")
+	errUnsupportedPlatform = errors.New("hardware detection is not supported on this platform")
+	errCPUModelNotFound    = errors.New("cpu model not found")
 )
 
 type hardware struct {

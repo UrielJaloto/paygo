@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	providerName     = "asaas"
-	requestTimeout   = 10 * time.Second
+	providerName         = "asaas"
+	requestTimeout       = 10 * time.Second
 	maximumResponseBytes = 1 << 20
 )
 
@@ -35,7 +35,7 @@ type Provider struct {
 type apiCall struct {
 	method string
 	path   string
-	input     any
+	input  any
 	out    any
 }
 
@@ -45,7 +45,7 @@ type errorResponse struct {
 	} `json:"errors"`
 }
 
-func NewMoney(baseURL, apiKey, webhookToken string, customers CustomerCache, httpClient *http.Client) *Provider {
+func NewProvider(baseURL, apiKey, webhookToken string, customers CustomerCache, httpClient *http.Client) *Provider {
 	client := *httpClient
 	client.Timeout = requestTimeout
 	return &Provider{baseURL: baseURL, apiKey: apiKey, webhookToken: webhookToken, customers: customers, http: &client}

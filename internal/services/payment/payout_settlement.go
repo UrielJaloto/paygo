@@ -12,7 +12,7 @@ import (
 type payoutSettlement struct {
 	payout    payment.Payout
 	plan      posting
-	eventType event.Type
+	eventType string
 }
 
 func (s *Service) applyPayoutEvent(ctx context.Context, store Store, occurred payment.ProviderEvent) error {
@@ -28,7 +28,7 @@ func (s *Service) applyPayoutEvent(ctx context.Context, store Store, occurred pa
 
 func (s *Service) markPayoutCompleted(ctx context.Context, store Store, found payment.Payout) error {
 	transferID := s.ids.NewID()
-	changed, err := found.MarkCompleted(transferID, s.clock.Now())
+	changed, err := found.MarkCompleted(transferID, s.now())
 	if err != nil || !changed {
 		return nil
 	}
@@ -47,7 +47,7 @@ func (s *Service) markPayoutCompleted(ctx context.Context, store Store, found pa
 
 func (s *Service) markPayoutFailed(ctx context.Context, store Store, found payment.Payout) error {
 	transferID := s.ids.NewID()
-	changed, err := found.MarkFailed(transferID, s.clock.Now())
+	changed, err := found.MarkFailed(transferID, s.now())
 	if err != nil || !changed {
 		return nil
 	}
@@ -71,7 +71,7 @@ func (s *Service) settlePayout(ctx context.Context, store Store, settlement payo
 	if err := store.Payouts.Update(ctx, settlement.payout); err != nil {
 		return fmt.Errorf("updating payout: %w", err)
 	}
-	metadata := event.Metadata{ID: event.ID(s.ids.NewID()), At: s.clock.Now()}
+	metadata := event.Metadata{ID: s.ids.NewID(), At: s.now()}
 	if err := store.Outbox.Add(ctx, event.NewPayoutEvent(metadata, settlement.eventType, settlement.payout)); err != nil {
 		return fmt.Errorf("adding event: %w", err)
 	}

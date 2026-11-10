@@ -26,7 +26,7 @@ func serve(ctx context.Context, t *testing.T, handler http.Handler, shutdownTime
 		t.Fatalf("Listen() error = %v", err)
 	}
 	result := make(chan error, 1)
-	server := httpserver.NewMoney(listener.Addr().String(), handler, time.Second, shutdownTimeout)
+	server := httpserver.NewServer(listener.Addr().String(), handler, time.Second, shutdownTimeout)
 	go func() { result <- server.Run(ctx, listener) }()
 	return running{url: "http://" + listener.Addr().String(), result: result}
 }
@@ -128,7 +128,7 @@ func TestRun_ClosedListener_ReturnsServeError(t *testing.T) {
 	}
 	listener.Close()
 
-	err = httpserver.NewMoney("", http.NotFoundHandler(), time.Second, time.Second).Run(context.Background(), listener)
+	err = httpserver.NewServer("", http.NotFoundHandler(), time.Second, time.Second).Run(context.Background(), listener)
 
 	if !errors.Is(err, net.ErrClosed) {
 		t.Fatalf("Run() error = %v, want %v", err, net.ErrClosed)

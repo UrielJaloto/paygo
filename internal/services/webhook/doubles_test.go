@@ -11,11 +11,11 @@ import (
 )
 
 type fakeEndpoints struct {
-	found   map[webhook.EndpointID]webhook.Endpoint
-	active  int
-	saved   []webhook.Endpoint
-	updated []webhook.Endpoint
-	failures    map[string]error
+	found    map[string]webhook.Endpoint
+	active   int
+	saved    []webhook.Endpoint
+	updated  []webhook.Endpoint
+	failures map[string]error
 }
 
 func (f *fakeEndpoints) Save(_ context.Context, endpoint webhook.Endpoint) error {
@@ -23,7 +23,7 @@ func (f *fakeEndpoints) Save(_ context.Context, endpoint webhook.Endpoint) error
 	return f.failures["save"]
 }
 
-func (f *fakeEndpoints) FindByID(_ context.Context, id webhook.EndpointID) (webhook.Endpoint, error) {
+func (f *fakeEndpoints) FindByID(_ context.Context, id string) (webhook.Endpoint, error) {
 	if err := f.failures["find"]; err != nil {
 		return webhook.Endpoint{}, err
 	}
@@ -52,16 +52,16 @@ func (f *fakeEndpoints) Update(_ context.Context, endpoint webhook.Endpoint) err
 }
 
 type fakeDeliveries struct {
-	found   map[webhook.DeliveryID]webhook.Delivery
-	pending []webhook.Delivery
-	listed  []webhook.Delivery
-	filter  service.DeliveryFilter
-	limit   page.Limit
-	updated []webhook.Delivery
-	failures    map[string]error
+	found    map[string]webhook.Delivery
+	pending  []webhook.Delivery
+	listed   []webhook.Delivery
+	filter   service.DeliveryFilter
+	limit    page.Limit
+	updated  []webhook.Delivery
+	failures map[string]error
 }
 
-func (f *fakeDeliveries) FindByID(_ context.Context, id webhook.DeliveryID) (webhook.Delivery, error) {
+func (f *fakeDeliveries) FindByID(_ context.Context, id string) (webhook.Delivery, error) {
 	if err := f.failures["find"]; err != nil {
 		return webhook.Delivery{}, err
 	}
@@ -78,7 +78,7 @@ func (f *fakeDeliveries) ListByOwner(_ context.Context, filter service.DeliveryF
 	return f.listed, f.failures["list"]
 }
 
-func (f *fakeDeliveries) ListPendingByEndpoint(context.Context, webhook.EndpointID) ([]webhook.Delivery, error) {
+func (f *fakeDeliveries) ListPendingByEndpoint(context.Context, string) ([]webhook.Delivery, error) {
 	return f.pending, f.failures["pending"]
 }
 

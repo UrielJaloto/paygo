@@ -37,20 +37,20 @@ type errorMapping struct {
 	kind   problemKind
 }
 
-func PresentError(c *gin.Context, err error) {
-	_ = c.Error(err)
+func PresentError(ginContext *gin.Context, err error) {
+	_ = ginContext.Error(err)
 	for _, mapping := range listErrorMappings() {
 		if errors.Is(err, mapping.target) {
-			presentProblem(c, mapping.kind, formatProblemDetail(err, mapping))
+			presentProblem(ginContext, mapping.kind, formatProblemDetail(err, mapping))
 			return
 		}
 	}
-	presentProblem(c, problemKind{http.StatusInternalServerError, "internal", "Internal server error"}, internalErrorDetail)
+	presentProblem(ginContext, problemKind{http.StatusInternalServerError, "internal", "Internal server error"}, internalErrorDetail)
 }
 
-func presentProblem(c *gin.Context, kind problemKind, detail string) {
-	c.Header("Content-Type", "application/problem+json")
-	c.AbortWithStatusJSON(kind.status, problem{Type: "/problems/" + kind.slug, Title: kind.title, Status: kind.status, Detail: detail})
+func presentProblem(ginContext *gin.Context, kind problemKind, detail string) {
+	ginContext.Header("Content-Type", "application/problem+json")
+	ginContext.AbortWithStatusJSON(kind.status, problem{Type: "/problems/" + kind.slug, Title: kind.title, Status: kind.status, Detail: detail})
 }
 
 func formatProblemDetail(err error, mapping errorMapping) string {

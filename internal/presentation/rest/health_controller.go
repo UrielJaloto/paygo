@@ -24,16 +24,16 @@ func NewHealthController(readiness ReadinessChecker, metrics http.Handler) *Heal
 	return &HealthController{readiness: readiness, metrics: metrics}
 }
 
-func (h *HealthController) ReportLiveness(c *gin.Context) {
-	c.JSON(http.StatusOK, statusResponse{Status: "ok"})
+func (h *HealthController) ReportLiveness(ginContext *gin.Context) {
+	ginContext.JSON(http.StatusOK, statusResponse{Status: "ok"})
 }
 
-func (h *HealthController) ReportReadiness(c *gin.Context) {
-	if h.readiness.IsReady(c.Request.Context()) {
-		c.JSON(http.StatusOK, statusResponse{Status: "ready"})
+func (h *HealthController) ReportReadiness(ginContext *gin.Context) {
+	if h.readiness.IsReady(ginContext.Request.Context()) {
+		ginContext.JSON(http.StatusOK, statusResponse{Status: "ready"})
 		return
 	}
-	c.JSON(http.StatusServiceUnavailable, statusResponse{Status: "unavailable"})
+	ginContext.JSON(http.StatusServiceUnavailable, statusResponse{Status: "unavailable"})
 }
 
 func registerHealthRoutes(engine *gin.Engine, controller *HealthController) {

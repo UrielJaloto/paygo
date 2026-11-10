@@ -26,11 +26,9 @@ type AccountFunder interface {
 type fundingOperation func(ctx context.Context, input transferservice.FundingInput) (transferservice.TransferOutput, error)
 
 type AdminController struct {
-	issuer    KeyIssuer
-	revoker   KeyRevoker
-	funder    AccountFunder
-	presenter AdminPresenter
-	transfers TransferPresenter
+	issuer  KeyIssuer
+	revoker KeyRevoker
+	funder  AccountFunder
 }
 
 type fundingRequest struct {
@@ -39,54 +37,54 @@ type fundingRequest struct {
 	Currency  string `json:"currency"`
 }
 
-func NewAdminController(issuer KeyIssuer, revoker KeyRevoker, funder AccountFunder, presenter AdminPresenter, transfers TransferPresenter) *AdminController {
-	return &AdminController{issuer: issuer, revoker: revoker, funder: funder, presenter: presenter, transfers: transfers}
+func NewAdminController(issuer KeyIssuer, revoker KeyRevoker, funder AccountFunder) *AdminController {
+	return &AdminController{issuer: issuer, revoker: revoker, funder: funder}
 }
 
-func (a *AdminController) IssueKey(c *gin.Context) {
-	issued, err := a.issuer.Issue(c.Request.Context(), apikeyservice.IssueInput{OwnerID: c.Param("owner_id")})
+func (a *AdminController) IssueKey(ginContext *gin.Context) {
+	issued, err := a.issuer.Issue(ginContext.Request.Context(), apikeyservice.IssueInput{OwnerID: ginContext.Param("owner_id")})
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
-	c.JSON(http.StatusCreated, a.presenter.toIssuedKeyResponse(issued))
+	ginContext.JSON(http.StatusCreated, toIssuedKeyResponse(issued))
 }
 
-func (a *AdminController) RevokeKey(c *gin.Context) {
-	if err := a.revoker.Revoke(c.Request.Context(), apikeyservice.RevokeInput{KeyID: c.Param("id")}); err != nil {
-		PresentError(c, err)
+func (a *AdminController) RevokeKey(ginContext *gin.Context) {
+	if err := a.revoker.Revoke(ginContext.Request.Context(), apikeyservice.RevokeInput{KeyID: ginContext.Param("id")}); err != nil {
+		PresentError(ginContext, err)
 		return
 	}
-	c.Status(http.StatusNoContent)
+	ginContext.Status(http.StatusNoContent)
 }
 
-func (a *AdminController) Deposit(c *gin.Context) {
-	a.handleFunding(c, a.funder.Deposit)
+func (a *AdminController) Deposit(ginContext *gin.Context) {
+	a.handleFunding(ginContext, a.funder.Deposit)
 }
 
-func (a *AdminController) Withdraw(c *gin.Context) {
-	a.handleFunding(c, a.funder.Withdraw)
+func (a *AdminController) Withdraw(ginContext *gin.Context) {
+	a.handleFunding(ginContext, a.funder.Withdraw)
 }
 
-func (a *AdminController) handleFunding(c *gin.Context, operation fundingOperation) {
-	key, err := readIdempotencyKey(c)
+func (a *AdminController) handleFunding(ginContext *gin.Context, operation fundingOperation) {
+	key, err := readIdempotencyKey(ginContext)
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
 	var request fundingRequest
-	if err := decodeJSON(c, &request); err != nil {
-		PresentError(c, err)
+	if err := decodeJSON(ginContext, &request); err != nil {
+		PresentError(ginContext, err)
 		return
 	}
-	output, err := operation(c.Request.Context(), transferservice.FundingInput{
+	output, err := operation(ginContext.Request.Context(), transferservice.FundingInput{
 		OwnerID:        string(apikey.SystemOwnerID),
 		IdempotencyKey: key,
 		AccountID:      request.AccountID,
 		Amount:         request.Amount,
 		Currency:       request.Currency,
 	})
-	a.transfers.presentMoneyMovement(c, output, err)
+	presentMoneyMovement(ginContext, output, err)
 }
 
 func registerAdminRoutes(group *gin.RouterGroup, controller *AdminController) {

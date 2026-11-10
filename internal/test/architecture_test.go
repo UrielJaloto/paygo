@@ -50,41 +50,41 @@ var contextOrder = map[string]map[string]int{
 }
 
 type sourcePackage struct {
-	directory     string
-	imports []string
+	directory string
+	imports   []string
 }
 
 func TestDependencyMatrix_LayersAreLowerTriangular(t *testing.T) {
 	tests := []struct {
-		name string
+		name     string
 		packages []sourcePackage
-		want []string
+		want     []string
 	}{
 		{name: "empty tree has no violations"},
 		{
-			name: "services importing domain is allowed",
+			name:     "services importing domain is allowed",
 			packages: []sourcePackage{{directory: "services/account", imports: []string{"domain/account"}}},
 		},
 		{
-			name: "domain importing services is rejected",
+			name:     "domain importing services is rejected",
 			packages: []sourcePackage{{directory: "domain/account", imports: []string{"services/account"}}},
-			want: []string{"domain/account must not import services/account"},
+			want:     []string{"domain/account must not import services/account"},
 		},
 		{
-			name: "presentation importing infrastructure is rejected",
+			name:     "presentation importing infrastructure is rejected",
 			packages: []sourcePackage{{directory: "presentation/rest", imports: []string{"infrastructure/config"}}},
-			want: []string{"presentation/rest must not import infrastructure/config"},
+			want:     []string{"presentation/rest must not import infrastructure/config"},
 		},
 		{
-			name: "infrastructure importing presentation is rejected",
+			name:     "infrastructure importing presentation is rejected",
 			packages: []sourcePackage{{directory: "infrastructure/logging", imports: []string{"presentation/rest"}}},
-			want: []string{"infrastructure/logging must not import presentation/rest"},
+			want:     []string{"infrastructure/logging must not import presentation/rest"},
 		},
 		{
 			name: "cmd may import every layer",
 			packages: []sourcePackage{{
-				directory:     "cmd/paygo-api",
-				imports: []string{"domain/money", "services/account", "presentation/rest", "infrastructure/config"},
+				directory: "cmd/paygo-api",
+				imports:   []string{"domain/money", "services/account", "presentation/rest", "infrastructure/config"},
 			}},
 		},
 	}
@@ -100,28 +100,28 @@ func TestDependencyMatrix_LayersAreLowerTriangular(t *testing.T) {
 
 func TestDependencyMatrix_ContextsFollowDeclaredOrder(t *testing.T) {
 	tests := []struct {
-		name string
+		name     string
 		packages []sourcePackage
-		want []string
+		want     []string
 	}{
 		{
-			name: "lower context importing a higher one is rejected",
+			name:     "lower context importing a higher one is rejected",
 			packages: []sourcePackage{{directory: "domain/money", imports: []string{"domain/account"}}},
-			want: []string{"domain/money must not import domain/account"},
+			want:     []string{"domain/money must not import domain/account"},
 		},
 		{
-			name: "higher context importing a lower one is allowed",
+			name:     "higher context importing a lower one is allowed",
 			packages: []sourcePackage{{directory: "domain/transfer", imports: []string{"domain/ledger"}}},
 		},
 		{
-			name: "sibling services are rejected",
+			name:     "sibling services are rejected",
 			packages: []sourcePackage{{directory: "services/account", imports: []string{"services/transfer"}}},
-			want: []string{"services/account must not import services/transfer"},
+			want:     []string{"services/account must not import services/transfer"},
 		},
 		{
-			name: "undeclared context is rejected",
+			name:     "undeclared context is rejected",
 			packages: []sourcePackage{{directory: "domain/foo"}},
-			want: []string{"domain/foo has no position in the DSM order"},
+			want:     []string{"domain/foo has no position in the DSM order"},
 		},
 	}
 	for _, testCase := range tests {
@@ -136,17 +136,17 @@ func TestDependencyMatrix_ContextsFollowDeclaredOrder(t *testing.T) {
 
 func layerViolations(packages []sourcePackage) []string {
 	var violations []string
-	for _, pkg := range packages {
-		violations = append(violations, packageLayerViolations(pkg)...)
+	for _, sourcePackage := range packages {
+		violations = append(violations, packageLayerViolations(sourcePackage)...)
 	}
 	return violations
 }
 
-func packageLayerViolations(pkg sourcePackage) []string {
+func packageLayerViolations(source sourcePackage) []string {
 	var violations []string
-	for _, imported := range pkg.imports {
-		if breaksLayerOrder(pkg.directory, imported) {
-			violations = append(violations, pkg.directory+" must not import "+imported)
+	for _, imported := range source.imports {
+		if breaksLayerOrder(source.directory, imported) {
+			violations = append(violations, source.directory+" must not import "+imported)
 		}
 	}
 	return violations
@@ -160,24 +160,24 @@ func breaksLayerOrder(directory, imported string) bool {
 
 func contextViolations(packages []sourcePackage, order map[string]map[string]int) []string {
 	var violations []string
-	for _, pkg := range packages {
-		violations = append(violations, packageContextViolations(pkg, order[layerOf(pkg.directory)])...)
+	for _, sourcePackage := range packages {
+		violations = append(violations, packageContextViolations(sourcePackage, order[layerOf(sourcePackage.directory)])...)
 	}
 	return violations
 }
 
-func packageContextViolations(pkg sourcePackage, contexts map[string]int) []string {
+func packageContextViolations(source sourcePackage, contexts map[string]int) []string {
 	if contexts == nil {
 		return nil
 	}
-	from, ok := contexts[contextOf(pkg.directory)]
+	from, ok := contexts[contextOf(source.directory)]
 	if !ok {
-		return []string{pkg.directory + " has no position in the DSM order"}
+		return []string{source.directory + " has no position in the DSM order"}
 	}
 	var violations []string
-	for _, imported := range pkg.imports {
-		if breaksContextOrder(pkg.directory, imported, from, contexts) {
-			violations = append(violations, pkg.directory+" must not import "+imported)
+	for _, imported := range source.imports {
+		if breaksContextOrder(source.directory, imported, from, contexts) {
+			violations = append(violations, source.directory+" must not import "+imported)
 		}
 	}
 	return violations
@@ -261,8 +261,8 @@ func collectImports(path string, imports map[string][]string) error {
 	}
 	directory := filepath.ToSlash(filepath.Dir(layerPath(path)))
 	list := imports[directory]
-	for _, spec := range file.Imports {
-		value, err := strconv.Unquote(spec.Path.Value)
+	for _, imported := range file.Imports {
+		value, err := strconv.Unquote(imported.Path.Value)
 		if err != nil {
 			return fmt.Errorf("unquote import in %s: %w", path, err)
 		}
@@ -308,8 +308,8 @@ func (f sourceFile) directory() string {
 
 func (f sourceFile) imports() []string {
 	paths := make([]string, 0, len(f.syntax.Imports))
-	for _, spec := range f.syntax.Imports {
-		paths = append(paths, strings.Trim(spec.Path.Value, `"`))
+	for _, imported := range f.syntax.Imports {
+		paths = append(paths, strings.Trim(imported.Path.Value, `"`))
 	}
 	return paths
 }

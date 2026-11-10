@@ -10,17 +10,13 @@ import (
 )
 
 const (
-	ChargePending ChargeStatus = "pending"
-	ChargePaid    ChargeStatus = "paid"
-	ChargeExpired ChargeStatus = "expired"
-	ChargeFailed  ChargeStatus = "failed"
+	ChargePending = "pending"
+	ChargePaid    = "paid"
+	ChargeExpired = "expired"
+	ChargeFailed  = "failed"
 
 	maximumPayerNameLength = 100
 )
-
-type ChargeID string
-
-type ChargeStatus string
 
 type Payer struct {
 	Document Document
@@ -52,14 +48,14 @@ type ChargeDraft struct {
 }
 
 type ChargeSnapshot struct {
-	ID         ChargeID
+	ID         string
 	OwnerID    apikey.OwnerID
 	AccountID  account.ID
 	Amount     money.Money
 	Payer      Payer
 	Reference  Reference
 	Pix        PixCode
-	Status     ChargeStatus
+	Status     string
 	TransferID string
 	Timeline   Timeline
 }
@@ -68,7 +64,7 @@ type Charge struct {
 	state ChargeSnapshot
 }
 
-func NewCharge(id ChargeID, draft ChargeDraft, expiresAt, createdAt time.Time) (Charge, error) {
+func NewCharge(id string, draft ChargeDraft, expiresAt, createdAt time.Time) (Charge, error) {
 	if draft.Amount.Currency() != money.BRL {
 		return Charge{}, fmt.Errorf("%w: %s", money.ErrUnsupportedCurrency, draft.Amount.Currency())
 	}
@@ -92,7 +88,7 @@ func RestoreCharge(snapshot ChargeSnapshot) Charge {
 	return Charge{state: snapshot}
 }
 
-func (c Charge) ID() ChargeID {
+func (c Charge) ID() string {
 	return c.state.ID
 }
 
@@ -120,7 +116,7 @@ func (c Charge) Pix() PixCode {
 	return c.state.Pix
 }
 
-func (c Charge) Status() ChargeStatus {
+func (c Charge) Status() string {
 	return c.state.Status
 }
 
@@ -157,7 +153,7 @@ func (c *Charge) MarkFailed(now time.Time) error {
 	return c.changePendingStatus(ChargeFailed, now)
 }
 
-func (c *Charge) changePendingStatus(target ChargeStatus, now time.Time) error {
+func (c *Charge) changePendingStatus(target string, now time.Time) error {
 	if c.state.Status != ChargePending {
 		return fmt.Errorf("%w: charge %s to %s", ErrInvalidTransition, c.state.Status, target)
 	}

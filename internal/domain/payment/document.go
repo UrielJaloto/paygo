@@ -8,13 +8,13 @@ import (
 )
 
 const (
-	cpfLength      = 11
-	cnpjLength     = 14
-	cpfMaximumWeight   = 11
-	cnpjMaximumWeight  = 9
-	checkDigits    = 2
-	firstWeight    = 2
-	checkDigitBase = 11
+	cpfLength         = 11
+	cnpjLength        = 14
+	cpfMaximumWeight  = 11
+	cnpjMaximumWeight = 9
+	checkDigits       = 2
+	firstWeight       = 2
+	checkDigitBase    = 11
 )
 
 var (
@@ -48,8 +48,8 @@ func hasValidCheckDigits(digits string) bool {
 
 func calculateCheckDigit(digits string, maximumWeight int) string {
 	sum, weight := 0, firstWeight
-	for i := len(digits) - 1; i >= 0; i-- {
-		sum += int(digits[i]-'0') * weight
+	for index := len(digits) - 1; index >= 0; index-- {
+		sum += int(digits[index]-'0') * weight
 		weight++
 		if weight > maximumWeight {
 			weight = firstWeight

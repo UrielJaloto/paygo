@@ -29,7 +29,7 @@ func TestNewSelectedProvider_SelectsProviderBySettings(t *testing.T) {
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			got := provider.NewMoney(testCase.settings, stubCustomers{}, stubIDs{})
+			got := provider.NewSelectedProvider(testCase.settings, stubCustomers{}, stubIDs{})
 
 			if got.Name() != testCase.want {
 				t.Fatalf("Name() = %q, want %q", got.Name(), testCase.want)

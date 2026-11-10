@@ -40,7 +40,7 @@ const (
 		GROUP BY a.id
 		HAVING a.balance_minor <> COALESCE(sum(` + signedAmount + `), 0)
 		ORDER BY a.id`
-	countAccounts    = `SELECT count(*) FROM accounts`
+	countAccounts          = `SELECT count(*) FROM accounts`
 	totalEntriesByCurrency = `SELECT currency, sum(` + signedAmount + `)::bigint FROM ledger_entries GROUP BY currency`
 )
 
@@ -52,7 +52,7 @@ func NewLedgerRepository(pool *pgxpool.Pool) *LedgerRepository {
 	return &LedgerRepository{database: pool}
 }
 
-func (r *LedgerRepository) CalculateBalance(ctx context.Context, id account.ID) (money.Money, error) {
+func (r *LedgerRepository) FindBalance(ctx context.Context, id account.ID) (money.Money, error) {
 	var minor int64
 	var currency money.Currency
 	err := r.database.QueryRow(ctx, selectBalance, id).Scan(&minor, &currency)
@@ -119,11 +119,11 @@ func newEntryColumns(entries []ledger.Entry) entryColumns {
 func scanEntryRow(row pgx.CollectableRow) (ledger.Entry, error) {
 	var id, journalID string
 	var accountID account.ID
-	var direction ledger.Direction
+	var direction string
 	var minor int64
 	var currency money.Currency
 	var createdAt time.Time
 	err := row.Scan(&id, &journalID, &accountID, &direction, &minor, &currency, &createdAt)
-	entry, _ := ledger.NewEntry(id, accountID, direction, money.NewMoney(minor, currency), createdAt)
-	return entry.AssignJournal(journalID), err
+	entry, entryErr := ledger.NewEntry(id, accountID, direction, money.NewMoney(minor, currency), createdAt)
+	return entry.AssignJournal(journalID), errors.Join(err, entryErr)
 }

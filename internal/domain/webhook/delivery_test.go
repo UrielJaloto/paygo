@@ -23,7 +23,7 @@ func pending() webhook.Delivery {
 	return webhook.NewDelivery("d1", "ev1", "e1", "o1", at)
 }
 
-func withStatus(status webhook.DeliveryStatus, attempts int) webhook.Delivery {
+func withStatus(status string, attempts int) webhook.Delivery {
 	return webhook.RestoreDelivery(webhook.DeliverySnapshot{ID: "d1", Status: status, Attempts: attempts, NextAttemptAt: at})
 }
 
@@ -87,7 +87,7 @@ func TestMarkFailed_BelowMax_SchedulesRetry(t *testing.T) {
 	target := pending()
 	later := at.Add(time.Minute)
 	if err := target.MarkFailed(webhook.Failure{Reason: "boom", At: later, Policy: policy(t, 8)}); err != nil {
-		t.Fatalf("Fail: %v", err)
+		t.Fatalf("MarkFailed: %v", err)
 	}
 	if target.Attempts() != 1 || target.Status() != webhook.DeliveryPending || target.LastError() != "boom" {
 		t.Fatalf("unexpected state: %+v", target)
@@ -100,7 +100,7 @@ func TestMarkFailed_BelowMax_SchedulesRetry(t *testing.T) {
 func TestMarkFailed_AtMax_IsDead(t *testing.T) {
 	target := withStatus(webhook.DeliveryPending, 7)
 	if err := target.MarkFailed(webhook.Failure{Reason: "boom", At: at, Policy: policy(t, 8)}); err != nil {
-		t.Fatalf("Fail: %v", err)
+		t.Fatalf("MarkFailed: %v", err)
 	}
 	if target.Attempts() != 8 || target.Status() != webhook.DeliveryDead {
 		t.Fatalf("unexpected state: %+v", target)
@@ -129,7 +129,7 @@ func TestMarkSucceeded_Pending_IsSucceeded(t *testing.T) {
 	target := pending()
 	later := at.Add(time.Minute)
 	if err := target.MarkSucceeded(later); err != nil {
-		t.Fatalf("Succeed: %v", err)
+		t.Fatalf("MarkSucceeded: %v", err)
 	}
 	if target.Status() != webhook.DeliverySucceeded || !target.UpdatedAt().Equal(later) {
 		t.Fatalf("unexpected state: %+v", target)
@@ -158,7 +158,7 @@ func TestReplay_Dead_ResetsToPending(t *testing.T) {
 }
 
 func TestReplay_NotDead_ReturnsErrDeliveryNotReplayable(t *testing.T) {
-	for _, status := range []webhook.DeliveryStatus{webhook.DeliveryPending, webhook.DeliverySucceeded} {
+	for _, status := range []string{webhook.DeliveryPending, webhook.DeliverySucceeded} {
 		target := withStatus(status, 1)
 		if err := target.Replay(at); !errors.Is(err, webhook.ErrDeliveryNotReplayable) {
 			t.Fatalf("%s: error = %v", status, err)
@@ -177,7 +177,7 @@ func TestMarkDead_Pending_IsDeadWithReason(t *testing.T) {
 func TestIsDue_ComparesNextAttempt(t *testing.T) {
 	cases := []struct {
 		name   string
-		status webhook.DeliveryStatus
+		status string
 		now    time.Time
 		want   bool
 	}{

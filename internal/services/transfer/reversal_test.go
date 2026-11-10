@@ -18,7 +18,7 @@ import (
 
 const originalID = "0190c000-0000-7000-8000-000000000001"
 
-func completed(id transfer.ID, kind transfer.Kind, owner apikey.OwnerID) transfer.Transfer {
+func completed(id string, kind string, owner apikey.OwnerID) transfer.Transfer {
 	request := transfer.Request{OwnerID: owner, Key: "key-0", Kind: kind, From: lowID, To: highID, Amount: money.NewMoney(100, money.BRL)}
 	return transfer.Restore(transfer.Snapshot{ID: id, Request: request, Status: transfer.StatusCompleted, CreatedAt: now})
 }
@@ -35,8 +35,8 @@ func validReverse() service.ReverseInput {
 
 func TestReverse_Valid_MovesBackAndMarksOriginal(t *testing.T) {
 	store := reversibleStore()
-	svc, _ := newService(store)
-	got, err := svc.Reverse(context.Background(), validReverse())
+	service, _ := newService(store)
+	got, err := service.Reverse(context.Background(), validReverse())
 	if err != nil {
 		t.Fatalf("Reverse: %v", err)
 	}
@@ -54,8 +54,8 @@ func TestReverse_Valid_MovesBackAndMarksOriginal(t *testing.T) {
 func TestReverse_InsufficientFunds_DoesNotMarkOriginal(t *testing.T) {
 	store := reversibleStore()
 	store.balances[highID] = money.NewMoney(50, money.BRL)
-	svc, _ := newService(store)
-	_, err := svc.Reverse(context.Background(), validReverse())
+	service, _ := newService(store)
+	_, err := service.Reverse(context.Background(), validReverse())
 	if !errors.Is(err, transfer.ErrInsufficientFunds) || store.wasCalled("mark") {
 		t.Fatalf("error = %v, calls = %v", err, store.calls)
 	}
@@ -79,8 +79,8 @@ func TestReverse_NotReversible_ReturnsExactError(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			store := standardStore()
 			store.originals[originalID] = testCase.original
-			svc, _ := newService(store)
-			_, err := svc.Reverse(context.Background(), validReverse())
+			service, _ := newService(store)
+			_, err := service.Reverse(context.Background(), validReverse())
 			if !errors.Is(err, testCase.want) || store.wasCalled("lock") {
 				t.Fatalf("error = %v, calls = %v", err, store.calls)
 			}
@@ -93,7 +93,7 @@ func TestReverse_SameKey_ReturnsReplayAfterOriginalWasReversed(t *testing.T) {
 	original := store.originals[originalID]
 	request, err := original.BuildReversalRequest("key-1")
 	if err != nil {
-		t.Fatalf("ReversalRequest: %v", err)
+		t.Fatalf("BuildReversalRequest: %v", err)
 	}
 	if err := original.Reverse(); err != nil {
 		t.Fatalf("Reverse: %v", err)
@@ -101,8 +101,8 @@ func TestReverse_SameKey_ReturnsReplayAfterOriginalWasReversed(t *testing.T) {
 	store.originals[originalID] = original
 	done := transfer.Restore(transfer.Snapshot{ID: "r1", Request: request, Status: transfer.StatusCompleted, CreatedAt: now})
 	store.existing = &savedTransfer{transfer: done, fingerprint: request.CalculateFingerprint()}
-	svc, _ := newService(store)
-	got, err := svc.Reverse(context.Background(), validReverse())
+	service, _ := newService(store)
+	got, err := service.Reverse(context.Background(), validReverse())
 	if err != nil {
 		t.Fatalf("Reverse: %v", err)
 	}
@@ -115,10 +115,10 @@ func TestReverse_Deposit_MovesBackToSettlement(t *testing.T) {
 	request := transfer.Request{OwnerID: apikey.SystemOwnerID, Key: "key-0", Kind: transfer.KindDeposit, From: settlement, To: lowID, Amount: money.NewMoney(100, money.BRL)}
 	store := standardStore()
 	store.originals[originalID] = transfer.Restore(transfer.Snapshot{ID: originalID, Request: request, Status: transfer.StatusCompleted, CreatedAt: now})
-	svc, _ := newService(store)
+	service, _ := newService(store)
 	input := validReverse()
 	input.OwnerID = string(apikey.SystemOwnerID)
-	got, err := svc.Reverse(context.Background(), input)
+	got, err := service.Reverse(context.Background(), input)
 	if err != nil {
 		t.Fatalf("Reverse: %v", err)
 	}
@@ -133,15 +133,15 @@ func TestReverse_InvalidInput_DoesNotRunUnitOfWork(t *testing.T) {
 		change func(*service.ReverseInput)
 		want   error
 	}{
-		{name: "invalid owner", change: func(i *service.ReverseInput) { i.OwnerID = "x" }, want: apikey.ErrInvalidOwner},
-		{name: "invalid key", change: func(i *service.ReverseInput) { i.IdempotencyKey = "" }, want: transfer.ErrInvalidIdempotencyKey},
+		{name: "invalid owner", change: func(input *service.ReverseInput) { input.OwnerID = "x" }, want: apikey.ErrInvalidOwner},
+		{name: "invalid key", change: func(input *service.ReverseInput) { input.IdempotencyKey = "" }, want: transfer.ErrInvalidIdempotencyKey},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := validReverse()
 			testCase.change(&input)
-			svc, unitOfWork := newService(reversibleStore())
-			if _, err := svc.Reverse(context.Background(), input); !errors.Is(err, testCase.want) || unitOfWork.runs != 0 {
+			service, unitOfWork := newService(reversibleStore())
+			if _, err := service.Reverse(context.Background(), input); !errors.Is(err, testCase.want) || unitOfWork.runs != 0 {
 				t.Fatalf("error = %v, runs = %d", err, unitOfWork.runs)
 			}
 		})
@@ -150,27 +150,27 @@ func TestReverse_InvalidInput_DoesNotRunUnitOfWork(t *testing.T) {
 
 func TestReverse_StoreCallFails_StopsLaterCalls(t *testing.T) {
 	order := []string{"original", "find", "lock", "find", "balance", "append", "save", "outbox", "mark"}
-	for i, failing := range order {
-		t.Run(fmt.Sprintf("%d_%s", i, failing), func(t *testing.T) {
+	for index, failing := range order {
+		t.Run(fmt.Sprintf("%d_%s", index, failing), func(t *testing.T) {
 			store := reversibleStore()
-			store.failOnCall = i + 1
-			svc, _ := newService(store)
-			if _, err := svc.Reverse(context.Background(), validReverse()); !errors.Is(err, errBoom) {
+			store.failOnCall = index + 1
+			service, _ := newService(store)
+			if _, err := service.Reverse(context.Background(), validReverse()); !errors.Is(err, errBoom) {
 				t.Fatalf("error = %v", err)
 			}
-			if !slices.Equal(store.calls, order[:i+1]) {
-				t.Fatalf("calls = %v, want %v", store.calls, order[:i+1])
+			if !slices.Equal(store.calls, order[:index+1]) {
+				t.Fatalf("calls = %v, want %v", store.calls, order[:index+1])
 			}
 		})
 	}
 }
 
 func newQueryService(reader *fakeReader) *service.Service {
-	return service.NewMoney(&fakeUnitOfWork{store: standardStore()}, reader, stubClock{now: now}, &sequenceIDs{})
+	return service.NewService(&fakeUnitOfWork{store: standardStore()}, reader, stubClock{now: now}.Now, &sequenceIDs{})
 }
 
 func TestFind_Outcomes_ReturnExactResult(t *testing.T) {
-	found := map[transfer.ID]transfer.Transfer{
+	found := map[string]transfer.Transfer{
 		"mine":  completed("mine", transfer.KindTransfer, ownerOne),
 		"other": completed("other", transfer.KindTransfer, ownerTwo),
 	}
@@ -185,8 +185,8 @@ func TestFind_Outcomes_ReturnExactResult(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			svc := newQueryService(&fakeReader{found: found})
-			got, err := svc.Find(context.Background(), service.TransferQuery{OwnerID: ownerOne, TransferID: testCase.id})
+			transfers := newQueryService(&fakeReader{found: found})
+			got, err := transfers.Find(context.Background(), service.TransferQuery{OwnerID: ownerOne, TransferID: testCase.id})
 			if !errors.Is(err, testCase.want) {
 				t.Fatalf("error = %v, want %v", err, testCase.want)
 			}
@@ -198,11 +198,11 @@ func TestFind_Outcomes_ReturnExactResult(t *testing.T) {
 }
 
 func TestFind_Failures_ReturnExactError(t *testing.T) {
-	svc := newQueryService(&fakeReader{findErr: errBoom})
-	if _, err := svc.Find(context.Background(), service.TransferQuery{OwnerID: ownerOne, TransferID: "t"}); !errors.Is(err, errBoom) {
+	transfers := newQueryService(&fakeReader{findErr: errBoom})
+	if _, err := transfers.Find(context.Background(), service.TransferQuery{OwnerID: ownerOne, TransferID: "t"}); !errors.Is(err, errBoom) {
 		t.Fatalf("error = %v", err)
 	}
-	if _, err := svc.Find(context.Background(), service.TransferQuery{OwnerID: "x"}); !errors.Is(err, apikey.ErrInvalidOwner) {
+	if _, err := transfers.Find(context.Background(), service.TransferQuery{OwnerID: "x"}); !errors.Is(err, apikey.ErrInvalidOwner) {
 		t.Fatalf("error = %v", err)
 	}
 }
@@ -243,18 +243,18 @@ func TestList_Failures_ReturnExactError(t *testing.T) {
 		change func(*service.ListInput)
 		want   error
 	}{
-		{name: "invalid owner", change: func(i *service.ListInput) { i.OwnerID = "x" }, want: apikey.ErrInvalidOwner},
-		{name: "invalid account", change: func(i *service.ListInput) { i.AccountID = "1" }, want: account.ErrInvalidAccountID},
-		{name: "invalid cursor", change: func(i *service.ListInput) { i.Cursor = "%" }, want: page.ErrInvalidCursor},
-		{name: "invalid limit", change: func(i *service.ListInput) { i.Limit = "x" }, want: page.ErrInvalidPageLimit},
+		{name: "invalid owner", change: func(input *service.ListInput) { input.OwnerID = "x" }, want: apikey.ErrInvalidOwner},
+		{name: "invalid account", change: func(input *service.ListInput) { input.AccountID = "1" }, want: account.ErrInvalidAccountID},
+		{name: "invalid cursor", change: func(input *service.ListInput) { input.Cursor = "%" }, want: page.ErrInvalidCursor},
+		{name: "invalid limit", change: func(input *service.ListInput) { input.Limit = "x" }, want: page.ErrInvalidPageLimit},
 		{name: "reader fails", change: func(*service.ListInput) {}, want: errBoom},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := valid
 			testCase.change(&input)
-			svc := newQueryService(&fakeReader{listErr: errBoom})
-			if _, err := svc.List(context.Background(), input); !errors.Is(err, testCase.want) {
+			service := newQueryService(&fakeReader{listErr: errBoom})
+			if _, err := service.List(context.Background(), input); !errors.Is(err, testCase.want) {
 				t.Fatalf("error = %v, want %v", err, testCase.want)
 			}
 		})
@@ -278,8 +278,8 @@ func TestReverse_OriginalCannotBePosted_ReturnsDomainError(t *testing.T) {
 			store.balances[highID] = money.NewMoney(1000, money.BRL)
 			request := transfer.Request{OwnerID: ownerOne, Key: "key-0", Kind: transfer.KindTransfer, From: lowID, To: testCase.to, Amount: money.NewMoney(testCase.amount, money.BRL)}
 			store.originals[originalID] = transfer.Restore(transfer.Snapshot{ID: originalID, Request: request, Status: transfer.StatusCompleted, CreatedAt: now})
-			svc, _ := newService(store)
-			if _, err := svc.Reverse(context.Background(), validReverse()); !errors.Is(err, testCase.want) {
+			service, _ := newService(store)
+			if _, err := service.Reverse(context.Background(), validReverse()); !errors.Is(err, testCase.want) {
 				t.Fatalf("error = %v, want %v", err, testCase.want)
 			}
 		})

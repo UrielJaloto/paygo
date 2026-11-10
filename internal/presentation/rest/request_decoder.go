@@ -17,11 +17,11 @@ var (
 	errUnsupportedMediaType = errors.New("unsupported media type")
 )
 
-func decodeJSON(c *gin.Context, destination any) error {
-	if c.ContentType() != "application/json" {
+func decodeJSON(ginContext *gin.Context, destination any) error {
+	if ginContext.ContentType() != "application/json" {
 		return errUnsupportedMediaType
 	}
-	decoder := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, maximumRequestBodyBytes))
+	decoder := json.NewDecoder(http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maximumRequestBodyBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(destination); err != nil {
 		return classifyDecodeError(err)

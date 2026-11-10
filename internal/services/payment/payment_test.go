@@ -16,18 +16,18 @@ import (
 )
 
 const (
-	ownerID       = "01900000-0000-7000-8000-0000000000a1"
-	otherOwnerID  = "01900000-0000-7000-8000-0000000000a2"
-	customerID    = "01900000-0000-7000-8000-0000000000b1"
-	clearingID    = "01900000-0000-7000-8000-000000000011"
-	holdID        = "01900000-0000-7000-8000-000000000021"
-	validDocument = "52998224725"
-	providerReference   = "fake_1"
+	ownerID           = "01900000-0000-7000-8000-0000000000a1"
+	otherOwnerID      = "01900000-0000-7000-8000-0000000000a2"
+	customerID        = "01900000-0000-7000-8000-0000000000b1"
+	clearingID        = "01900000-0000-7000-8000-000000000011"
+	holdID            = "01900000-0000-7000-8000-000000000021"
+	validDocument     = "52998224725"
+	providerReference = "fake_1"
 )
 
 var testNow = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
-func newAccount(id, owner string, kind account.Kind, currency money.Currency) account.Account {
+func newAccount(id, owner string, kind string, currency money.Currency) account.Account {
 	return account.Restore(account.Snapshot{
 		ID:       account.ID(id),
 		OwnerID:  apikey.OwnerID(owner),
@@ -51,7 +51,7 @@ func paymentStore() *fakeStore {
 }
 
 func newService(store *fakeStore, provider *spyProvider) *service.Service {
-	return service.NewMoney(&fakeUnitOfWork{store: store}, provider, stubClock{now: testNow}, &sequenceIDs{})
+	return service.NewService(&fakeUnitOfWork{store: store}, provider, stubClock{now: testNow}.Now, &sequenceIDs{})
 }
 
 func chargeInput() service.ChargeInput {
@@ -66,7 +66,7 @@ func chargeInput() service.ChargeInput {
 	}
 }
 
-func seedCharge(t *testing.T, store *fakeStore, status payment.ChargeStatus) payment.Charge {
+func seedCharge(t *testing.T, store *fakeStore, status string) payment.Charge {
 	t.Helper()
 	charge := payment.RestoreCharge(payment.ChargeSnapshot{
 		ID:        "charge-1",
@@ -120,14 +120,14 @@ func TestCreateCharge_InvalidInput_ReturnsErrorWithoutCallingProvider(t *testing
 		mutate func(*service.ChargeInput)
 		want   error
 	}{
-		{name: "owner", mutate: func(i *service.ChargeInput) { i.OwnerID = "nope" }, want: apikey.ErrInvalidOwner},
-		{name: "key", mutate: func(i *service.ChargeInput) { i.IdempotencyKey = "" }, want: transfer.ErrInvalidIdempotencyKey},
-		{name: "account", mutate: func(i *service.ChargeInput) { i.AccountID = "nope" }, want: account.ErrInvalidAccountID},
-		{name: "currency code", mutate: func(i *service.ChargeInput) { i.Currency = "XXX" }, want: money.ErrUnsupportedCurrency},
-		{name: "currency not accepted", mutate: func(i *service.ChargeInput) { i.Currency = "USD" }, want: money.ErrUnsupportedCurrency},
-		{name: "amount", mutate: func(i *service.ChargeInput) { i.Amount = "abc" }, want: money.ErrInvalidAmount},
-		{name: "document", mutate: func(i *service.ChargeInput) { i.PayerDocument = "1" }, want: payment.ErrInvalidDocument},
-		{name: "payer name", mutate: func(i *service.ChargeInput) { i.PayerName = "" }, want: payment.ErrInvalidPayerName},
+		{name: "owner", mutate: func(input *service.ChargeInput) { input.OwnerID = "nope" }, want: apikey.ErrInvalidOwner},
+		{name: "key", mutate: func(input *service.ChargeInput) { input.IdempotencyKey = "" }, want: transfer.ErrInvalidIdempotencyKey},
+		{name: "account", mutate: func(input *service.ChargeInput) { input.AccountID = "nope" }, want: account.ErrInvalidAccountID},
+		{name: "currency code", mutate: func(input *service.ChargeInput) { input.Currency = "XXX" }, want: money.ErrUnsupportedCurrency},
+		{name: "currency not accepted", mutate: func(input *service.ChargeInput) { input.Currency = "USD" }, want: money.ErrUnsupportedCurrency},
+		{name: "amount", mutate: func(input *service.ChargeInput) { input.Amount = "abc" }, want: money.ErrInvalidAmount},
+		{name: "document", mutate: func(input *service.ChargeInput) { input.PayerDocument = "1" }, want: payment.ErrInvalidDocument},
+		{name: "payer name", mutate: func(input *service.ChargeInput) { input.PayerName = "" }, want: payment.ErrInvalidPayerName},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -172,13 +172,13 @@ func TestCreateCharge_AccountNotAllowed_ReturnsAccountNotFound(t *testing.T) {
 func TestCreateCharge_SameKeyAndRequest_ReplaysWithoutCallingProvider(t *testing.T) {
 	store := paymentStore()
 	provider := &spyProvider{chargeResult: service.ChargeResult{ProviderID: providerReference}}
-	svc := newService(store, provider)
-	first, err := svc.CreateCharge(context.Background(), chargeInput())
+	service := newService(store, provider)
+	first, err := service.CreateCharge(context.Background(), chargeInput())
 	if err != nil {
 		t.Fatalf("first CreateCharge() error = %v", err)
 	}
 
-	second, err := svc.CreateCharge(context.Background(), chargeInput())
+	second, err := service.CreateCharge(context.Background(), chargeInput())
 	if err != nil {
 		t.Fatalf("second CreateCharge() error = %v", err)
 	}
@@ -193,14 +193,14 @@ func TestCreateCharge_SameKeyAndRequest_ReplaysWithoutCallingProvider(t *testing
 
 func TestCreateCharge_SameKeyOtherRequest_ReturnsConflict(t *testing.T) {
 	store := paymentStore()
-	svc := newService(store, &spyProvider{})
-	if _, err := svc.CreateCharge(context.Background(), chargeInput()); err != nil {
+	service := newService(store, &spyProvider{})
+	if _, err := service.CreateCharge(context.Background(), chargeInput()); err != nil {
 		t.Fatalf("first CreateCharge() error = %v", err)
 	}
 	input := chargeInput()
 	input.Amount = "11.00"
 
-	_, err := svc.CreateCharge(context.Background(), input)
+	_, err := service.CreateCharge(context.Background(), input)
 	if !errors.Is(err, transfer.ErrIdempotencyConflict) {
 		t.Fatalf("CreateCharge() error = %v, want %v", err, transfer.ErrIdempotencyConflict)
 	}
@@ -261,7 +261,7 @@ func TestFindCharge_Queries_ReturnOnlyOwnCharges(t *testing.T) {
 	}
 }
 
-func webhookFor(kind payment.EventKind, eventID string) *spyProvider {
+func webhookFor(kind string, eventID string) *spyProvider {
 	return &spyProvider{parsed: payment.ProviderEvent{Provider: "fake", EventID: eventID, ProviderID: providerReference, Kind: kind}}
 }
 
@@ -385,7 +385,7 @@ func TestHandleWebhook_Rejections_ReturnError(t *testing.T) {
 }
 
 func TestHandleWebhook_UnknownProviderID_ReturnsChargeNotFound(t *testing.T) {
-	for _, kind := range []payment.EventKind{payment.EventChargePaid, payment.EventChargeExpired} {
+	for _, kind := range []string{payment.EventChargePaid, payment.EventChargeExpired} {
 		t.Run(string(kind), func(t *testing.T) {
 			err := newService(paymentStore(), webhookFor(kind, "evt-1")).HandleWebhook(context.Background(), service.WebhookInput{Provider: "fake"})
 			if !errors.Is(err, payment.ErrChargeNotFound) {
@@ -398,8 +398,8 @@ func TestHandleWebhook_UnknownProviderID_ReturnsChargeNotFound(t *testing.T) {
 func TestHandleWebhook_StaleTransition_AcknowledgesWithoutChanges(t *testing.T) {
 	tests := []struct {
 		name   string
-		kind   payment.EventKind
-		status payment.ChargeStatus
+		kind   string
+		status string
 	}{
 		{name: "paid after expired", kind: payment.EventChargePaid, status: payment.ChargeExpired},
 		{name: "expired after paid", kind: payment.EventChargeExpired, status: payment.ChargePaid},
@@ -478,15 +478,15 @@ func TestHandleWebhook_ChargeCannotPost_ReturnsDomainError(t *testing.T) {
 func TestCreateCharge_SameKeyCommittedWhileWaitingForLock_Replays(t *testing.T) {
 	store := paymentStore()
 	provider := &spyProvider{chargeResult: service.ChargeResult{ProviderID: providerReference}}
-	svc := newService(store, provider)
-	first, err := svc.CreateCharge(context.Background(), chargeInput())
+	service := newService(store, provider)
+	first, err := service.CreateCharge(context.Background(), chargeInput())
 	if err != nil {
 		t.Fatalf("first CreateCharge() error = %v", err)
 	}
 	store.charges.hasKey = false
 	store.onLock = func() { store.charges.hasKey = true }
 
-	second, err := svc.CreateCharge(context.Background(), chargeInput())
+	second, err := service.CreateCharge(context.Background(), chargeInput())
 	if err != nil {
 		t.Fatalf("second CreateCharge() error = %v", err)
 	}
@@ -499,9 +499,9 @@ func TestCreateCharge_SameKeyCommittedWhileWaitingForLock_Replays(t *testing.T) 
 func TestCreateCharge_ReplayLookupFailsAfterLock_ReturnsError(t *testing.T) {
 	store := paymentStore()
 	store.onLock = func() { store.failures["charge.byKey"] = errBoom }
-	svc := newService(store, &spyProvider{chargeResult: service.ChargeResult{ProviderID: providerReference}})
+	service := newService(store, &spyProvider{chargeResult: service.ChargeResult{ProviderID: providerReference}})
 
-	_, err := svc.CreateCharge(context.Background(), chargeInput())
+	_, err := service.CreateCharge(context.Background(), chargeInput())
 
 	if !errors.Is(err, errBoom) || len(store.charges.items) != 0 {
 		t.Errorf("err = %v, charges = %d", err, len(store.charges.items))

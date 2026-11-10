@@ -42,7 +42,7 @@ func NewChargeRepository(pool *pgxpool.Pool) *ChargeRepository {
 	return &ChargeRepository{database: pool}
 }
 
-func (r *ChargeRepository) Save(ctx context.Context, charge payment.Charge, key transfer.IdempotencyKey, fingerprint transfer.Fingerprint) error {
+func (r *ChargeRepository) Save(ctx context.Context, charge payment.Charge, key transfer.IdempotencyKey, fingerprint string) error {
 	_, err := r.database.Exec(ctx, insertCharge, charge.ID(), charge.OwnerID(), key, fingerprint, charge.AccountID(),
 		charge.Amount().Minor(), charge.Amount().Currency(), charge.Payer().Document, charge.Payer().Name,
 		charge.Reference().Provider, charge.Reference().ProviderID, charge.Pix().CopyPaste, charge.Pix().QRBase64,
@@ -59,7 +59,7 @@ func (r *ChargeRepository) Update(ctx context.Context, charge payment.Charge) er
 	return err
 }
 
-func (r *ChargeRepository) FindByID(ctx context.Context, id payment.ChargeID) (payment.Charge, error) {
+func (r *ChargeRepository) FindByID(ctx context.Context, id string) (payment.Charge, error) {
 	found, err := scanCharge(r.database.QueryRow(ctx, selectCharge, id))
 	return found, mapNotFound(err, payment.ErrChargeNotFound)
 }
@@ -69,8 +69,8 @@ func (r *ChargeRepository) FindByProviderID(ctx context.Context, providerID stri
 	return found, mapNotFound(err, payment.ErrChargeNotFound)
 }
 
-func (r *ChargeRepository) FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (payment.Charge, transfer.Fingerprint, error) {
-	var fingerprint transfer.Fingerprint
+func (r *ChargeRepository) FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (payment.Charge, string, error) {
+	var fingerprint string
 	found, err := scanCharge(r.database.QueryRow(ctx, selectChargeByKey, owner, key), &fingerprint)
 	return found, fingerprint, mapNotFound(err, payment.ErrChargeNotFound)
 }

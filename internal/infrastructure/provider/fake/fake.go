@@ -27,9 +27,9 @@ type IDGenerator interface {
 type Provider struct {
 	token   string
 	ids     IDGenerator
-	mutex      sync.Mutex
-	charges map[string]payment.EventKind
-	payouts map[string]payment.EventKind
+	mutex   sync.Mutex
+	charges map[string]string
+	payouts map[string]string
 }
 
 type webhookBody struct {
@@ -39,12 +39,12 @@ type webhookBody struct {
 	SyncOnly   bool   `json:"sync_only"`
 }
 
-func NewMoney(token string, ids IDGenerator) *Provider {
+func NewProvider(token string, ids IDGenerator) *Provider {
 	return &Provider{
 		token:   token,
 		ids:     ids,
-		charges: make(map[string]payment.EventKind),
-		payouts: make(map[string]payment.EventKind),
+		charges: make(map[string]string),
+		payouts: make(map[string]string),
 	}
 }
 
@@ -68,16 +68,16 @@ func (p *Provider) SendPixPayout(context.Context, paymentservice.PayoutRequest) 
 	return paymentservice.PayoutResult{ProviderID: id}, nil
 }
 
-func (p *Provider) FetchCharge(_ context.Context, providerID string) (payment.EventKind, error) {
+func (p *Provider) FetchCharge(_ context.Context, providerID string) (string, error) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	return lookupStatus(p.charges, providerID), nil
+	return findStatus(p.charges, providerID), nil
 }
 
-func (p *Provider) FetchPayout(_ context.Context, providerID string) (payment.EventKind, error) {
+func (p *Provider) FetchPayout(_ context.Context, providerID string) (string, error) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	return lookupStatus(p.payouts, providerID), nil
+	return findStatus(p.payouts, providerID), nil
 }
 
 func (p *Provider) MarkPaid(providerID string) {
@@ -86,11 +86,15 @@ func (p *Provider) MarkPaid(providerID string) {
 	p.charges[providerID] = payment.EventChargePaid
 }
 
-func (p *Provider) MarkPayout(providerID string, done bool) {
-	kind := payment.EventPayoutFailed
-	if done {
-		kind = payment.EventPayoutDone
-	}
+func (p *Provider) MarkPayoutCompleted(providerID string) {
+	p.setPayoutState(providerID, payment.EventPayoutDone)
+}
+
+func (p *Provider) MarkPayoutFailed(providerID string) {
+	p.setPayoutState(providerID, payment.EventPayoutFailed)
+}
+
+func (p *Provider) setPayoutState(providerID string, kind string) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	p.payouts[providerID] = kind
@@ -105,23 +109,23 @@ func (p *Provider) ParseWebhook(_ context.Context, header http.Header, body []by
 		return payment.ProviderEvent{}, fmt.Errorf("%w: decoding fake webhook: %v", payment.ErrProviderRejected, err)
 	}
 	kind := parseEventKind(parsed.Type)
-	p.apply(parsed.ProviderID, kind)
+	p.recordState(parsed.ProviderID, kind)
 	if parsed.SyncOnly {
 		kind = payment.EventIgnored
 	}
 	return payment.ProviderEvent{Provider: providerName, EventID: parsed.EventID, ProviderID: parsed.ProviderID, Kind: kind}, nil
 }
 
-func (p *Provider) apply(providerID string, kind payment.EventKind) {
+func (p *Provider) recordState(providerID string, kind string) {
 	switch kind {
 	case payment.EventChargePaid:
 		p.MarkPaid(providerID)
 	case payment.EventPayoutDone, payment.EventPayoutFailed:
-		p.MarkPayout(providerID, kind == payment.EventPayoutDone)
+		p.setPayoutState(providerID, kind)
 	}
 }
 
-func parseEventKind(webhookType string) payment.EventKind {
+func parseEventKind(webhookType string) string {
 	switch webhookType {
 	case "charge.paid":
 		return payment.EventChargePaid
@@ -133,7 +137,7 @@ func parseEventKind(webhookType string) payment.EventKind {
 	return payment.EventIgnored
 }
 
-func lookupStatus(states map[string]payment.EventKind, providerID string) payment.EventKind {
+func findStatus(states map[string]string, providerID string) string {
 	if kind, found := states[providerID]; found {
 		return kind
 	}

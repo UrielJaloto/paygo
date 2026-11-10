@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	defaultAdminURL = "postgres://paygo:paygo@localhost:5432/postgres?sslmode=disable"
+	defaultAdminURL = "postgres://paygo:example-postgres-password@localhost:5432/postgres?sslmode=disable"
 	adminToken      = "e2e-admin-token-0123456789abcdef0123"
 	fakeToken       = "e2e-fake-token-0123456789abcdef01234"
 	ownerOne        = "01890000-0000-7000-8000-000000000001"
@@ -45,11 +45,11 @@ type binaries struct {
 }
 
 type stack struct {
-	api         string
-	worker      string
-	databaseURL string
-	coverageDirectory    string
-	process     *process
+	api               string
+	worker            string
+	databaseURL       string
+	coverageDirectory string
+	process           *process
 }
 
 type process struct {
@@ -199,18 +199,18 @@ func startStackWith(t *testing.T, overrides map[string]string) stack {
 }
 
 func withAddress(shared map[string]string, address string) map[string]string {
-	env := map[string]string{"PAYGO_HTTP_ADDR": address}
+	environment := map[string]string{"PAYGO_HTTP_ADDR": address}
 	for name, value := range shared {
-		env[name] = value
+		environment[name] = value
 	}
-	return env
+	return environment
 }
 
-func startProcess(t *testing.T, path string, env map[string]string) *process {
+func startProcess(t *testing.T, path string, variables map[string]string) *process {
 	t.Helper()
 	var output bytes.Buffer
 	command := exec.Command(path)
-	command.Env = environment(env)
+	command.Env = environment(variables)
 	command.Stdout, command.Stderr = &output, &output
 	if err := command.Start(); err != nil {
 		t.Fatalf("starting %s: %v", path, err)

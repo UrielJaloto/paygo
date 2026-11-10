@@ -14,8 +14,8 @@ type paymentProvider interface {
 	Name() string
 	CreatePixCharge(ctx context.Context, request payment.ChargeRequest) (payment.ChargeResult, error)
 	SendPixPayout(ctx context.Context, request payment.PayoutRequest) (payment.PayoutResult, error)
-	FetchCharge(ctx context.Context, providerID string) (domainpayment.EventKind, error)
-	FetchPayout(ctx context.Context, providerID string) (domainpayment.EventKind, error)
+	FetchCharge(ctx context.Context, providerID string) (string, error)
+	FetchPayout(ctx context.Context, providerID string) (string, error)
 	ParseWebhook(ctx context.Context, header http.Header, body []byte) (domainpayment.ProviderEvent, error)
 }
 
@@ -46,14 +46,14 @@ func (t *ProviderTracer) SendPixPayout(ctx context.Context, request payment.Payo
 	return result, err
 }
 
-func (t *ProviderTracer) FetchCharge(ctx context.Context, providerID string) (domainpayment.EventKind, error) {
+func (t *ProviderTracer) FetchCharge(ctx context.Context, providerID string) (string, error) {
 	ctx, span := t.tracer.Start(ctx, "provider.FetchCharge")
 	kind, err := t.next.FetchCharge(ctx, providerID)
 	endSpan(span, err)
 	return kind, err
 }
 
-func (t *ProviderTracer) FetchPayout(ctx context.Context, providerID string) (domainpayment.EventKind, error) {
+func (t *ProviderTracer) FetchPayout(ctx context.Context, providerID string) (string, error) {
 	ctx, span := t.tracer.Start(ctx, "provider.FetchPayout")
 	kind, err := t.next.FetchPayout(ctx, providerID)
 	endSpan(span, err)

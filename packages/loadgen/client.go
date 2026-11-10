@@ -22,8 +22,8 @@ const (
 )
 
 var (
-	errUnexpectedStatus = errors.NewMoney("unexpected status")
-	errInvalidAmount    = errors.NewMoney("invalid amount")
+	errUnexpectedStatus = errors.New("unexpected status")
+	errInvalidAmount    = errors.New("invalid amount")
 )
 
 type clientConfig struct {

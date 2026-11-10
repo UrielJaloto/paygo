@@ -10,12 +10,12 @@ type AdminChecker interface {
 }
 
 func NewAdminAuthMiddleware(checker AdminChecker) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		token, found := readBearerToken(c)
+	return func(ginContext *gin.Context) {
+		token, found := readBearerToken(ginContext)
 		if !found || !checker.IsAdmin(token) {
-			PresentError(c, apikeyservice.ErrUnauthenticated)
+			PresentError(ginContext, apikeyservice.ErrUnauthenticated)
 			return
 		}
-		c.Next()
+		ginContext.Next()
 	}
 }

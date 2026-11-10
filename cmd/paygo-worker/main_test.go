@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	bootDeadline  = 10 * time.Second
-	testToken     = "0123456789abcdef0123456789abcdef"
+	bootDeadline        = 10 * time.Second
+	testToken           = "0123456789abcdef0123456789abcdef"
 	unreachableDatabase = "postgres://paygo:paygo@127.0.0.1:1/paygo?sslmode=disable&connect_timeout=2"
 )
 
@@ -39,9 +39,9 @@ func baseEnvironment(address string) map[string]string {
 }
 
 func unreachableEnvironment(address string) map[string]string {
-	env := baseEnvironment(address)
-	env["PAYGO_DATABASE_URL"] = unreachableDatabase
-	return env
+	environment := baseEnvironment(address)
+	environment["PAYGO_DATABASE_URL"] = unreachableDatabase
+	return environment
 }
 
 func freeAddress(t *testing.T) string {
@@ -54,20 +54,20 @@ func freeAddress(t *testing.T) string {
 	return listener.Addr().String()
 }
 
-func buildLookup(env map[string]string) func(string) (string, bool) {
+func buildLookup(environment map[string]string) func(string) (string, bool) {
 	return func(name string) (string, bool) {
-		value, found := env[name]
+		value, found := environment[name]
 		return value, found
 	}
 }
 
-func startWorker(t *testing.T, env map[string]string) runningWorker {
+func startWorker(t *testing.T, environment map[string]string) runningWorker {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	worker := runningWorker{address: env["PAYGO_HTTP_ADDR"], cancel: cancel, done: make(chan int, 1), stderr: &bytes.Buffer{}}
+	worker := runningWorker{address: environment["PAYGO_HTTP_ADDR"], cancel: cancel, done: make(chan int, 1), stderr: &bytes.Buffer{}}
 	go func() {
-		worker.done <- run(ctx, buildLookup(env), &bytes.Buffer{}, worker.stderr)
+		worker.done <- run(ctx, buildLookup(environment), &bytes.Buffer{}, worker.stderr)
 	}()
 	return worker
 }
@@ -112,17 +112,17 @@ func TestRun_StartupFailure_ReturnsOneAndNamesTheCause(t *testing.T) {
 	missingToken := unreachableEnvironment("127.0.0.1:0")
 	delete(missingToken, "PAYGO_FAKE_WEBHOOK_TOKEN")
 	tests := []struct {
-		name string
-		env  map[string]string
-		want string
+		name        string
+		environment map[string]string
+		want        string
 	}{
-		{name: "invalid config", env: missingToken, want: "PAYGO_FAKE_WEBHOOK_TOKEN"},
-		{name: "unreachable database", env: unreachableEnvironment("127.0.0.1:0"), want: "pinging database"},
+		{name: "invalid config", environment: missingToken, want: "PAYGO_FAKE_WEBHOOK_TOKEN"},
+		{name: "unreachable database", environment: unreachableEnvironment("127.0.0.1:0"), want: "pinging database"},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
 			var stderr bytes.Buffer
-			code := run(context.Background(), buildLookup(testCase.env), &bytes.Buffer{}, &stderr)
+			code := run(context.Background(), buildLookup(testCase.environment), &bytes.Buffer{}, &stderr)
 			if code != 1 || !strings.Contains(stderr.String(), testCase.want) {
 				t.Errorf("exit = %d, stderr %q, want %q", code, stderr.String(), testCase.want)
 			}
@@ -150,10 +150,10 @@ func TestNewDeliverInput_InvalidAttempts_ReturnsPolicyError(t *testing.T) {
 func TestRun_TracingFailure_ReturnsOneAndNamesTheCause(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	env := unreachableEnvironment("127.0.0.1:0")
-	env["PAYGO_OTLP_ENDPOINT"] = "127.0.0.1:1"
+	environment := unreachableEnvironment("127.0.0.1:0")
+	environment["PAYGO_OTLP_ENDPOINT"] = "127.0.0.1:1"
 	var stderr bytes.Buffer
-	code := run(ctx, buildLookup(env), &bytes.Buffer{}, &stderr)
+	code := run(ctx, buildLookup(environment), &bytes.Buffer{}, &stderr)
 	if code != 1 || !strings.Contains(stderr.String(), context.Canceled.Error()) {
 		t.Errorf("exit = %d, stderr %q", code, stderr.String())
 	}
@@ -166,15 +166,15 @@ func TestRunPollers_InvalidAttempts_ReturnsPolicyError(t *testing.T) {
 	}
 }
 
-const defaultAdminURL = "postgres://paygo:paygo@localhost:5432/postgres?sslmode=disable"
+const defaultAdminURL = "postgres://paygo:example-postgres-password@localhost:5432/postgres?sslmode=disable"
 
 func postgresEnvironment(address string) map[string]string {
-	env := baseEnvironment(address)
-	env["PAYGO_DATABASE_URL"] = defaultAdminURL
+	environment := baseEnvironment(address)
+	environment["PAYGO_DATABASE_URL"] = defaultAdminURL
 	if databaseURL := os.Getenv("PAYGO_TEST_DATABASE_URL"); databaseURL != "" {
-		env["PAYGO_DATABASE_URL"] = databaseURL
+		environment["PAYGO_DATABASE_URL"] = databaseURL
 	}
-	return env
+	return environment
 }
 
 func TestRun_Postgres_ServesUntilCancelled(t *testing.T) {
@@ -191,11 +191,11 @@ func TestRun_Postgres_ServesUntilCancelled(t *testing.T) {
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			env := postgresEnvironment(freeAddress(t))
+			environment := postgresEnvironment(freeAddress(t))
 			for name, value := range testCase.extra {
-				env[name] = value
+				environment[name] = value
 			}
-			worker := startWorker(t, env)
+			worker := startWorker(t, environment)
 			worker.waitHealthy(t)
 			worker.cancel()
 			if code := worker.exitCode(t); code != 0 {

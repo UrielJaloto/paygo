@@ -65,7 +65,7 @@ func TestNewID_FixedInputs_MatchesLayout(t *testing.T) {
 	timestamp := fmt.Sprintf("%012x", startOf2026().UnixMilli())
 	want := timestamp[:8] + "-" + timestamp[8:] + "-7000-8000-000000000000"
 
-	got := identifier.NewMoney(&fixedClock{now: startOf2026()}, zeroReader{}).NewID()
+	got := identifier.NewUUIDv7Generator((&fixedClock{now: startOf2026()}).Now, zeroReader{}).NewID()
 
 	if got != want {
 		t.Fatalf("id = %q, want %q", got, want)
@@ -76,16 +76,16 @@ func TestNewID_FixedInputs_MatchesLayout(t *testing.T) {
 }
 
 func TestNewID_SameMillisecond_IsStrictlyIncreasing(t *testing.T) {
-	assertIncreasing(t, identifier.NewMoney(&fixedClock{now: startOf2026()}, rand.Reader), 1000)
+	assertIncreasing(t, identifier.NewUUIDv7Generator((&fixedClock{now: startOf2026()}).Now, rand.Reader), 1000)
 }
 
 func TestNewID_CounterExhausted_StaysIncreasing(t *testing.T) {
-	assertIncreasing(t, identifier.NewMoney(&fixedClock{now: startOf2026()}, zeroReader{}), 5000)
+	assertIncreasing(t, identifier.NewUUIDv7Generator((&fixedClock{now: startOf2026()}).Now, zeroReader{}), 5000)
 }
 
 func TestNewID_ClockAdvances_ReseedsCounter(t *testing.T) {
 	clock := &fixedClock{now: startOf2026()}
-	generator := identifier.NewMoney(clock, zeroReader{})
+	generator := identifier.NewUUIDv7Generator(clock.Now, zeroReader{})
 	generator.NewID()
 	second := generator.NewID()
 	clock.set(startOf2026().Add(time.Millisecond))
@@ -102,7 +102,7 @@ func TestNewID_ClockAdvances_ReseedsCounter(t *testing.T) {
 
 func TestNewID_ClockGoesBack_StaysIncreasing(t *testing.T) {
 	clock := &fixedClock{now: startOf2026()}
-	generator := identifier.NewMoney(clock, zeroReader{})
+	generator := identifier.NewUUIDv7Generator(clock.Now, zeroReader{})
 	first := generator.NewID()
 	clock.set(startOf2026().Add(-time.Hour))
 
@@ -114,7 +114,7 @@ func TestNewID_ClockGoesBack_StaysIncreasing(t *testing.T) {
 }
 
 func TestNewID_Concurrent_ReturnsUniqueIDs(t *testing.T) {
-	generator := identifier.NewMoney(&fixedClock{now: startOf2026()}, rand.Reader)
+	generator := identifier.NewUUIDv7Generator((&fixedClock{now: startOf2026()}).Now, rand.Reader)
 	ids := make(chan string, 8000)
 	var running sync.WaitGroup
 	for range 8 {
@@ -142,5 +142,5 @@ func TestNewID_RandomFails_Panics(t *testing.T) {
 			t.Fatalf("recovered = %v, want a generating uuid panic", recovered)
 		}
 	}()
-	identifier.NewMoney(&fixedClock{now: startOf2026()}, failingReader{}).NewID()
+	identifier.NewUUIDv7Generator((&fixedClock{now: startOf2026()}).Now, failingReader{}).NewID()
 }

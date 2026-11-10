@@ -25,8 +25,6 @@ var (
 
 var secretPattern = regexp.MustCompile(`^whsec_[A-Za-z0-9_-]{43}$`)
 
-type EndpointID string
-
 type EndpointURL string
 
 func ParseEndpointURL(text string) (EndpointURL, error) {
@@ -52,7 +50,7 @@ func isAllowedTarget(target *url.URL) bool {
 }
 
 type EndpointSnapshot struct {
-	ID        EndpointID
+	ID        string
 	OwnerID   apikey.OwnerID
 	URL       EndpointURL
 	Secret    string
@@ -61,7 +59,7 @@ type EndpointSnapshot struct {
 }
 
 type Endpoint struct {
-	id        EndpointID
+	id        string
 	ownerID   apikey.OwnerID
 	url       EndpointURL
 	secret    string
@@ -69,7 +67,7 @@ type Endpoint struct {
 	createdAt time.Time
 }
 
-func NewEndpoint(id EndpointID, owner apikey.OwnerID, target EndpointURL, secret string, createdAt time.Time) (Endpoint, error) {
+func NewEndpoint(id string, owner apikey.OwnerID, target EndpointURL, secret string, createdAt time.Time) (Endpoint, error) {
 	if !secretPattern.MatchString(secret) {
 		return Endpoint{}, ErrInvalidSecret
 	}
@@ -94,7 +92,7 @@ func RestoreEndpoint(snapshot EndpointSnapshot) Endpoint {
 	}
 }
 
-func (e Endpoint) ID() EndpointID {
+func (e Endpoint) ID() string {
 	return e.id
 }
 

@@ -12,6 +12,11 @@ import (
 
 var ErrForbiddenDestination = errors.New("forbidden webhook destination")
 
+const (
+	maximumIdleConnections = 100
+	idleConnectionTimeout  = 90 * time.Second
+)
+
 var sharedAddressSpace = netip.MustParsePrefix("100.64.0.0/10")
 
 func NewClient(timeout time.Duration) *http.Client {
@@ -19,8 +24,8 @@ func NewClient(timeout time.Duration) *http.Client {
 	transport := &http.Transport{
 		DialContext:         dialer.DialContext,
 		TLSHandshakeTimeout: timeout,
-		MaxIdleConns:        100,
-		IdleConnTimeout:     90 * time.Second,
+		MaxIdleConns:        maximumIdleConnections,
+		IdleConnTimeout:     idleConnectionTimeout,
 	}
 	return &http.Client{
 		Timeout:   timeout,
@@ -32,9 +37,9 @@ func NewClient(timeout time.Duration) *http.Client {
 }
 
 func validateDestination(_ string, address string, _ syscall.RawConn) error {
-	destination, _ := netip.ParseAddrPort(address)
-	if !isPublic(destination.Addr().Unmap()) {
-		return fmt.Errorf("%w: %s", ErrForbiddenDestination, destination.Addr())
+	destination, err := netip.ParseAddrPort(address)
+	if err != nil || !isPublic(destination.Addr().Unmap()) {
+		return errors.Join(fmt.Errorf("%w: %s", ErrForbiddenDestination, address), err)
 	}
 	return nil
 }

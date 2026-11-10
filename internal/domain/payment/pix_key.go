@@ -7,11 +7,11 @@ import (
 )
 
 const (
-	PixKeyCPF   PixKeyType = "cpf"
-	PixKeyCNPJ  PixKeyType = "cnpj"
-	PixKeyEmail PixKeyType = "email"
-	PixKeyPhone PixKeyType = "phone"
-	PixKeyEVP   PixKeyType = "evp"
+	PixKeyCPF   = "cpf"
+	PixKeyCNPJ  = "cnpj"
+	PixKeyEmail = "email"
+	PixKeyPhone = "phone"
+	PixKeyEVP   = "evp"
 
 	maximumEmailLength = 77
 )
@@ -21,15 +21,13 @@ var (
 	evpPattern   = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 )
 
-type PixKeyType string
-
 type PixKey struct {
-	kind  PixKeyType
+	kind  string
 	value string
 }
 
 func ParsePixKey(kind, value string) (PixKey, error) {
-	keyType := PixKeyType(kind)
+	keyType := kind
 	normalized, valid := normalizePixValue(keyType, value)
 	if !valid {
 		return PixKey{}, fmt.Errorf("%w: %s %q", ErrInvalidPixKey, kind, value)
@@ -37,7 +35,7 @@ func ParsePixKey(kind, value string) (PixKey, error) {
 	return PixKey{kind: keyType, value: normalized}, nil
 }
 
-func normalizePixValue(kind PixKeyType, value string) (string, bool) {
+func normalizePixValue(kind string, value string) (string, bool) {
 	switch kind {
 	case PixKeyCPF:
 		return trimDocument(value, cpfLength)
@@ -63,7 +61,7 @@ func isValidEmail(value string) bool {
 	return found && len(value) <= maximumEmailLength && !strings.Contains(domain, "@") && strings.Contains(domain, ".")
 }
 
-func (k PixKey) Kind() PixKeyType {
+func (k PixKey) Kind() string {
 	return k.kind
 }
 

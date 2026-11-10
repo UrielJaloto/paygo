@@ -15,13 +15,13 @@ type PanicReporter interface {
 }
 
 func NewRecoveryMiddleware(reporter PanicReporter) gin.HandlerFunc {
-	return func(c *gin.Context) {
+	return func(ginContext *gin.Context) {
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				reporter.ReportPanic(c.Request.Context(), recovered, debug.Stack())
-				PresentError(c, errHandlerPanicked)
+				reporter.ReportPanic(ginContext.Request.Context(), recovered, debug.Stack())
+				PresentError(ginContext, errHandlerPanicked)
 			}
 		}()
-		c.Next()
+		ginContext.Next()
 	}
 }

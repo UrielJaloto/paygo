@@ -33,9 +33,7 @@ type deliveryPageResponse struct {
 	NextCursor string             `json:"next_cursor,omitempty"`
 }
 
-type WebhookPresenter struct{}
-
-func (WebhookPresenter) toEndpointResponse(output webhookservice.EndpointOutput) endpointResponse {
+func toEndpointResponse(output webhookservice.EndpointOutput) endpointResponse {
 	return endpointResponse{
 		ID:        output.ID,
 		URL:       output.URL,
@@ -44,19 +42,19 @@ func (WebhookPresenter) toEndpointResponse(output webhookservice.EndpointOutput)
 	}
 }
 
-func (p WebhookPresenter) toRegisteredEndpointResponse(output webhookservice.RegisteredEndpoint) registeredEndpointResponse {
-	return registeredEndpointResponse{endpointResponse: p.toEndpointResponse(output.EndpointOutput), Secret: output.Secret}
+func toRegisteredEndpointResponse(output webhookservice.RegisteredEndpoint) registeredEndpointResponse {
+	return registeredEndpointResponse{endpointResponse: toEndpointResponse(output.EndpointOutput), Secret: output.Secret}
 }
 
-func (p WebhookPresenter) toEndpointListResponse(outputs []webhookservice.EndpointOutput) endpointListResponse {
+func toEndpointListResponse(outputs []webhookservice.EndpointOutput) endpointListResponse {
 	items := make([]endpointResponse, 0, len(outputs))
 	for _, output := range outputs {
-		items = append(items, p.toEndpointResponse(output))
+		items = append(items, toEndpointResponse(output))
 	}
 	return endpointListResponse{Items: items}
 }
 
-func (WebhookPresenter) toDeliveryResponse(output webhookservice.DeliveryOutput) deliveryResponse {
+func toDeliveryResponse(output webhookservice.DeliveryOutput) deliveryResponse {
 	return deliveryResponse{
 		ID:            output.ID,
 		EventID:       output.EventID,
@@ -68,10 +66,10 @@ func (WebhookPresenter) toDeliveryResponse(output webhookservice.DeliveryOutput)
 	}
 }
 
-func (p WebhookPresenter) toDeliveryPageResponse(page webhookservice.DeliveryPage) deliveryPageResponse {
+func toDeliveryPageResponse(page webhookservice.DeliveryPage) deliveryPageResponse {
 	items := make([]deliveryResponse, 0, len(page.Items))
 	for _, item := range page.Items {
-		items = append(items, p.toDeliveryResponse(item))
+		items = append(items, toDeliveryResponse(item))
 	}
 	return deliveryPageResponse{Items: items, NextCursor: page.NextCursor}
 }

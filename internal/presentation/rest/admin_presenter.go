@@ -9,9 +9,7 @@ type issuedKeyResponse struct {
 	CreatedAt string `json:"created_at"`
 }
 
-type AdminPresenter struct{}
-
-func (AdminPresenter) toIssuedKeyResponse(key apikeyservice.IssuedKey) issuedKeyResponse {
+func toIssuedKeyResponse(key apikeyservice.IssuedKey) issuedKeyResponse {
 	return issuedKeyResponse{
 		ID:        key.ID,
 		OwnerID:   key.OwnerID,

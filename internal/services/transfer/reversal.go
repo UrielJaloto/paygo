@@ -11,7 +11,7 @@ import (
 type reversal struct {
 	owner apikey.OwnerID
 	key   transfer.IdempotencyKey
-	id    transfer.ID
+	id    string
 }
 
 func (s *Service) reverseTransfer(ctx context.Context, store Store, target reversal) (TransferOutput, error) {

@@ -34,7 +34,7 @@ func (r *EndpointRepository) Save(ctx context.Context, endpoint webhook.Endpoint
 	return err
 }
 
-func (r *EndpointRepository) FindByID(ctx context.Context, id webhook.EndpointID) (webhook.Endpoint, error) {
+func (r *EndpointRepository) FindByID(ctx context.Context, id string) (webhook.Endpoint, error) {
 	var snapshot webhook.EndpointSnapshot
 	err := r.database.QueryRow(ctx, selectEndpoint, id).Scan(scanEndpointTargets(&snapshot)...)
 	return webhook.RestoreEndpoint(snapshot), mapNotFound(err, webhook.ErrEndpointNotFound)

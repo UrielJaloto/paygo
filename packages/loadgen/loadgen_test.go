@@ -22,7 +22,7 @@ func (l *ledgerStub) Transfer(_ context.Context, move movement) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	if move.key == l.failKey {
-		return errors.NewMoney("rejected")
+		return errors.New("rejected")
 	}
 	l.balances[move.from] -= move.amountMinor
 	l.balances[move.to] += move.amountMinor

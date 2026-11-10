@@ -43,7 +43,7 @@ func TestProvider_EmptyEndpoint_WorksWithoutTraceID(t *testing.T) {
 	}
 	ctx, span := provider.Tracer().Start(context.Background(), "ignored")
 	span.End()
-	if id := provider.TraceID(ctx); id != "" {
+	if id := provider.ReadTraceID(ctx); id != "" {
 		t.Errorf("TraceID = %q, want empty", id)
 	}
 	if err := provider.Shutdown(context.Background()); err != nil {
@@ -57,7 +57,7 @@ func TestProvider_Endpoint_RecordsTraceIDAndShutsDown(t *testing.T) {
 		t.Fatalf("NewProvider: %v", err)
 	}
 	ctx, span := provider.Tracer().Start(context.Background(), "recorded")
-	if id := provider.TraceID(ctx); len(id) != 32 {
+	if id := provider.ReadTraceID(ctx); len(id) != 32 {
 		t.Errorf("TraceID = %q, want 32 hex characters", id)
 	}
 	span.SetStatus(codes.Ok, "")

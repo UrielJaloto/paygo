@@ -6,13 +6,12 @@ import (
 	"time"
 
 	"github.com/UrielJaloto/paygo/internal/domain/apikey"
-	"github.com/UrielJaloto/paygo/internal/domain/event"
 )
 
 const (
-	DeliveryPending   DeliveryStatus = "pending"
-	DeliverySucceeded DeliveryStatus = "succeeded"
-	DeliveryDead      DeliveryStatus = "dead"
+	DeliveryPending   = "pending"
+	DeliverySucceeded = "succeeded"
+	DeliveryDead      = "dead"
 
 	jitterLimit = 0.2
 )
@@ -24,16 +23,12 @@ var (
 	ErrInvalidJitter         = errors.New("invalid jitter")
 )
 
-type DeliveryID string
-
-type DeliveryStatus string
-
 type DeliverySnapshot struct {
-	ID            DeliveryID
-	EventID       event.ID
-	EndpointID    EndpointID
+	ID            string
+	EventID       string
+	EndpointID    string
 	OwnerID       apikey.OwnerID
-	Status        DeliveryStatus
+	Status        string
 	Attempts      int
 	NextAttemptAt time.Time
 	LastError     string
@@ -48,18 +43,18 @@ type Failure struct {
 }
 
 type Delivery struct {
-	id            DeliveryID
-	eventID       event.ID
-	endpointID    EndpointID
+	id            string
+	eventID       string
+	endpointID    string
 	ownerID       apikey.OwnerID
-	status        DeliveryStatus
+	status        string
 	attempts      int
 	nextAttemptAt time.Time
 	lastError     string
 	updatedAt     time.Time
 }
 
-func NewDelivery(id DeliveryID, eventID event.ID, endpointID EndpointID, owner apikey.OwnerID, at time.Time) Delivery {
+func NewDelivery(id string, eventID string, endpointID string, owner apikey.OwnerID, at time.Time) Delivery {
 	return RestoreDelivery(DeliverySnapshot{
 		ID:            id,
 		EventID:       eventID,
@@ -85,15 +80,15 @@ func RestoreDelivery(snapshot DeliverySnapshot) Delivery {
 	}
 }
 
-func (d Delivery) ID() DeliveryID {
+func (d Delivery) ID() string {
 	return d.id
 }
 
-func (d Delivery) EventID() event.ID {
+func (d Delivery) EventID() string {
 	return d.eventID
 }
 
-func (d Delivery) EndpointID() EndpointID {
+func (d Delivery) EndpointID() string {
 	return d.endpointID
 }
 
@@ -101,7 +96,7 @@ func (d Delivery) OwnerID() apikey.OwnerID {
 	return d.ownerID
 }
 
-func (d Delivery) Status() DeliveryStatus {
+func (d Delivery) Status() string {
 	return d.status
 }
 

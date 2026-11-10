@@ -83,7 +83,7 @@ func newSpyObservability() spyObservability {
 }
 
 func (s spyObservability) observability() rest.Observability {
-	return rest.Observability{Logger: s.logger, Observer: s.observer, Spans: s.spans, Clock: s.clock}
+	return rest.Observability{Logger: s.logger, Observer: s.observer, Spans: s.spans, Now: s.clock.Now}
 }
 
 type stubAuthenticator struct {
@@ -121,15 +121,15 @@ type guarded struct {
 }
 
 func newGuarded(authenticator rest.Authenticator, limiter rest.Limiter) *guarded {
-	g := &guarded{router: gin.New()}
+	guard := &guarded{router: gin.New()}
 	access := rest.Access{Authenticator: authenticator, Limiter: limiter, Admin: stubAdmin{}}
-	handler := func(c *gin.Context) {
-		g.called, g.owner = true, rest.OwnerFrom(c)
-		c.Status(http.StatusNoContent)
+	handler := func(ginContext *gin.Context) {
+		guard.called, guard.owner = true, rest.OwnerFrom(ginContext)
+		ginContext.Status(http.StatusNoContent)
 	}
-	rest.OwnerGroup(g.router, access).GET("/thing", handler)
-	rest.AdminGroup(g.router, access).GET("/thing", handler)
-	return g
+	rest.OwnerGroup(guard.router, access).GET("/thing", handler)
+	rest.AdminGroup(guard.router, access).GET("/thing", handler)
+	return guard
 }
 
 func (g *guarded) get(path, authorization string) *httptest.ResponseRecorder {
@@ -142,9 +142,9 @@ func (g *guarded) get(path, authorization string) *httptest.ResponseRecorder {
 
 func routeReturning404(spies spyObservability) *gin.Engine {
 	router := routerObservedBy(spies.observability(), &spyPanics{}, true)
-	router.GET("/probes/:id", func(c *gin.Context) {
-		spies.spans.spanInCtx = c.Request.Context().Value(spanKey{}) == true
-		c.Status(http.StatusNotFound)
+	router.GET("/probes/:id", func(ginContext *gin.Context) {
+		spies.spans.spanInCtx = ginContext.Request.Context().Value(spanKey{}) == true
+		ginContext.Status(http.StatusNotFound)
 	})
 	return router
 }
@@ -169,7 +169,7 @@ func TestAccessLog_MatchedRoute_LogsTemplateStatusAndDuration(t *testing.T) {
 func TestAccessLog_PresentedError_LogsCause(t *testing.T) {
 	spies := newSpyObservability()
 	router := routerObservedBy(spies.observability(), &spyPanics{}, true)
-	router.GET("/fail", func(c *gin.Context) { rest.PresentError(c, errBoom) })
+	router.GET("/fail", func(ginContext *gin.Context) { rest.PresentError(ginContext, errBoom) })
 	get(router, "/fail")
 	if !errors.Is(spies.logger.err, errBoom) || spies.logger.status != http.StatusInternalServerError {
 		t.Fatalf("logged %d with %v", spies.logger.status, spies.logger.err)
@@ -223,11 +223,11 @@ func TestAuth_InvalidCredentials_Returns401(t *testing.T) {
 	var bodies []string
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			g := newGuarded(stubAuthenticator{}, &spyLimiter{allow: true})
-			recorder := g.get("/v1/thing", testCase.authorization)
+			guard := newGuarded(stubAuthenticator{}, &spyLimiter{allow: true})
+			recorder := guard.get("/v1/thing", testCase.authorization)
 			body := decodeProblem(t, recorder)
-			if recorder.Code != http.StatusUnauthorized || body.Type != "/problems/unauthenticated" || g.called {
-				t.Fatalf("code = %d, body = %+v, called = %v", recorder.Code, body, g.called)
+			if recorder.Code != http.StatusUnauthorized || body.Type != "/problems/unauthenticated" || guard.called {
+				t.Fatalf("code = %d, body = %+v, called = %v", recorder.Code, body, guard.called)
 			}
 			bodies = append(bodies, recorder.Body.String())
 		})
@@ -240,28 +240,28 @@ func TestAuth_InvalidCredentials_Returns401(t *testing.T) {
 }
 
 func TestAuth_AuthenticatorFails_Returns500(t *testing.T) {
-	g := newGuarded(stubAuthenticator{err: errBoom}, &spyLimiter{allow: true})
-	recorder := g.get("/v1/thing", "Bearer "+ownerToken)
-	if body := decodeProblem(t, recorder); recorder.Code != http.StatusInternalServerError || body.Detail != "internal error" || g.called {
-		t.Fatalf("code = %d, body = %+v, called = %v", recorder.Code, body, g.called)
+	guard := newGuarded(stubAuthenticator{err: errBoom}, &spyLimiter{allow: true})
+	recorder := guard.get("/v1/thing", "Bearer "+ownerToken)
+	if body := decodeProblem(t, recorder); recorder.Code != http.StatusInternalServerError || body.Detail != "internal error" || guard.called {
+		t.Fatalf("code = %d, body = %+v, called = %v", recorder.Code, body, guard.called)
 	}
 }
 
 func TestAuth_ValidToken_ExposesOwnerAndRateLimitsByIt(t *testing.T) {
 	limiter := &spyLimiter{allow: true}
-	g := newGuarded(stubAuthenticator{}, limiter)
-	recorder := g.get("/v1/thing", "Bearer "+ownerToken)
-	if recorder.Code != http.StatusNoContent || g.owner != ownerID || limiter.key != ownerID {
-		t.Fatalf("code = %d, owner = %q, limiter key = %q", recorder.Code, g.owner, limiter.key)
+	guard := newGuarded(stubAuthenticator{}, limiter)
+	recorder := guard.get("/v1/thing", "Bearer "+ownerToken)
+	if recorder.Code != http.StatusNoContent || guard.owner != ownerID || limiter.key != ownerID {
+		t.Fatalf("code = %d, owner = %q, limiter key = %q", recorder.Code, guard.owner, limiter.key)
 	}
 }
 
 func TestRateLimit_Denied_Returns429WithoutCallingHandler(t *testing.T) {
-	g := newGuarded(stubAuthenticator{}, &spyLimiter{allow: false})
-	recorder := g.get("/v1/thing", "Bearer "+ownerToken)
+	guard := newGuarded(stubAuthenticator{}, &spyLimiter{allow: false})
+	recorder := guard.get("/v1/thing", "Bearer "+ownerToken)
 	body := decodeProblem(t, recorder)
-	if recorder.Code != http.StatusTooManyRequests || body.Type != "/problems/rate-limited" || g.called {
-		t.Fatalf("code = %d, body = %+v, called = %v", recorder.Code, body, g.called)
+	if recorder.Code != http.StatusTooManyRequests || body.Type != "/problems/rate-limited" || guard.called {
+		t.Fatalf("code = %d, body = %+v, called = %v", recorder.Code, body, guard.called)
 	}
 	if got := recorder.Header().Get("Retry-After"); got != "1" {
 		t.Fatalf("Retry-After = %q", got)
@@ -270,8 +270,8 @@ func TestRateLimit_Denied_Returns429WithoutCallingHandler(t *testing.T) {
 
 func TestRateLimit_Unauthenticated_NeverConsultsLimiter(t *testing.T) {
 	limiter := &spyLimiter{allow: false}
-	g := newGuarded(stubAuthenticator{}, limiter)
-	if recorder := g.get("/v1/thing", ""); recorder.Code != http.StatusUnauthorized || limiter.key != "" {
+	guard := newGuarded(stubAuthenticator{}, limiter)
+	if recorder := guard.get("/v1/thing", ""); recorder.Code != http.StatusUnauthorized || limiter.key != "" {
 		t.Fatalf("code = %d, limiter key = %q", recorder.Code, limiter.key)
 	}
 }
@@ -289,10 +289,10 @@ func TestAdminAuth_Token_AllowsOnlyAdmin(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			g := newGuarded(stubAuthenticator{}, &spyLimiter{allow: true})
-			recorder := g.get("/admin/v1/thing", testCase.authorization)
-			if recorder.Code != testCase.code || g.called != testCase.called {
-				t.Fatalf("code = %d, called = %v", recorder.Code, g.called)
+			guard := newGuarded(stubAuthenticator{}, &spyLimiter{allow: true})
+			recorder := guard.get("/admin/v1/thing", testCase.authorization)
+			if recorder.Code != testCase.code || guard.called != testCase.called {
+				t.Fatalf("code = %d, called = %v", recorder.Code, guard.called)
 			}
 		})
 	}

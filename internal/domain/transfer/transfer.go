@@ -12,18 +12,18 @@ import (
 )
 
 const (
-	KindTransfer   Kind = "transfer"
-	KindDeposit    Kind = "deposit"
-	KindWithdrawal Kind = "withdrawal"
-	KindReversal   Kind = "reversal"
+	KindTransfer   = "transfer"
+	KindDeposit    = "deposit"
+	KindWithdrawal = "withdrawal"
+	KindReversal   = "reversal"
 
-	KindCharge           Kind = "charge"
-	KindPayout           Kind = "payout"
-	KindPayoutCompletion Kind = "payout_completion"
-	KindPayoutFailure    Kind = "payout_failure"
+	KindCharge           = "charge"
+	KindPayout           = "payout"
+	KindPayoutCompletion = "payout_completion"
+	KindPayoutFailure    = "payout_failure"
 
-	StatusCompleted Status = "completed"
-	StatusReversed  Status = "reversed"
+	StatusCompleted = "completed"
+	StatusReversed  = "reversed"
 )
 
 var (
@@ -36,43 +36,37 @@ var (
 	ErrInvalidIdempotencyKey   = errors.New("invalid idempotency key")
 )
 
-type ID string
-
-type Kind string
-
-type Status string
-
 type Request struct {
 	OwnerID    apikey.OwnerID
 	Key        IdempotencyKey
-	Kind       Kind
+	Kind       string
 	From       account.ID
 	To         account.ID
 	Amount     money.Money
-	ReversalOf ID
+	ReversalOf string
 }
 
 type Snapshot struct {
-	ID        ID
+	ID        string
 	Request   Request
-	Status    Status
+	Status    string
 	CreatedAt time.Time
 }
 
 type Transfer struct {
-	id             ID
+	id             string
 	ownerID        apikey.OwnerID
 	idempotencyKey IdempotencyKey
-	kind           Kind
+	kind           string
 	from           account.ID
 	to             account.ID
 	amount         money.Money
-	status         Status
-	reversalOf     ID
+	status         string
+	reversalOf     string
 	createdAt      time.Time
 }
 
-func NewMoney(id ID, request Request, createdAt time.Time) (Transfer, error) {
+func NewTransfer(id string, request Request, createdAt time.Time) (Transfer, error) {
 	if request.From == request.To {
 		return Transfer{}, fmt.Errorf("%w: %s", ErrSameAccount, request.From)
 	}
@@ -87,24 +81,24 @@ type Movement struct {
 	Amount  money.Money
 }
 
-func (m Movement) toRequest(kind Kind) Request {
+func (m Movement) toRequest(kind string) Request {
 	return Request{OwnerID: m.OwnerID, Key: m.Key, Kind: kind, From: m.From, To: m.To, Amount: m.Amount}
 }
 
-func NewCharge(id ID, movement Movement, createdAt time.Time) (Transfer, error) {
-	return NewMoney(id, movement.toRequest(KindCharge), createdAt)
+func NewCharge(id string, movement Movement, createdAt time.Time) (Transfer, error) {
+	return NewTransfer(id, movement.toRequest(KindCharge), createdAt)
 }
 
-func NewPayout(id ID, movement Movement, createdAt time.Time) (Transfer, error) {
-	return NewMoney(id, movement.toRequest(KindPayout), createdAt)
+func NewPayout(id string, movement Movement, createdAt time.Time) (Transfer, error) {
+	return NewTransfer(id, movement.toRequest(KindPayout), createdAt)
 }
 
-func NewPayoutCompletion(id ID, movement Movement, createdAt time.Time) (Transfer, error) {
-	return NewMoney(id, movement.toRequest(KindPayoutCompletion), createdAt)
+func NewPayoutCompletion(id string, movement Movement, createdAt time.Time) (Transfer, error) {
+	return NewTransfer(id, movement.toRequest(KindPayoutCompletion), createdAt)
 }
 
-func NewPayoutFailure(id ID, movement Movement, createdAt time.Time) (Transfer, error) {
-	return NewMoney(id, movement.toRequest(KindPayoutFailure), createdAt)
+func NewPayoutFailure(id string, movement Movement, createdAt time.Time) (Transfer, error) {
+	return NewTransfer(id, movement.toRequest(KindPayoutFailure), createdAt)
 }
 
 func Restore(snapshot Snapshot) Transfer {
@@ -122,7 +116,7 @@ func Restore(snapshot Snapshot) Transfer {
 	}
 }
 
-func (t Transfer) ID() ID {
+func (t Transfer) ID() string {
 	return t.id
 }
 
@@ -134,7 +128,7 @@ func (t Transfer) IdempotencyKey() IdempotencyKey {
 	return t.idempotencyKey
 }
 
-func (t Transfer) Kind() Kind {
+func (t Transfer) Kind() string {
 	return t.kind
 }
 
@@ -150,11 +144,11 @@ func (t Transfer) Amount() money.Money {
 	return t.amount
 }
 
-func (t Transfer) Status() Status {
+func (t Transfer) Status() string {
 	return t.status
 }
 
-func (t Transfer) ReversalOf() ID {
+func (t Transfer) ReversalOf() string {
 	return t.reversalOf
 }
 

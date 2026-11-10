@@ -98,7 +98,7 @@ func validateFunds(ctx context.Context, store Store, request transfer.Request, f
 	if from.AllowsNegativeBalance() {
 		return nil
 	}
-	balance, err := store.Ledger.CalculateBalance(ctx, from.ID())
+	balance, err := store.Ledger.FindBalance(ctx, from.ID())
 	if err != nil {
 		return fmt.Errorf("reading balance: %w", err)
 	}
@@ -113,7 +113,7 @@ func validateFunds(ctx context.Context, store Store, request transfer.Request, f
 }
 
 func (s *Service) recordTransfer(ctx context.Context, store Store, request transfer.Request, owners []apikey.OwnerID) (TransferOutput, error) {
-	created, err := transfer.NewMoney(transfer.ID(s.ids.NewID()), request, s.clock.Now())
+	created, err := transfer.NewTransfer(s.ids.NewID(), request, s.now())
 	if err != nil {
 		return TransferOutput{}, err
 	}
@@ -127,23 +127,23 @@ func (s *Service) recordTransfer(ctx context.Context, store Store, request trans
 	if err := store.Transfers.Save(ctx, created, request.CalculateFingerprint()); err != nil {
 		return TransferOutput{}, fmt.Errorf("saving transfer: %w", err)
 	}
-	metadata := event.Metadata{ID: event.ID(s.ids.NewID()), At: created.CreatedAt()}
+	metadata := event.Metadata{ID: s.ids.NewID(), At: created.CreatedAt()}
 	if err := store.Outbox.Add(ctx, event.NewTransferEvent(metadata, created, owners)); err != nil {
 		return TransferOutput{}, fmt.Errorf("adding event: %w", err)
 	}
 	return toOutput(created), nil
 }
 
-func toOutput(t transfer.Transfer) TransferOutput {
+func toOutput(transfer transfer.Transfer) TransferOutput {
 	return TransferOutput{
-		ID:            string(t.ID()),
-		Kind:          string(t.Kind()),
-		Status:        string(t.Status()),
-		FromAccountID: string(t.From()),
-		ToAccountID:   string(t.To()),
-		AmountMinor:   t.Amount().Minor(),
-		Currency:      string(t.Amount().Currency()),
-		ReversalOf:    string(t.ReversalOf()),
-		CreatedAt:     t.CreatedAt(),
+		ID:            string(transfer.ID()),
+		Kind:          string(transfer.Kind()),
+		Status:        string(transfer.Status()),
+		FromAccountID: string(transfer.From()),
+		ToAccountID:   string(transfer.To()),
+		AmountMinor:   transfer.Amount().Minor(),
+		Currency:      string(transfer.Amount().Currency()),
+		ReversalOf:    string(transfer.ReversalOf()),
+		CreatedAt:     transfer.CreatedAt(),
 	}
 }

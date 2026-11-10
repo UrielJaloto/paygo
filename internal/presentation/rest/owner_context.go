@@ -4,10 +4,10 @@ import "github.com/gin-gonic/gin"
 
 const ownerContextKey = "paygo.owner"
 
-func setOwner(c *gin.Context, ownerID string) {
-	c.Set(ownerContextKey, ownerID)
+func setOwner(ginContext *gin.Context, ownerID string) {
+	ginContext.Set(ownerContextKey, ownerID)
 }
 
-func readOwner(c *gin.Context) string {
-	return c.GetString(ownerContextKey)
+func readOwner(ginContext *gin.Context) string {
+	return ginContext.GetString(ownerContextKey)
 }

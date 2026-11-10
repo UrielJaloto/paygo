@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	migrationsDirectory         = "migrations"
+	migrationsDirectory   = "migrations"
 	createMigrationsTable = `
 		SELECT pg_advisory_xact_lock(727274);
 		CREATE TABLE IF NOT EXISTS schema_migrations (

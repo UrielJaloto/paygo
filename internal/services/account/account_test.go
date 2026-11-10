@@ -30,7 +30,7 @@ var (
 	own     = service.AccountQuery{OwnerID: ownerID, AccountID: accountID}
 )
 
-func stored(id string, status account.Status) account.Account {
+func stored(id string, status string) account.Account {
 	return account.Restore(account.Snapshot{
 		ID:        account.ID(id),
 		OwnerID:   ownerID,
@@ -43,10 +43,10 @@ func stored(id string, status account.Status) account.Account {
 }
 
 func newService(repository *fakeRepository, reader *fakeLedger) *service.Service {
-	return service.NewMoney(repository, reader, stubClock{now: now}, stubIDs{id: accountID})
+	return service.NewService(repository, reader, stubClock{now: now}.Now, stubIDs{id: accountID})
 }
 
-func entry(t *testing.T, id string, direction ledger.Direction) ledger.Entry {
+func entry(t *testing.T, id string, direction string) ledger.Entry {
 	t.Helper()
 	created, err := ledger.NewEntry(id, accountID, direction, money.NewMoney(100, money.BRL), now)
 	if err != nil {
@@ -219,9 +219,9 @@ func TestList_RepositoryFails_WrapsError(t *testing.T) {
 
 func TestFindBalance_OwnAccount_ReturnsMaterializedBalance(t *testing.T) {
 	reader := &fakeLedger{balance: money.NewMoney(300, money.BRL)}
-	got, err := newService(newFakeRepository(stored(accountID, account.StatusActive)), reader).CalculateBalance(context.Background(), own)
+	got, err := newService(newFakeRepository(stored(accountID, account.StatusActive)), reader).FindBalance(context.Background(), own)
 	if err != nil {
-		t.Fatalf("Balance: %v", err)
+		t.Fatalf("FindBalance: %v", err)
 	}
 	want := service.BalanceOutput{AccountID: accountID, AmountMinor: 300, Currency: "BRL"}
 	if got != want {
@@ -235,7 +235,7 @@ func TestFindBalance_OwnAccount_ReturnsMaterializedBalance(t *testing.T) {
 func TestFindBalance_OtherOwner_DoesNotReadLedger(t *testing.T) {
 	reader := &fakeLedger{}
 	query := service.AccountQuery{OwnerID: otherOwnerID, AccountID: accountID}
-	_, err := newService(newFakeRepository(stored(accountID, account.StatusActive)), reader).CalculateBalance(context.Background(), query)
+	_, err := newService(newFakeRepository(stored(accountID, account.StatusActive)), reader).FindBalance(context.Background(), query)
 	if !errors.Is(err, account.ErrAccountNotFound) {
 		t.Fatalf("error = %v", err)
 	}
@@ -246,7 +246,7 @@ func TestFindBalance_OtherOwner_DoesNotReadLedger(t *testing.T) {
 
 func TestFindBalance_ReaderFails_WrapsError(t *testing.T) {
 	reader := &fakeLedger{balanceErr: errBoom}
-	_, err := newService(newFakeRepository(stored(accountID, account.StatusActive)), reader).CalculateBalance(context.Background(), own)
+	_, err := newService(newFakeRepository(stored(accountID, account.StatusActive)), reader).FindBalance(context.Background(), own)
 	if !errors.Is(err, errBoom) || !strings.HasPrefix(err.Error(), "reading balance: ") {
 		t.Fatalf("error = %v", err)
 	}
@@ -257,7 +257,7 @@ func TestListStatement_KeepsRepositoryOrder(t *testing.T) {
 	input := service.PageInput{OwnerID: ownerID, AccountID: accountID}
 	got, err := newService(newFakeRepository(stored(accountID, account.StatusActive)), reader).ListStatement(context.Background(), input)
 	if err != nil {
-		t.Fatalf("Statement: %v", err)
+		t.Fatalf("ListStatement: %v", err)
 	}
 	want := service.StatementPage{Items: []service.StatementLine{
 		{EntryID: secondID, TransferID: "t1", Direction: "credit", AmountMinor: 100, Currency: "BRL", CreatedAt: now},
@@ -273,7 +273,7 @@ func TestListStatement_MoreThanLimit_ReturnsNextCursor(t *testing.T) {
 	input := service.PageInput{OwnerID: ownerID, AccountID: accountID, Limit: "1"}
 	got, err := newService(newFakeRepository(stored(accountID, account.StatusActive)), reader).ListStatement(context.Background(), input)
 	if err != nil {
-		t.Fatalf("Statement: %v", err)
+		t.Fatalf("ListStatement: %v", err)
 	}
 	if len(got.Items) != 1 || got.NextCursor != page.NewCursor(thirdID).Encode() || reader.lastLimit != 2 {
 		t.Fatalf("got %+v, limit asked %d", got, reader.lastLimit)

@@ -25,7 +25,7 @@ func TestAccountContract_Postgres_Passes(t *testing.T) {
 	runAccountContract(t, newPostgresStores)
 }
 
-func TestPosting_BuildJournalContract_Postgres_Passes(t *testing.T) {
+func TestTransferContract_Postgres_Passes(t *testing.T) {
 	runTransferContract(t, newPostgresStores)
 }
 

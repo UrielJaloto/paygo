@@ -7,13 +7,9 @@ import (
 )
 
 const (
-	idleLifetime       = 10 * time.Minute
+	idleLifetime  = 10 * time.Minute
 	sweepInterval = time.Minute
 )
-
-type Clock interface {
-	Now() time.Time
-}
 
 type bucket struct {
 	tokens  float64
@@ -21,7 +17,7 @@ type bucket struct {
 }
 
 type TokenBucketLimiter struct {
-	clock     Clock
+	now       func() time.Time
 	rate      float64
 	burst     float64
 	mutex     sync.Mutex
@@ -29,20 +25,20 @@ type TokenBucketLimiter struct {
 	lastSweep time.Time
 }
 
-func NewMoney(clock Clock, ratePerSecond, burst int) *TokenBucketLimiter {
+func NewTokenBucketLimiter(now func() time.Time, ratePerSecond, burst int) *TokenBucketLimiter {
 	return &TokenBucketLimiter{
-		clock:     clock,
+		now:       now,
 		rate:      float64(ratePerSecond),
 		burst:     float64(burst),
 		buckets:   make(map[string]*bucket),
-		lastSweep: clock.Now(),
+		lastSweep: now(),
 	}
 }
 
 func (l *TokenBucketLimiter) Allow(key string) bool {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	now := l.clock.Now()
+	now := l.now()
 	l.sweepIdleBuckets(now)
 	current := l.refillBucket(key, now)
 	if current.tokens < 1 {

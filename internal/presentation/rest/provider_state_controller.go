@@ -22,17 +22,17 @@ func NewProviderStateController(parser WebhookParser) *ProviderStateController {
 	return &ProviderStateController{parser: parser}
 }
 
-func (p *ProviderStateController) Record(c *gin.Context) {
-	body, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maximumProviderWebhookBytes))
+func (p *ProviderStateController) Record(ginContext *gin.Context) {
+	body, err := io.ReadAll(http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maximumProviderWebhookBytes))
 	if err != nil {
-		PresentError(c, classifyDecodeError(err))
+		PresentError(ginContext, classifyDecodeError(err))
 		return
 	}
-	if _, err := p.parser.ParseWebhook(c.Request.Context(), c.Request.Header, body); err != nil {
-		PresentError(c, err)
+	if _, err := p.parser.ParseWebhook(ginContext.Request.Context(), ginContext.Request.Header, body); err != nil {
+		PresentError(ginContext, err)
 		return
 	}
-	c.JSON(http.StatusOK, statusResponse{Status: "ok"})
+	ginContext.JSON(http.StatusOK, statusResponse{Status: "ok"})
 }
 
 func registerProviderStateRoutes(engine *gin.Engine, controller *ProviderStateController) {

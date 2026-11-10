@@ -22,7 +22,7 @@ type Registry struct {
 }
 
 func NewRegistry() *Registry {
-	r := &Registry{
+	registry := &Registry{
 		registry:     prometheus.NewRegistry(),
 		httpRequests: newCounter("paygo_http_requests_total", "HTTP requests served, by method, route and status.", "method", "route", "status"),
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -39,12 +39,12 @@ func NewRegistry() *Registry {
 		payments:         newCounter("paygo_payments_total", "Pix charges and payouts created, by kind and status.", "kind", "status"),
 		providerRequests: newCounter("paygo_provider_requests_total", "Payment provider calls, by provider, operation and result.", "provider", "operation", "result"),
 	}
-	r.registry.MustRegister(
+	registry.registry.MustRegister(
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		r.httpRequests, r.httpDuration, r.transfers, r.deliveries, r.published, r.payments, r.providerRequests,
+		registry.httpRequests, registry.httpDuration, registry.transfers, registry.deliveries, registry.published, registry.payments, registry.providerRequests,
 	)
-	return r
+	return registry
 }
 
 func newCounter(name, help string, labels ...string) *prometheus.CounterVec {

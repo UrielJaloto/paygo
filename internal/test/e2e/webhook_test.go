@@ -41,14 +41,14 @@ func newReceiver(t *testing.T) *receiver {
 	return target
 }
 
-func (r *receiver) handle(w http.ResponseWriter, request *http.Request) {
+func (r *receiver) handle(writer http.ResponseWriter, request *http.Request) {
 	body, _ := io.ReadAll(request.Body)
 	status := http.StatusOK
 	select {
 	case status = <-r.statuses:
 	default:
 	}
-	w.WriteHeader(status)
+	writer.WriteHeader(status)
 	r.receipts <- receipt{header: request.Header.Clone(), body: body, status: status}
 }
 

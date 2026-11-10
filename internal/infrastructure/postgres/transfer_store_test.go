@@ -50,7 +50,7 @@ func newPair(t *testing.T, stores Stores) pair {
 
 func (p pair) transfer(t *testing.T, sequence int, owner apikey.OwnerID) transfer.Transfer {
 	t.Helper()
-	created, err := transfer.NewMoney(transfer.ID(testID(sequence)), transfer.Request{
+	created, err := transfer.NewTransfer(testID(sequence), transfer.Request{
 		OwnerID: owner,
 		Key:     transfer.IdempotencyKey(testID(sequence)),
 		Kind:    transfer.KindTransfer,
@@ -71,7 +71,7 @@ func (p pair) journal(t *testing.T, base int) ledger.JournalTransaction {
 
 func balanceOf(t *testing.T, stores Stores, id account.ID) int64 {
 	t.Helper()
-	balance, err := stores.Ledger.CalculateBalance(context.Background(), id)
+	balance, err := stores.Ledger.FindBalance(context.Background(), id)
 	noError(t, err)
 	equal(t, balance.Currency(), money.BRL)
 	return balance.Minor()
@@ -105,7 +105,7 @@ func ledgerSameAccount(t *testing.T, stores Stores) {
 }
 
 func ledgerMissing(t *testing.T, stores Stores) {
-	_, err := stores.Ledger.CalculateBalance(context.Background(), account.ID(testID(99)))
+	_, err := stores.Ledger.FindBalance(context.Background(), account.ID(testID(99)))
 	errorIs(t, err, account.ErrAccountNotFound)
 }
 
@@ -139,11 +139,11 @@ func transferRoundTrip(t *testing.T, stores Stores) {
 
 func transferMissing(t *testing.T, stores Stores) {
 	ctx := context.Background()
-	_, err := stores.Transfers.FindByID(ctx, transfer.ID(testID(99)))
+	_, err := stores.Transfers.FindByID(ctx, testID(99))
 	errorIs(t, err, transfer.ErrTransferNotFound)
 	_, _, err = stores.Transfers.FindByIdempotencyKey(ctx, testOwner, "missing")
 	errorIs(t, err, transfer.ErrTransferNotFound)
-	_, err = stores.Transfers.FindByIDForUpdate(ctx, transfer.ID(testID(99)))
+	_, err = stores.Transfers.FindByIDForUpdate(ctx, testID(99))
 	errorIs(t, err, transfer.ErrTransferNotFound)
 }
 
@@ -152,13 +152,13 @@ func transferDuplicateKey(t *testing.T, stores Stores) {
 	accounts := newPair(t, stores)
 	noError(t, stores.Transfers.Save(ctx, accounts.transfer(t, 100, testOwner), testFingerprint))
 	duplicate := accounts.transfer(t, 100, testOwner)
-	repeated, err := transfer.NewMoney(transfer.ID(testID(101)), transfer.Request{
+	repeated, err := transfer.NewTransfer(testID(101), transfer.Request{
 		OwnerID: testOwner, Key: duplicate.IdempotencyKey(), Kind: transfer.KindTransfer,
 		From: accounts.from, To: accounts.to, Amount: duplicate.Amount(),
 	}, testTime)
 	noError(t, err)
 	errorIs(t, stores.Transfers.Save(ctx, repeated, testFingerprint), transfer.ErrIdempotencyConflict)
-	foreign, err := transfer.NewMoney(transfer.ID(testID(102)), transfer.Request{
+	foreign, err := transfer.NewTransfer(testID(102), transfer.Request{
 		OwnerID: otherOwner, Key: duplicate.IdempotencyKey(), Kind: transfer.KindTransfer,
 		From: accounts.from, To: accounts.to, Amount: duplicate.Amount(),
 	}, testTime)
@@ -202,7 +202,7 @@ func transferRollback(t *testing.T, stores Stores) {
 	err := stores.Unit.Run(ctx, func(ctx context.Context, store transferservice.Store) error {
 		noError(t, store.Ledger.Append(ctx, journal))
 		noError(t, store.Transfers.Save(ctx, created, testFingerprint))
-		pending, err := store.Ledger.CalculateBalance(ctx, accounts.to)
+		pending, err := store.Ledger.FindBalance(ctx, accounts.to)
 		noError(t, err)
 		equal(t, pending.Minor(), 100)
 		return errWorkFailed
@@ -220,7 +220,7 @@ func transferOutboxClaim(t *testing.T, stores Stores) {
 	ctx := context.Background()
 	saved := newPair(t, stores).transfer(t, 10, testOwner)
 	noError(t, stores.Transfers.Save(ctx, saved, testFingerprint))
-	noError(t, stores.Outbox.Add(ctx, event.NewTransferEvent(event.Metadata{ID: event.ID(testID(20)), At: testTime}, saved, []apikey.OwnerID{testOwner})))
+	noError(t, stores.Outbox.Add(ctx, event.NewTransferEvent(event.Metadata{ID: testID(20), At: testTime}, saved, []apikey.OwnerID{testOwner})))
 	claimed, err := stores.Outbox.ClaimUnpublished(ctx, 1)
 	noError(t, err)
 	equal(t, len(claimed), 1)
@@ -238,7 +238,7 @@ func fund(t *testing.T, service *transferservice.Service, id account.ID) {
 
 func transferService(t *testing.T, stores Stores) {
 	accounts := newPair(t, stores)
-	service := transferservice.NewMoney(stores.Unit, stores.Transfers, fixedClock{}, &sequentialIDs{})
+	service := transferservice.NewService(stores.Unit, stores.Transfers, fixedClock{}.Now, &sequentialIDs{})
 	fund(t, service, accounts.from)
 	input := transferservice.TransferInput{
 		OwnerID: string(testOwner), IdempotencyKey: "pay", FromAccountID: string(accounts.from),
@@ -265,7 +265,7 @@ func transferService(t *testing.T, stores Stores) {
 func transferReversal(t *testing.T, stores Stores) {
 	ctx := context.Background()
 	accounts := newPair(t, stores)
-	service := transferservice.NewMoney(stores.Unit, stores.Transfers, fixedClock{}, &sequentialIDs{})
+	service := transferservice.NewService(stores.Unit, stores.Transfers, fixedClock{}.Now, &sequentialIDs{})
 	fund(t, service, accounts.from)
 	moved, err := service.Transfer(ctx, transferservice.TransferInput{
 		OwnerID: string(testOwner), IdempotencyKey: "pay", FromAccountID: string(accounts.from),

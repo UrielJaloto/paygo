@@ -7,8 +7,8 @@ import (
 )
 
 type Mismatch struct {
-	AccountID     string
-	StoredMinor   int64
+	AccountID       string
+	StoredMinor     int64
 	CalculatedMinor int64
 }
 
@@ -21,7 +21,7 @@ type Service struct {
 	reader Reader
 }
 
-func NewMoney(reader Reader) *Service {
+func NewService(reader Reader) *Service {
 	return &Service{reader: reader}
 }
 

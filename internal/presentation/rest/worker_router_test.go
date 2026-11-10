@@ -24,7 +24,7 @@ func (s *stubParser) ParseWebhook(_ context.Context, _ http.Header, body []byte)
 }
 
 func newWorkerRouter(parser rest.WebhookParser) http.Handler {
-	metrics := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	metrics := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusOK) })
 	return rest.NewWorkerRouter(&spyPanics{}, rest.WorkerControllers{
 		Health:        rest.NewHealthController(stubReadiness(true), metrics),
 		ProviderState: rest.NewProviderStateController(parser),
@@ -39,7 +39,7 @@ func TestWorkerRouter_ProviderState(t *testing.T) {
 	}{
 		{name: "recorded", want: http.StatusOK},
 		{name: "bad token", err: payment.ErrWebhookUnauthorized, want: http.StatusUnauthorized},
-		{name: "unreadable event", err: fmt.Errorf("%w: malformed", payment.ErrProviderRejected), want: http.StatusUnprocessableEntity},
+		{name: "unreadable event", err: fmt.Errorf("%writer: malformed", payment.ErrProviderRejected), want: http.StatusUnprocessableEntity},
 		{name: "unexpected failure", err: errors.New("boom"), want: http.StatusInternalServerError},
 	}
 	for _, testCase := range tests {

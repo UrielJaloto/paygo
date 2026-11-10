@@ -21,8 +21,8 @@ import (
 )
 
 const goldenBody = `{"id":"evt-1","type":"transfer.completed","created_at":"2026-01-02T03:04:05Z",` +
-	`"data":{"id":"trf-1","kind":"transfer","status":"completed","from_account_id":"acc-1",` +
-	`"to_account_id":"acc-2","amount":"12.34","currency":"BRL","created_at":"2026-01-02T03:04:00Z"}}`
+	`"data":{"id":"trf-1","kind":"transfer","status":"completed","from_account_id":"account-1",` +
+	`"to_account_id":"account-2","amount":"12.34","currency":"BRL","created_at":"2026-01-02T03:04:00Z"}}`
 
 var now = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
@@ -38,7 +38,7 @@ type spySigner struct {
 	body      []byte
 }
 
-func (s *spySigner) SignWebhook(secret string, timestamp int64, body []byte) string {
+func (s *spySigner) Sign(secret string, timestamp int64, body []byte) string {
 	s.secret, s.timestamp, s.body = secret, timestamp, body
 	return "signature"
 }
@@ -48,8 +48,8 @@ func fixedEvent() event.Event {
 		ID: "trf-1",
 		Request: transfer.Request{
 			Kind:   transfer.KindTransfer,
-			From:   "acc-1",
-			To:     "acc-2",
+			From:   "account-1",
+			To:     "account-2",
 			Amount: money.NewMoney(1234, money.BRL),
 		},
 		Status:    transfer.StatusCompleted,
@@ -67,7 +67,7 @@ func endpointAt(url string) webhook.Endpoint {
 }
 
 func newSender(client *http.Client) *webhookhttp.HTTPWebhookSender {
-	return webhookhttp.NewMoney(client, &spySigner{}, fixedClock{})
+	return webhookhttp.NewHTTPWebhookSender(client, (&spySigner{}).Sign, fixedClock{}.Now)
 }
 
 func respondingWith(status int) *httptest.Server {
@@ -116,7 +116,7 @@ func TestSend_Request_SendsSignedPayload(t *testing.T) {
 	defer server.Close()
 	signer := &spySigner{}
 
-	err := webhookhttp.NewMoney(server.Client(), signer, fixedClock{}).Send(context.Background(), endpointAt(server.URL), fixedEvent())
+	err := webhookhttp.NewHTTPWebhookSender(server.Client(), signer.Sign, fixedClock{}.Now).Send(context.Background(), endpointAt(server.URL), fixedEvent())
 
 	if err != nil {
 		t.Fatalf("Send() error = %v", err)

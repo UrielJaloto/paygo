@@ -17,7 +17,7 @@ var ErrInvalidDeliveryStatus = errors.New("invalid delivery status")
 
 type EndpointRepository interface {
 	Save(ctx context.Context, endpoint webhook.Endpoint) error
-	FindByID(ctx context.Context, id webhook.EndpointID) (webhook.Endpoint, error)
+	FindByID(ctx context.Context, id string) (webhook.Endpoint, error)
 	ListByOwner(ctx context.Context, owner apikey.OwnerID) ([]webhook.Endpoint, error)
 	CountActiveByOwner(ctx context.Context, owner apikey.OwnerID) (int, error)
 	Update(ctx context.Context, endpoint webhook.Endpoint) error
@@ -25,13 +25,13 @@ type EndpointRepository interface {
 
 type DeliveryFilter struct {
 	Owner  apikey.OwnerID
-	Status webhook.DeliveryStatus
+	Status string
 }
 
 type DeliveryRepository interface {
-	FindByID(ctx context.Context, id webhook.DeliveryID) (webhook.Delivery, error)
+	FindByID(ctx context.Context, id string) (webhook.Delivery, error)
 	ListByOwner(ctx context.Context, filter DeliveryFilter, cursor page.Cursor, limit page.Limit) ([]webhook.Delivery, error)
-	ListPendingByEndpoint(ctx context.Context, id webhook.EndpointID) ([]webhook.Delivery, error)
+	ListPendingByEndpoint(ctx context.Context, id string) ([]webhook.Delivery, error)
 	Update(ctx context.Context, delivery webhook.Delivery) error
 }
 
@@ -48,23 +48,19 @@ type SecretGenerator interface {
 	NewSecret() (string, error)
 }
 
-type Clock interface {
-	Now() time.Time
-}
-
 type IDGenerator interface {
 	NewID() string
 }
 
 type Service struct {
-	unitOfWork     UnitOfWork
-	secrets SecretGenerator
-	clock   Clock
-	ids     IDGenerator
+	unitOfWork UnitOfWork
+	secrets    SecretGenerator
+	now        func() time.Time
+	ids        IDGenerator
 }
 
-func NewMoney(unitOfWork UnitOfWork, secrets SecretGenerator, clock Clock, ids IDGenerator) *Service {
-	return &Service{unitOfWork: unitOfWork, secrets: secrets, clock: clock, ids: ids}
+func NewService(unitOfWork UnitOfWork, secrets SecretGenerator, now func() time.Time, ids IDGenerator) *Service {
+	return &Service{unitOfWork: unitOfWork, secrets: secrets, now: now, ids: ids}
 }
 
 func (s *Service) Register(ctx context.Context, input RegisterInput) (RegisteredEndpoint, error) {
@@ -80,7 +76,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Registered
 	if err != nil {
 		return RegisteredEndpoint{}, fmt.Errorf("generating secret: %w", err)
 	}
-	endpoint, err := webhook.NewEndpoint(webhook.EndpointID(s.ids.NewID()), owner, target, secret, s.clock.Now())
+	endpoint, err := webhook.NewEndpoint(s.ids.NewID(), owner, target, secret, s.now())
 	if err != nil {
 		return RegisteredEndpoint{}, err
 	}
@@ -119,7 +115,7 @@ func (s *Service) Disable(ctx context.Context, query EndpointQuery) error {
 		return err
 	}
 	return s.unitOfWork.Run(ctx, func(ctx context.Context, store Store) error {
-		return s.disableEndpoint(ctx, store, owner, webhook.EndpointID(query.EndpointID))
+		return s.disableEndpoint(ctx, store, owner, query.EndpointID)
 	})
 }
 
@@ -154,7 +150,7 @@ func (s *Service) Replay(ctx context.Context, query DeliveryQuery) (DeliveryOutp
 	}
 	var output DeliveryOutput
 	err = s.unitOfWork.Run(ctx, func(ctx context.Context, store Store) error {
-		output, err = s.replayDelivery(ctx, store, owner, webhook.DeliveryID(query.DeliveryID))
+		output, err = s.replayDelivery(ctx, store, owner, query.DeliveryID)
 		return err
 	})
 	if err != nil {

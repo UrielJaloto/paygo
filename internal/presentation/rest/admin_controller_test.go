@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	fundingBody   = `{"account_id":"acc-1","amount":"10.50","currency":"BRL"}`
+	fundingBody   = `{"account_id":"account-1","amount":"10.50","currency":"BRL"}`
 	issuedKeyJSON = `{"id":"key-1","owner_id":"owner-1","token":"secret-token","created_at":"2026-01-02T03:04:05.678Z"}`
 )
 
@@ -61,7 +61,7 @@ func (s *stubAdminServices) Withdraw(_ context.Context, input transferservice.Fu
 }
 
 func adminRouter(services *stubAdminServices) *gin.Engine {
-	controller := rest.NewAdminController(services, services, services, rest.AdminPresenter{}, rest.TransferPresenter{})
+	controller := rest.NewAdminController(services, services, services)
 	return apiRouter(rest.Controllers{Admin: controller})
 }
 
@@ -138,7 +138,7 @@ func TestAdminFunding_NewMovement_Returns201WithSystemOwner(t *testing.T) {
 			want := transferservice.FundingInput{
 				OwnerID:        string(apikey.SystemOwnerID),
 				IdempotencyKey: idempotencyKey,
-				AccountID:      "acc-1",
+				AccountID:      "account-1",
 				Amount:         "10.50",
 				Currency:       "BRL",
 			}

@@ -36,29 +36,29 @@ type AccountLocker interface {
 }
 
 type Ledger interface {
-	CalculateBalance(ctx context.Context, id account.ID) (money.Money, error)
+	FindBalance(ctx context.Context, id account.ID) (money.Money, error)
 	Append(ctx context.Context, journal ledger.JournalTransaction) error
 }
 
 type TransferWriter interface {
-	Save(ctx context.Context, t transfer.Transfer, fingerprint transfer.Fingerprint) error
+	Save(ctx context.Context, t transfer.Transfer, fingerprint string) error
 }
 
 type ChargeRepository interface {
-	Save(ctx context.Context, charge payment.Charge, key transfer.IdempotencyKey, fingerprint transfer.Fingerprint) error
+	Save(ctx context.Context, charge payment.Charge, key transfer.IdempotencyKey, fingerprint string) error
 	Update(ctx context.Context, charge payment.Charge) error
-	FindByID(ctx context.Context, id payment.ChargeID) (payment.Charge, error)
+	FindByID(ctx context.Context, id string) (payment.Charge, error)
 	FindByProviderID(ctx context.Context, providerID string) (payment.Charge, error)
-	FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (payment.Charge, transfer.Fingerprint, error)
+	FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (payment.Charge, string, error)
 	ListPending(ctx context.Context, olderThan time.Time, limit int) ([]payment.Charge, error)
 }
 
 type PayoutRepository interface {
-	Save(ctx context.Context, payout payment.Payout, key transfer.IdempotencyKey, fingerprint transfer.Fingerprint) error
+	Save(ctx context.Context, payout payment.Payout, key transfer.IdempotencyKey, fingerprint string) error
 	Update(ctx context.Context, payout payment.Payout) error
-	FindByID(ctx context.Context, id payment.PayoutID) (payment.Payout, error)
+	FindByID(ctx context.Context, id string) (payment.Payout, error)
 	FindByProviderID(ctx context.Context, providerID string) (payment.Payout, error)
-	FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (payment.Payout, transfer.Fingerprint, error)
+	FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (payment.Payout, string, error)
 	ListPending(ctx context.Context, olderThan time.Time, limit int) ([]payment.Payout, error)
 }
 
@@ -70,29 +70,25 @@ type Outbox interface {
 	Add(ctx context.Context, e event.Event) error
 }
 
-type Clock interface {
-	Now() time.Time
-}
-
 type IDGenerator interface {
 	NewID() string
 }
 
 type Service struct {
-	unitOfWork      UnitOfWork
-	provider PaymentProvider
-	clock    Clock
-	ids      IDGenerator
+	unitOfWork UnitOfWork
+	provider   PaymentProvider
+	now        func() time.Time
+	ids        IDGenerator
 }
 
 type chargeOpening struct {
 	charge      payment.Charge
 	key         transfer.IdempotencyKey
-	fingerprint transfer.Fingerprint
+	fingerprint string
 }
 
-func NewMoney(unitOfWork UnitOfWork, provider PaymentProvider, clock Clock, ids IDGenerator) *Service {
-	return &Service{unitOfWork: unitOfWork, provider: provider, clock: clock, ids: ids}
+func NewService(unitOfWork UnitOfWork, provider PaymentProvider, now func() time.Time, ids IDGenerator) *Service {
+	return &Service{unitOfWork: unitOfWork, provider: provider, now: now, ids: ids}
 }
 
 func (s *Service) CreateCharge(ctx context.Context, input ChargeInput) (ChargeOutput, error) {
@@ -115,7 +111,7 @@ func (s *Service) FindCharge(ctx context.Context, query ChargeQuery) (ChargeOutp
 	var found payment.Charge
 	err = s.unitOfWork.Run(ctx, func(ctx context.Context, store Store) error {
 		var err error
-		found, err = store.Charges.FindByID(ctx, payment.ChargeID(query.ChargeID))
+		found, err = store.Charges.FindByID(ctx, query.ChargeID)
 		return err
 	})
 	if err != nil {
@@ -136,8 +132,8 @@ func (s *Service) parseCharge(input ChargeInput) (chargeOpening, error) {
 	if err != nil {
 		return chargeOpening{}, err
 	}
-	now := s.clock.Now()
-	charge, err := payment.NewCharge(payment.ChargeID(s.ids.NewID()), draft, now.Add(chargeLifetime), now)
+	now := s.now()
+	charge, err := payment.NewCharge(s.ids.NewID(), draft, now.Add(chargeLifetime), now)
 	if err != nil {
 		return chargeOpening{}, err
 	}
@@ -247,7 +243,7 @@ func (s *Service) requestPix(ctx context.Context, charge payment.Charge) (Charge
 }
 
 func (s *Service) markChargeFailed(ctx context.Context, charge payment.Charge, cause error) error {
-	transition := charge.MarkFailed(s.clock.Now())
+	transition := charge.MarkFailed(s.now())
 	return fmt.Errorf("creating pix charge: %w", errors.Join(cause, transition, s.updateCharge(ctx, charge)))
 }
 

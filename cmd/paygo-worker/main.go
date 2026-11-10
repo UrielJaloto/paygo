@@ -88,9 +88,10 @@ func runPollers(ctx context.Context, settings config.WorkerSettings, kit toolkit
 	if err != nil {
 		return err
 	}
-	server := httpserver.NewMoney(settings.Worker.Addr, newRouter(services, kit), readHeaderTimeout, settings.Worker.ShutdownTimeout)
+	server := httpserver.NewServer(settings.Worker.Addr, newRouter(services, kit), readHeaderTimeout, settings.Worker.ShutdownTimeout)
+	plan := pollerPlan{worker: settings.Worker, input: input, syncInterval: settings.Payments.PaymentSyncInterval}
 	serve := func(ctx context.Context) error { return server.Run(ctx, listener) }
-	return poller.RunAll(ctx, append(newPollers(pollerPlan{worker: settings.Worker, input: input, syncInterval: settings.Payments.PaymentSyncInterval}, services, kit), serve)...)
+	return poller.RunAll(ctx, append(newPollers(plan, services, kit), serve)...)
 }
 
 func newDeliverInput(worker config.Worker) (dispatch.DeliverInput, error) {
@@ -102,7 +103,7 @@ func newDeliverInput(worker config.Worker) (dispatch.DeliverInput, error) {
 }
 
 type toolkit struct {
-	clock    clock.SystemClock
+	now      func() time.Time
 	ids      *identifier.UUIDv7Generator
 	requests logging.RequestLogger
 	tracer   trace.Tracer
@@ -124,11 +125,10 @@ type serviceSet struct {
 }
 
 func newToolkit(telemetry config.Telemetry, stdout io.Writer, traces *tracing.Provider) toolkit {
-	systemClock := clock.NewMoney()
 	logger := logging.NewTracedJSONLogger(stdout, telemetry.LogLevel, traces)
 	return toolkit{
-		clock:    systemClock,
-		ids:      identifier.NewMoney(systemClock, rand.Reader),
+		now:      clock.Now,
+		ids:      identifier.NewUUIDv7Generator(clock.Now, rand.Reader),
 		requests: logging.NewRequestLogger(logger),
 		tracer:   traces.Tracer(),
 		registry: metrics.NewRegistry(),
@@ -136,14 +136,14 @@ func newToolkit(telemetry config.Telemetry, stdout io.Writer, traces *tracing.Pr
 }
 
 func openServices(ctx context.Context, settings config.WorkerSettings, kit toolkit) (serviceSet, error) {
-	pool, err := postgres.NewTracedPool(ctx, settings.Database.URL, settings.Database.MaxConns, tracing.NewQuerySpanStarter(kit.tracer))
+	pool, err := postgres.NewTracedPool(ctx, settings.Database.URL, settings.Database.MaximumConnections, tracing.NewQuerySpanStarter(kit.tracer))
 	if err != nil {
 		return serviceSet{}, err
 	}
 	selected := newProvider(settings.Payments, postgres.NewProviderCustomerCache(pool), kit)
 	return serviceSet{
-		dispatch:  dispatch.NewMoney(postgres.NewDispatchUnitOfWork(pool, kit.ids), postgres.NewDeliveryRepository(pool), newSender(settings.Worker, kit), kit.clock, newJitter()),
-		payments:  payment.NewMoney(postgres.NewPaymentUnitOfWork(pool), selected, kit.clock, kit.ids),
+		dispatch:  dispatch.NewService(postgres.NewDispatchUnitOfWork(pool, kit.ids), postgres.NewDeliveryRepository(pool), newSender(settings.Worker, kit), kit.now, newJitter()),
+		payments:  payment.NewService(postgres.NewPaymentUnitOfWork(pool), selected, kit.now, kit.ids),
 		provider:  selected,
 		readiness: postgres.NewHealthChecker(pool),
 		close:     pool.Close,
@@ -155,11 +155,11 @@ func newJitter() *randomness.Jitter {
 }
 
 func newSender(worker config.Worker, kit toolkit) *webhookhttp.HTTPWebhookSender {
-	return webhookhttp.NewMoney(webhookhttp.NewClient(worker.WebhookTimeout), secret.WebhookSigner{}, kit.clock)
+	return webhookhttp.NewHTTPWebhookSender(webhookhttp.NewClient(worker.WebhookTimeout), secret.SignWebhook, kit.now)
 }
 
 func newProvider(settings config.Payments, customers asaas.CustomerCache, kit toolkit) payment.PaymentProvider {
-	selected := provider.NewMoney(settings, customers, kit.ids)
+	selected := provider.NewSelectedProvider(settings, customers, kit.ids)
 	return metrics.NewProviderMetrics(tracing.NewProviderTracer(selected, kit.tracer), kit.registry)
 }
 
@@ -175,8 +175,8 @@ func newPollers(plan pollerPlan, services serviceSet, kit toolkit) []func(contex
 	dispatcher := metrics.NewDispatchServiceMetrics(services.dispatch, kit.registry)
 	payments := metrics.NewPaymentServiceMetrics(services.payments, kit.registry)
 	drain := plan.worker.ShutdownTimeout
-	outbound := poller.NewMoney(plan.worker.PollInterval, kit.requests)
-	reconcile := poller.NewMoney(plan.syncInterval, kit.requests)
+	outbound := poller.NewPoller(plan.worker.PollInterval, kit.requests)
+	reconcile := poller.NewPoller(plan.syncInterval, kit.requests)
 	return []func(context.Context) error{
 		func(ctx context.Context) error {
 			return outbound.Run(ctx, "fan-out", func(ctx context.Context) error {

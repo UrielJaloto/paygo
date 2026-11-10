@@ -23,7 +23,7 @@ func saveWithinLimit(ctx context.Context, store Store, endpoint webhook.Endpoint
 	return nil
 }
 
-func (s *Service) disableEndpoint(ctx context.Context, store Store, owner apikey.OwnerID, id webhook.EndpointID) error {
+func (s *Service) disableEndpoint(ctx context.Context, store Store, owner apikey.OwnerID, id string) error {
 	endpoint, err := store.Endpoints.FindByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("finding endpoint: %w", err)
@@ -40,13 +40,13 @@ func (s *Service) disableEndpoint(ctx context.Context, store Store, owner apikey
 	return s.killPendingDeliveries(ctx, store, id)
 }
 
-func (s *Service) killPendingDeliveries(ctx context.Context, store Store, id webhook.EndpointID) error {
+func (s *Service) killPendingDeliveries(ctx context.Context, store Store, id string) error {
 	pending, err := store.Deliveries.ListPendingByEndpoint(ctx, id)
 	if err != nil {
 		return fmt.Errorf("listing pending deliveries: %w", err)
 	}
 	for _, delivery := range pending {
-		delivery.MarkDead(disabledReason, s.clock.Now())
+		delivery.MarkDead(disabledReason, s.now())
 		if err := store.Deliveries.Update(ctx, delivery); err != nil {
 			return fmt.Errorf("updating delivery: %w", err)
 		}
@@ -54,7 +54,7 @@ func (s *Service) killPendingDeliveries(ctx context.Context, store Store, id web
 	return nil
 }
 
-func (s *Service) replayDelivery(ctx context.Context, store Store, owner apikey.OwnerID, id webhook.DeliveryID) (DeliveryOutput, error) {
+func (s *Service) replayDelivery(ctx context.Context, store Store, owner apikey.OwnerID, id string) (DeliveryOutput, error) {
 	delivery, err := store.Deliveries.FindByID(ctx, id)
 	if err != nil {
 		return DeliveryOutput{}, fmt.Errorf("finding delivery: %w", err)
@@ -62,7 +62,7 @@ func (s *Service) replayDelivery(ctx context.Context, store Store, owner apikey.
 	if delivery.OwnerID() != owner {
 		return DeliveryOutput{}, fmt.Errorf("%w: %s", webhook.ErrDeliveryNotFound, id)
 	}
-	if err := delivery.Replay(s.clock.Now()); err != nil {
+	if err := delivery.Replay(s.now()); err != nil {
 		return DeliveryOutput{}, err
 	}
 	if err := store.Deliveries.Update(ctx, delivery); err != nil {
@@ -71,8 +71,8 @@ func (s *Service) replayDelivery(ctx context.Context, store Store, owner apikey.
 	return toDeliveryOutput(delivery), nil
 }
 
-func parseStatus(text string) (webhook.DeliveryStatus, error) {
-	status := webhook.DeliveryStatus(text)
+func parseStatus(text string) (string, error) {
+	status := text
 	switch status {
 	case "", webhook.DeliveryPending, webhook.DeliverySucceeded, webhook.DeliveryDead:
 		return status, nil

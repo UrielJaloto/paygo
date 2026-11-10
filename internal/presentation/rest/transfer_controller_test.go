@@ -17,9 +17,9 @@ import (
 
 const (
 	idempotencyKey = "key-1"
-	transferJSON   = `{"id":"trf-1","kind":"transfer","status":"completed","from_account_id":"acc-1","to_account_id":"acc-2","amount":"10.50","currency":"BRL","created_at":"2026-01-02T03:04:05.678Z"}`
-	reversalJSON   = `{"id":"trf-1","kind":"transfer","status":"completed","from_account_id":"acc-1","to_account_id":"acc-2","amount":"10.50","currency":"BRL","reversal_of":"trf-0","created_at":"2026-01-02T03:04:05.678Z"}`
-	createBody     = `{"from_account_id":"acc-1","to_account_id":"acc-2","amount":"10.50","currency":"BRL"}`
+	transferJSON   = `{"id":"trf-1","kind":"transfer","status":"completed","from_account_id":"account-1","to_account_id":"account-2","amount":"10.50","currency":"BRL","created_at":"2026-01-02T03:04:05.678Z"}`
+	reversalJSON   = `{"id":"trf-1","kind":"transfer","status":"completed","from_account_id":"account-1","to_account_id":"account-2","amount":"10.50","currency":"BRL","reversal_of":"trf-0","created_at":"2026-01-02T03:04:05.678Z"}`
+	createBody     = `{"from_account_id":"account-1","to_account_id":"account-2","amount":"10.50","currency":"BRL"}`
 )
 
 type stubTransfers struct {
@@ -39,8 +39,8 @@ func (s *stubTransfers) output() transferservice.TransferOutput {
 		ID:            "trf-1",
 		Kind:          "transfer",
 		Status:        "completed",
-		FromAccountID: "acc-1",
-		ToAccountID:   "acc-2",
+		FromAccountID: "account-1",
+		ToAccountID:   "account-2",
 		AmountMinor:   1050,
 		Currency:      "BRL",
 		ReversalOf:    s.reversal,
@@ -72,7 +72,7 @@ func (s *stubTransfers) List(_ context.Context, input transferservice.ListInput)
 }
 
 func transferRouter(transfers *stubTransfers) *gin.Engine {
-	controller := rest.NewTransferController(transfers, transfers, transfers, rest.TransferPresenter{})
+	controller := rest.NewTransferController(transfers, transfers, transfers)
 	return apiRouter(rest.Controllers{Transfer: controller})
 }
 
@@ -91,7 +91,7 @@ func assertProblemType(t *testing.T, recorder *httptest.ResponseRecorder, status
 	}
 }
 
-func TestPosting_BuildJournalCreate_NewTransfer_Returns201WithExactInput(t *testing.T) {
+func TestTransferCreate_NewTransfer_Returns201WithExactInput(t *testing.T) {
 	transfers := &stubTransfers{}
 	recorder := callWithKey(transferRouter(transfers), "/v1/transfers", createBody)
 	assertResponse(t, recorder, http.StatusCreated, transferJSON)
@@ -101,8 +101,8 @@ func TestPosting_BuildJournalCreate_NewTransfer_Returns201WithExactInput(t *test
 	want := transferservice.TransferInput{
 		OwnerID:        ownerID,
 		IdempotencyKey: idempotencyKey,
-		FromAccountID:  "acc-1",
-		ToAccountID:    "acc-2",
+		FromAccountID:  "account-1",
+		ToAccountID:    "account-2",
 		Amount:         "10.50",
 		Currency:       "BRL",
 	}
@@ -111,7 +111,7 @@ func TestPosting_BuildJournalCreate_NewTransfer_Returns201WithExactInput(t *test
 	}
 }
 
-func TestPosting_BuildJournalCreate_Replay_Returns200WithHeader(t *testing.T) {
+func TestTransferCreate_Replay_Returns200WithHeader(t *testing.T) {
 	recorder := callWithKey(transferRouter(&stubTransfers{replay: true}), "/v1/transfers", createBody)
 	assertResponse(t, recorder, http.StatusOK, transferJSON)
 	if got := recorder.Header().Get("Idempotent-Replayed"); got != "true" {
@@ -119,7 +119,7 @@ func TestPosting_BuildJournalCreate_Replay_Returns200WithHeader(t *testing.T) {
 	}
 }
 
-func TestPosting_BuildJournalPosts_MissingKey_Return400WithoutCallingService(t *testing.T) {
+func TestTransferPosts_MissingKey_Return400WithoutCallingService(t *testing.T) {
 	for _, path := range []string{"/v1/transfers", "/v1/transfers/trf-0/reversal"} {
 		t.Run(path, func(t *testing.T) {
 			transfers := &stubTransfers{}
@@ -132,9 +132,9 @@ func TestPosting_BuildJournalPosts_MissingKey_Return400WithoutCallingService(t *
 	}
 }
 
-func TestPosting_BuildJournalCreate_AmountAsNumber_Returns400Malformed(t *testing.T) {
+func TestTransferCreate_AmountAsNumber_Returns400Malformed(t *testing.T) {
 	transfers := &stubTransfers{}
-	body := `{"from_account_id":"acc-1","to_account_id":"acc-2","amount":10.5,"currency":"BRL"}`
+	body := `{"from_account_id":"account-1","to_account_id":"account-2","amount":10.5,"currency":"BRL"}`
 	recorder := callWithKey(transferRouter(transfers), "/v1/transfers", body)
 	assertProblemType(t, recorder, http.StatusBadRequest, "malformed-request")
 	if transfers.calls != 0 {
@@ -142,7 +142,7 @@ func TestPosting_BuildJournalCreate_AmountAsNumber_Returns400Malformed(t *testin
 	}
 }
 
-func TestPosting_BuildJournalReverse_NewReversal_Returns201WithExactInput(t *testing.T) {
+func TestTransferReverse_NewReversal_Returns201WithExactInput(t *testing.T) {
 	transfers := &stubTransfers{reversal: "trf-0"}
 	recorder := callWithKey(transferRouter(transfers), "/v1/transfers/trf-0/reversal", "")
 	assertResponse(t, recorder, http.StatusCreated, reversalJSON)
@@ -152,7 +152,7 @@ func TestPosting_BuildJournalReverse_NewReversal_Returns201WithExactInput(t *tes
 	}
 }
 
-func TestPosting_BuildJournalReverse_Replay_Returns200WithHeader(t *testing.T) {
+func TestTransferReverse_Replay_Returns200WithHeader(t *testing.T) {
 	transfers := &stubTransfers{reversal: "trf-0", replay: true}
 	recorder := callWithKey(transferRouter(transfers), "/v1/transfers/trf-0/reversal", "")
 	assertResponse(t, recorder, http.StatusOK, reversalJSON)
@@ -161,7 +161,7 @@ func TestPosting_BuildJournalReverse_Replay_Returns200WithHeader(t *testing.T) {
 	}
 }
 
-func TestPosting_BuildJournalGet_Existing_Returns200(t *testing.T) {
+func TestTransferFind_Existing_Returns200(t *testing.T) {
 	transfers := &stubTransfers{}
 	recorder := call(transferRouter(transfers), http.MethodGet, "/v1/transfers/trf-1", "")
 	assertResponse(t, recorder, http.StatusOK, transferJSON)
@@ -170,23 +170,23 @@ func TestPosting_BuildJournalGet_Existing_Returns200(t *testing.T) {
 	}
 }
 
-func TestPosting_BuildJournalList_Filters_ForwardedAndCursorReturned(t *testing.T) {
+func TestTransferList_Filters_ForwardedAndCursorReturned(t *testing.T) {
 	transfers := &stubTransfers{}
 	transfers.page = transferservice.TransferPage{Items: []transferservice.TransferOutput{transfers.output()}, NextCursor: "next"}
-	recorder := call(transferRouter(transfers), http.MethodGet, "/v1/transfers?account_id=acc-1&cursor=c&limit=5", "")
+	recorder := call(transferRouter(transfers), http.MethodGet, "/v1/transfers?account_id=account-1&cursor=c&limit=5", "")
 	assertResponse(t, recorder, http.StatusOK, `{"items":[`+transferJSON+`],"next_cursor":"next"}`)
-	want := transferservice.ListInput{OwnerID: ownerID, AccountID: "acc-1", Cursor: "c", Limit: "5"}
+	want := transferservice.ListInput{OwnerID: ownerID, AccountID: "account-1", Cursor: "c", Limit: "5"}
 	if transfers.list != want {
 		t.Fatalf("input = %+v", transfers.list)
 	}
 }
 
-func TestPosting_BuildJournalList_LastPage_OmitsCursorAndKeepsEmptyItems(t *testing.T) {
+func TestTransferList_LastPage_OmitsCursorAndKeepsEmptyItems(t *testing.T) {
 	recorder := call(transferRouter(&stubTransfers{}), http.MethodGet, "/v1/transfers", "")
 	assertResponse(t, recorder, http.StatusOK, `{"items":[]}`)
 }
 
-func TestPosting_BuildJournalRoutes_ServiceError_ReturnsMappedProblem(t *testing.T) {
+func TestTransferRoutes_ServiceError_ReturnsMappedProblem(t *testing.T) {
 	cases := []struct {
 		name   string
 		method string

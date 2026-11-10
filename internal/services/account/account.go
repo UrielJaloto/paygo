@@ -13,19 +13,15 @@ import (
 )
 
 type Repository interface {
-	Save(ctx context.Context, acc account.Account) error
+	Save(ctx context.Context, account account.Account) error
 	FindByID(ctx context.Context, id account.ID) (account.Account, error)
 	ListByOwner(ctx context.Context, owner apikey.OwnerID, cursor page.Cursor, limit page.Limit) ([]account.Account, error)
-	Update(ctx context.Context, acc account.Account, expectedVersion int64) error
+	Update(ctx context.Context, account account.Account, expectedVersion int64) error
 }
 
 type LedgerReader interface {
-	CalculateBalance(ctx context.Context, id account.ID) (money.Money, error)
+	FindBalance(ctx context.Context, id account.ID) (money.Money, error)
 	ListStatement(ctx context.Context, id account.ID, cursor page.Cursor, limit page.Limit) ([]ledger.Entry, error)
-}
-
-type Clock interface {
-	Now() time.Time
 }
 
 type IDGenerator interface {
@@ -35,12 +31,12 @@ type IDGenerator interface {
 type Service struct {
 	repository Repository
 	ledger     LedgerReader
-	clock      Clock
+	now        func() time.Time
 	ids        IDGenerator
 }
 
-func NewMoney(repository Repository, ledger LedgerReader, clock Clock, ids IDGenerator) *Service {
-	return &Service{repository: repository, ledger: ledger, clock: clock, ids: ids}
+func NewService(repository Repository, ledger LedgerReader, now func() time.Time, ids IDGenerator) *Service {
+	return &Service{repository: repository, ledger: ledger, now: now, ids: ids}
 }
 
 func (s *Service) Open(ctx context.Context, input OpenInput) (AccountOutput, error) {
@@ -52,7 +48,7 @@ func (s *Service) Open(ctx context.Context, input OpenInput) (AccountOutput, err
 	if err != nil {
 		return AccountOutput{}, err
 	}
-	opened, err := account.NewCustomer(account.ID(s.ids.NewID()), owner, currency, s.clock.Now())
+	opened, err := account.NewCustomer(account.ID(s.ids.NewID()), owner, currency, s.now())
 	if err != nil {
 		return AccountOutput{}, err
 	}
@@ -83,7 +79,7 @@ func (s *Service) List(ctx context.Context, input ListInput) (AccountPage, error
 	if err != nil {
 		return AccountPage{}, fmt.Errorf("listing accounts: %w", err)
 	}
-	items, next := trimPage(accounts, limit, func(acc account.Account) string { return string(acc.ID()) })
+	items, next := trimPage(accounts, limit, func(account account.Account) string { return string(account.ID()) })
 	output := AccountPage{Items: make([]AccountOutput, 0, len(items)), NextCursor: next}
 	for _, item := range items {
 		output.Items = append(output.Items, toOutput(item))
@@ -91,12 +87,12 @@ func (s *Service) List(ctx context.Context, input ListInput) (AccountPage, error
 	return output, nil
 }
 
-func (s *Service) CalculateBalance(ctx context.Context, query AccountQuery) (BalanceOutput, error) {
+func (s *Service) FindBalance(ctx context.Context, query AccountQuery) (BalanceOutput, error) {
 	found, err := s.findOwnedAccount(ctx, query)
 	if err != nil {
 		return BalanceOutput{}, err
 	}
-	balance, err := s.ledger.CalculateBalance(ctx, found.ID())
+	balance, err := s.ledger.FindBalance(ctx, found.ID())
 	if err != nil {
 		return BalanceOutput{}, fmt.Errorf("reading balance: %w", err)
 	}
@@ -190,15 +186,15 @@ func trimPage[T any](items []T, limit page.Limit, idOf func(T) string) ([]T, str
 	return kept, page.NewCursor(idOf(kept[len(kept)-1])).Encode()
 }
 
-func toOutput(acc account.Account) AccountOutput {
+func toOutput(account account.Account) AccountOutput {
 	return AccountOutput{
-		ID:        string(acc.ID()),
-		OwnerID:   string(acc.OwnerID()),
-		Currency:  string(acc.Currency()),
-		Kind:      string(acc.Kind()),
-		Status:    string(acc.Status()),
-		Version:   acc.Version(),
-		CreatedAt: acc.CreatedAt(),
+		ID:        string(account.ID()),
+		OwnerID:   string(account.OwnerID()),
+		Currency:  string(account.Currency()),
+		Kind:      string(account.Kind()),
+		Status:    string(account.Status()),
+		Version:   account.Version(),
+		CreatedAt: account.CreatedAt(),
 	}
 }
 

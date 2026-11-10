@@ -8,10 +8,10 @@ import (
 )
 
 func NewTimeoutMiddleware(timeout time.Duration) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
+	return func(ginContext *gin.Context) {
+		ctx, cancel := context.WithTimeout(ginContext.Request.Context(), timeout)
 		defer cancel()
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
+		ginContext.Request = ginContext.Request.WithContext(ctx)
+		ginContext.Next()
 	}
 }

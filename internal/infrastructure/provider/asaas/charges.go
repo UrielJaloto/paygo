@@ -67,7 +67,7 @@ func (p *Provider) CreatePixCharge(ctx context.Context, request paymentservice.C
 	return paymentservice.ChargeResult{ProviderID: created.ID, PixCopyPaste: code.Payload, PixQRBase64: code.EncodedImage}, nil
 }
 
-func (p *Provider) FetchCharge(ctx context.Context, providerID string) (payment.EventKind, error) {
+func (p *Provider) FetchCharge(ctx context.Context, providerID string) (string, error) {
 	var found paymentResponse
 	path := "/payments/" + url.PathEscape(providerID)
 	if err := p.sendCall(ctx, apiCall{method: http.MethodGet, path: path, out: &found}); err != nil {
@@ -95,7 +95,7 @@ func (p *Provider) resolveCustomer(ctx context.Context, request paymentservice.C
 	return created.ID, nil
 }
 
-func parseChargeKind(status string) payment.EventKind {
+func parseChargeKind(status string) string {
 	switch status {
 	case "RECEIVED", "CONFIRMED":
 		return payment.EventChargePaid
@@ -105,6 +105,8 @@ func parseChargeKind(status string) payment.EventKind {
 	return payment.EventIgnored
 }
 
+const minorPerUnit = 100
+
 func formatDecimal(amountMinor int64) json.Number {
-	return json.Number(fmt.Sprintf("%d.%02d", amountMinor/100, amountMinor%100))
+	return json.Number(fmt.Sprintf("%d.%02d", amountMinor/minorPerUnit, amountMinor%minorPerUnit))
 }

@@ -11,8 +11,8 @@ import (
 
 const (
 	maximumTransactionAttempts = 4
-	serializationFailure   = "40001"
-	deadlockDetected       = "40P01"
+	serializationFailure       = "40001"
+	deadlockDetected           = "40P01"
 )
 
 type querier interface {

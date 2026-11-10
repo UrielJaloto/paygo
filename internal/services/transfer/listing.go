@@ -25,9 +25,9 @@ func buildPage(found []transfer.Transfer, owner apikey.OwnerID, limit page.Limit
 		next = page.NewCursor(string(kept[len(kept)-1].ID())).Encode()
 	}
 	items := make([]TransferOutput, 0, len(kept))
-	for _, t := range kept {
-		if t.OwnerID() == owner {
-			items = append(items, toOutput(t))
+	for _, transfer := range kept {
+		if transfer.OwnerID() == owner {
+			items = append(items, toOutput(transfer))
 		}
 	}
 	if len(items) == 0 {

@@ -22,7 +22,7 @@ const (
 	adminTokenVariable = "PAYGO_ADMIN_TOKEN"
 )
 
-var errMissingAdminToken = errors.NewMoney(adminTokenVariable + " is required")
+var errMissingAdminToken = errors.New(adminTokenVariable + " is required")
 
 type options struct {
 	scenario    string

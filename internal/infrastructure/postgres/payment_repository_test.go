@@ -48,7 +48,7 @@ func newPaymentFixture(t *testing.T) paymentFixture {
 
 func (f paymentFixture) newCharge(t *testing.T, sequence int, createdAt time.Time) payment.Charge {
 	t.Helper()
-	created, err := payment.NewCharge(payment.ChargeID(testID(sequence)), payment.ChargeDraft{
+	created, err := payment.NewCharge(testID(sequence), payment.ChargeDraft{
 		OwnerID:   testOwner,
 		AccountID: f.from,
 		Amount:    money.NewMoney(1000, money.BRL),
@@ -68,7 +68,7 @@ func (f paymentFixture) newPayout(t *testing.T, sequence int, createdAt time.Tim
 		t.Fatalf("ParsePixKey() error = %v", err)
 	}
 	hold := f.save(t, sequence+500, transfer.IdempotencyKey("hold-"+testID(sequence)))
-	created, err := payment.NewPayout(payment.PayoutID(testID(sequence)), payment.PayoutDraft{
+	created, err := payment.NewPayout(testID(sequence), payment.PayoutDraft{
 		OwnerID:        testOwner,
 		AccountID:      f.from,
 		Amount:         money.NewMoney(400, money.BRL),
@@ -90,7 +90,7 @@ func TestMigration_Payments_CreatesTablesAndSystemAccounts(t *testing.T) {
 		}
 	}
 	accounts := postgres.NewAccountRepository(pool)
-	for id, kind := range map[account.ID]account.Kind{clearingBRL: "provider_clearing", holdBRL: "payout_hold"} {
+	for id, kind := range map[account.ID]string{clearingBRL: "provider_clearing", holdBRL: "payout_hold"} {
 		found, err := accounts.FindByID(context.Background(), id)
 		if err != nil {
 			t.Fatalf("FindByID(%s) error = %v", id, err)
@@ -154,7 +154,7 @@ func TestChargeRepository_Finders_LocateSavedCharge(t *testing.T) {
 func TestChargeRepository_Missing_ReturnsErrChargeNotFound(t *testing.T) {
 	fixture := newPaymentFixture(t)
 	ctx := context.Background()
-	_, idErr := fixture.charges.FindByID(ctx, payment.ChargeID(testID(999)))
+	_, idErr := fixture.charges.FindByID(ctx, testID(999))
 	_, providerErr := fixture.charges.FindByProviderID(ctx, "missing")
 	_, _, keyErr := fixture.charges.FindByIdempotencyKey(ctx, testOwner, "missing")
 	for name, err := range map[string]error{"FindByID": idErr, "FindByProviderID": providerErr, "FindByIdempotencyKey": keyErr} {
@@ -198,11 +198,11 @@ func TestChargeRepository_ListPending_FiltersAndLimits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListPending() error = %v", err)
 	}
-	got := make([]payment.ChargeID, 0, len(all))
+	got := make([]string, 0, len(all))
 	for _, charge := range all {
 		got = append(got, charge.ID())
 	}
-	if want := []payment.ChargeID{payment.ChargeID(testID(100)), payment.ChargeID(testID(101))}; !slices.Equal(got, want) {
+	if want := []string{testID(100), testID(101)}; !slices.Equal(got, want) {
 		t.Fatalf("ListPending() = %v, want %v", got, want)
 	}
 	limited, err := fixture.charges.ListPending(ctx, cutoff, 1)
@@ -221,7 +221,7 @@ func TestPayoutRepository_RoundTrip_KeepsEveryField(t *testing.T) {
 	final := fixture.save(t, 101, "final")
 	payout.AttachProvider(stubPayoutID)
 	if _, err := payout.MarkCompleted(string(final.ID()), testTime.Add(time.Minute)); err != nil {
-		t.Fatalf("Complete() error = %v", err)
+		t.Fatalf("MarkCompleted() error = %v", err)
 	}
 	if err := fixture.payouts.Update(ctx, payout); err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -263,7 +263,7 @@ func TestPayoutRepository_Finders_LocateSavedPayout(t *testing.T) {
 func TestPayoutRepository_Missing_ReturnsErrPayoutNotFound(t *testing.T) {
 	fixture := newPaymentFixture(t)
 	ctx := context.Background()
-	_, idErr := fixture.payouts.FindByID(ctx, payment.PayoutID(testID(999)))
+	_, idErr := fixture.payouts.FindByID(ctx, testID(999))
 	_, providerErr := fixture.payouts.FindByProviderID(ctx, "missing")
 	_, _, keyErr := fixture.payouts.FindByIdempotencyKey(ctx, testOwner, "missing")
 	for name, err := range map[string]error{"FindByID": idErr, "FindByProviderID": providerErr, "FindByIdempotencyKey": keyErr} {
@@ -346,11 +346,11 @@ func (*stubProvider) SendPixPayout(context.Context, paymentservice.PayoutRequest
 	return paymentservice.PayoutResult{ProviderID: stubPayoutID}, nil
 }
 
-func (*stubProvider) FetchCharge(context.Context, string) (payment.EventKind, error) {
+func (*stubProvider) FetchCharge(context.Context, string) (string, error) {
 	return payment.EventChargePaid, nil
 }
 
-func (*stubProvider) FetchPayout(context.Context, string) (payment.EventKind, error) {
+func (*stubProvider) FetchPayout(context.Context, string) (string, error) {
 	return payment.EventPayoutDone, nil
 }
 
@@ -362,7 +362,7 @@ func TestPaymentService_RealDatabase_PaidChargeThenPayoutDone(t *testing.T) {
 	fixture := newPaymentFixture(t)
 	ctx := context.Background()
 	provider := &stubProvider{}
-	service := paymentservice.NewMoney(postgres.NewPaymentUnitOfWork(fixture.pool), provider, fixedClock{}, &sequentialIDs{})
+	service := paymentservice.NewService(postgres.NewPaymentUnitOfWork(fixture.pool), provider, fixedClock{}.Now, &sequentialIDs{})
 	if _, err := service.CreateCharge(ctx, paymentservice.ChargeInput{
 		OwnerID: string(testOwner), IdempotencyKey: "charge-1", AccountID: string(fixture.from),
 		Amount: "10.00", Currency: "BRL", PayerName: "Ana", PayerDocument: testDocument,
@@ -392,9 +392,9 @@ func TestPaymentService_RealDatabase_PaidChargeThenPayoutDone(t *testing.T) {
 	assertBalance(t, ledgerRepository, clearingBRL, -600)
 	mismatches, _, err := ledgerRepository.ListBalanceMismatches(ctx)
 	if err != nil {
-		t.Fatalf("CheckBalances() error = %v", err)
+		t.Fatalf("ListBalanceMismatches() error = %v", err)
 	}
 	if len(mismatches) != 0 {
-		t.Fatalf("CheckBalances() mismatches = %+v, want none", mismatches)
+		t.Fatalf("ListBalanceMismatches() mismatches = %+v, want none", mismatches)
 	}
 }

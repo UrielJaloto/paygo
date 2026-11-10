@@ -26,8 +26,8 @@ var allMigrations = []string{
 
 func TestNewPool_InvalidInput_ReturnsError(t *testing.T) {
 	tests := []struct {
-		name     string
-		url      string
+		name               string
+		url                string
 		maximumConnections int32
 	}{
 		{name: "bad url", url: "://bad", maximumConnections: 1},

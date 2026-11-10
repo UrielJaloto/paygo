@@ -31,7 +31,7 @@ func NewPaymentServiceMetrics(next paymentService, registry *Registry) *PaymentS
 
 func (m *PaymentServiceMetrics) CreateCharge(ctx context.Context, input payment.ChargeInput) (payment.ChargeOutput, error) {
 	output, err := m.next.CreateCharge(ctx, input)
-	m.count("charge", resolvePaymentResult(output.Status, err))
+	m.countPayment("charge", resolvePaymentResult(output.Status, err))
 	return output, err
 }
 
@@ -41,7 +41,7 @@ func (m *PaymentServiceMetrics) FindCharge(ctx context.Context, query payment.Ch
 
 func (m *PaymentServiceMetrics) CreatePayout(ctx context.Context, input payment.PayoutInput) (payment.PayoutOutput, error) {
 	output, err := m.next.CreatePayout(ctx, input)
-	m.count("payout", resolvePaymentResult(output.Status, err))
+	m.countPayment("payout", resolvePaymentResult(output.Status, err))
 	return output, err
 }
 
@@ -57,7 +57,7 @@ func (m *PaymentServiceMetrics) Sync(ctx context.Context, limit int) (payment.Sy
 	return m.next.Sync(ctx, limit)
 }
 
-func (m *PaymentServiceMetrics) count(kind, status string) {
+func (m *PaymentServiceMetrics) countPayment(kind, status string) {
 	m.registry.payments.WithLabelValues(kind, status).Inc()
 }
 

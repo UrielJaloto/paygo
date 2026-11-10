@@ -85,19 +85,19 @@ func (s stubTransfers) List(context.Context, transfer.ListInput) (transfer.Trans
 	return s.page, s.err
 }
 
-func TestPosting_BuildJournalServiceMetrics_Movements_CountByKindAndResult(t *testing.T) {
+func TestTransferServiceMetrics_Movements_CountByKindAndResult(t *testing.T) {
 	calls := map[string]func(*metrics.TransferServiceMetrics) (transfer.TransferOutput, error){
-		"transfer": func(m *metrics.TransferServiceMetrics) (transfer.TransferOutput, error) {
-			return m.Transfer(context.Background(), transfer.TransferInput{})
+		"transfer": func(serviceMetrics *metrics.TransferServiceMetrics) (transfer.TransferOutput, error) {
+			return serviceMetrics.Transfer(context.Background(), transfer.TransferInput{})
 		},
-		"deposit": func(m *metrics.TransferServiceMetrics) (transfer.TransferOutput, error) {
-			return m.Deposit(context.Background(), transfer.FundingInput{})
+		"deposit": func(serviceMetrics *metrics.TransferServiceMetrics) (transfer.TransferOutput, error) {
+			return serviceMetrics.Deposit(context.Background(), transfer.FundingInput{})
 		},
-		"withdrawal": func(m *metrics.TransferServiceMetrics) (transfer.TransferOutput, error) {
-			return m.Withdraw(context.Background(), transfer.FundingInput{})
+		"withdrawal": func(serviceMetrics *metrics.TransferServiceMetrics) (transfer.TransferOutput, error) {
+			return serviceMetrics.Withdraw(context.Background(), transfer.FundingInput{})
 		},
-		"reversal": func(m *metrics.TransferServiceMetrics) (transfer.TransferOutput, error) {
-			return m.Reverse(context.Background(), transfer.ReverseInput{})
+		"reversal": func(serviceMetrics *metrics.TransferServiceMetrics) (transfer.TransferOutput, error) {
+			return serviceMetrics.Reverse(context.Background(), transfer.ReverseInput{})
 		},
 	}
 	results := []struct {
@@ -131,7 +131,7 @@ func assertMovement(t *testing.T, next stubTransfers, call func(*metrics.Transfe
 	assertSeries(t, scrape(t, registry), series)
 }
 
-func TestPosting_BuildJournalServiceMetrics_Queries_PassThroughWithoutCounting(t *testing.T) {
+func TestTransferServiceMetrics_Queries_PassThroughWithoutCounting(t *testing.T) {
 	registry := metrics.NewRegistry()
 	next := stubTransfers{output: transfer.TransferOutput{ID: "trf-1"}, page: transfer.TransferPage{NextCursor: "next"}, err: errBoom}
 	decorator := metrics.NewTransferServiceMetrics(next, registry)

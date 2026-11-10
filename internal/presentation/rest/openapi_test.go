@@ -26,8 +26,8 @@ type openAPIOperation struct {
 }
 
 type openAPIDocument struct {
-	OpenAPI string `json:"openapi"`
-	Info    struct {
+	OpenAPI     string `json:"openapi"`
+	Information struct {
 		Title   string `json:"title"`
 		Version string `json:"version"`
 	} `json:"info"`
@@ -77,8 +77,8 @@ func declaresIdempotencyKey(operation openAPIOperation) bool {
 
 func TestOpenAPI_File_DecodesWithTheExpectedHeader(t *testing.T) {
 	document := readOpenAPI(t)
-	if !strings.HasPrefix(document.OpenAPI, "3.1") || document.Info.Title != "paygo" || document.Info.Version != "1.0.0" {
-		t.Errorf("header = %q %q %q", document.OpenAPI, document.Info.Title, document.Info.Version)
+	if !strings.HasPrefix(document.OpenAPI, "3.1") || document.Information.Title != "paygo" || document.Information.Version != "1.0.0" {
+		t.Errorf("header = %q %q %q", document.OpenAPI, document.Information.Title, document.Information.Version)
 	}
 }
 

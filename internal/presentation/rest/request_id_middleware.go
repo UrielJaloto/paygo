@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	requestIDHeader    = "X-Request-Id"
+	requestIDHeader        = "X-Request-Id"
 	maximumRequestIDLength = 64
-	requestIDAlphabet  = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-"
+	requestIDAlphabet      = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-"
 )
 
 type IDGenerator interface {
@@ -22,14 +22,14 @@ type RequestContextualizer interface {
 }
 
 func NewRequestIDMiddleware(ids IDGenerator, contextualizer RequestContextualizer) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		id := c.GetHeader(requestIDHeader)
+	return func(ginContext *gin.Context) {
+		id := ginContext.GetHeader(requestIDHeader)
 		if !isValidRequestID(id) {
 			id = ids.NewID()
 		}
-		c.Header(requestIDHeader, id)
-		c.Request = c.Request.WithContext(contextualizer.AttachRequestID(c.Request.Context(), id))
-		c.Next()
+		ginContext.Header(requestIDHeader, id)
+		ginContext.Request = ginContext.Request.WithContext(contextualizer.AttachRequestID(ginContext.Request.Context(), id))
+		ginContext.Next()
 	}
 }
 

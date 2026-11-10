@@ -28,8 +28,8 @@ func NewOutboxRepository(pool *pgxpool.Pool) *OutboxRepository {
 	return &OutboxRepository{database: pool}
 }
 
-func (r *OutboxRepository) Add(ctx context.Context, e event.Event) error {
-	_, err := r.database.Exec(ctx, insertOutboxEvent, e.ID(), e.Type(), e.TransferID(), e.OwnerIDs(), e.OccurredAt())
+func (r *OutboxRepository) Add(ctx context.Context, event event.Event) error {
+	_, err := r.database.Exec(ctx, insertOutboxEvent, event.ID(), event.Type(), event.TransferID(), event.OwnerIDs(), event.OccurredAt())
 	return err
 }
 
@@ -46,15 +46,15 @@ func (r *OutboxRepository) ClaimUnpublished(ctx context.Context, limit int) ([]e
 	return restoreEvents(ctx, r.database, stored)
 }
 
-func (r *OutboxRepository) MarkPublished(ctx context.Context, ids []event.ID) error {
+func (r *OutboxRepository) MarkPublished(ctx context.Context, ids []string) error {
 	_, err := r.database.Exec(ctx, markOutboxPublished, ids)
 	return err
 }
 
 type storedEvent struct {
-	metadata       event.Metadata
-	eventType  event.Type
-	transferID transfer.ID
+	metadata   event.Metadata
+	eventType  string
+	transferID string
 	owners     []apikey.OwnerID
 }
 
@@ -63,29 +63,29 @@ func (s *storedEvent) scanEventTargets() []any {
 }
 
 func restoreEvents(ctx context.Context, database querier, stored []storedEvent) ([]event.Event, error) {
-	ids := make([]transfer.ID, 0, len(stored))
-	for _, s := range stored {
-		ids = append(ids, s.transferID)
+	ids := make([]string, 0, len(stored))
+	for _, stored := range stored {
+		ids = append(ids, stored.transferID)
 	}
 	transfers, err := findTransfersByID(ctx, database, ids)
 	if err != nil {
 		return nil, err
 	}
 	events := make([]event.Event, 0, len(stored))
-	for _, s := range stored {
+	for _, stored := range stored {
 		events = append(events, event.Restore(event.Snapshot{
-			Metadata:       s.metadata,
-			Type:       s.eventType,
-			Transfer:   transfers[s.transferID],
-			TransferID: string(s.transferID),
-			OwnerIDs:   s.owners,
+			Metadata:   stored.metadata,
+			Type:       stored.eventType,
+			Transfer:   transfers[stored.transferID],
+			TransferID: string(stored.transferID),
+			OwnerIDs:   stored.owners,
 		}))
 	}
 	return events, nil
 }
 
-func findTransfersByID(ctx context.Context, database querier, ids []transfer.ID) (map[transfer.ID]transfer.Transfer, error) {
-	present := make([]transfer.ID, 0, len(ids))
+func findTransfersByID(ctx context.Context, database querier, ids []string) (map[string]transfer.Transfer, error) {
+	present := make([]string, 0, len(ids))
 	for _, id := range ids {
 		if id != "" {
 			present = append(present, id)
@@ -95,9 +95,9 @@ func findTransfersByID(ctx context.Context, database querier, ids []transfer.ID)
 	found, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (transfer.Transfer, error) {
 		return scanTransfer(row)
 	})
-	byID := make(map[transfer.ID]transfer.Transfer, len(found))
-	for _, t := range found {
-		byID[t.ID()] = t
+	byID := make(map[string]transfer.Transfer, len(found))
+	for _, transfer := range found {
+		byID[transfer.ID()] = transfer
 	}
 	return byID, err
 }

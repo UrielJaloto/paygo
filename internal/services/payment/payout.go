@@ -15,7 +15,7 @@ import (
 type payoutOpening struct {
 	payout      payment.Payout
 	key         transfer.IdempotencyKey
-	fingerprint transfer.Fingerprint
+	fingerprint string
 }
 
 func (s *Service) CreatePayout(ctx context.Context, input PayoutInput) (PayoutOutput, error) {
@@ -45,7 +45,7 @@ func (s *Service) FindPayout(ctx context.Context, query PayoutQuery) (PayoutOutp
 	var found payment.Payout
 	err = s.unitOfWork.Run(ctx, func(ctx context.Context, store Store) error {
 		var err error
-		found, err = store.Payouts.FindByID(ctx, payment.PayoutID(query.PayoutID))
+		found, err = store.Payouts.FindByID(ctx, query.PayoutID)
 		return err
 	})
 	if err != nil {
@@ -66,7 +66,7 @@ func (s *Service) parsePayout(input PayoutInput) (payoutOpening, error) {
 	if err != nil {
 		return payoutOpening{}, err
 	}
-	created, err := payment.NewPayout(payment.PayoutID(s.ids.NewID()), draft, s.clock.Now())
+	created, err := payment.NewPayout(s.ids.NewID(), draft, s.now())
 	if err != nil {
 		return payoutOpening{}, err
 	}
@@ -174,7 +174,7 @@ func lockPayoutCustomer(ctx context.Context, store Store, created payment.Payout
 	if err != nil {
 		return account.Account{}, fmt.Errorf("locking accounts: %w", err)
 	}
-	return locked[slices.IndexFunc(locked, func(a account.Account) bool { return a.ID() == id })], nil
+	return locked[slices.IndexFunc(locked, func(account account.Account) bool { return account.ID() == id })], nil
 }
 
 func validatePayoutFunds(ctx context.Context, store Store, created payment.Payout, customer account.Account) error {
@@ -185,7 +185,7 @@ func validatePayoutFunds(ctx context.Context, store Store, created payment.Payou
 	if !customer.CanMoveMoney() {
 		return fmt.Errorf("%w: %s", account.ErrAccountFrozen, id)
 	}
-	balance, err := store.Ledger.CalculateBalance(ctx, id)
+	balance, err := store.Ledger.FindBalance(ctx, id)
 	if err != nil {
 		return fmt.Errorf("reading balance: %w", err)
 	}

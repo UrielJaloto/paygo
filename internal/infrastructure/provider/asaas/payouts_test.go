@@ -65,7 +65,7 @@ func TestSendPixPayout_Failures_ReturnMappedError(t *testing.T) {
 func TestFetchPayout_Statuses_MapToKinds(t *testing.T) {
 	tests := []struct {
 		status string
-		want   payment.EventKind
+		want   string
 	}{
 		{"DONE", payment.EventPayoutDone},
 		{"FAILED", payment.EventPayoutFailed},
@@ -75,11 +75,11 @@ func TestFetchPayout_Statuses_MapToKinds(t *testing.T) {
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.status, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				_, _ = w.Write([]byte(`{"id":"tra","status":"` + testCase.status + `"}`))
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+				_, _ = writer.Write([]byte(`{"id":"tra","status":"` + testCase.status + `"}`))
 			}))
 			defer server.Close()
-			provider := asaas.NewMoney(server.URL, apiKey, webhookToken, emptyCache(), server.Client())
+			provider := asaas.NewProvider(server.URL, apiKey, webhookToken, emptyCache(), server.Client())
 			got, err := provider.FetchPayout(context.Background(), "tra")
 			if err != nil {
 				t.Fatalf("FetchPayout: %v", err)

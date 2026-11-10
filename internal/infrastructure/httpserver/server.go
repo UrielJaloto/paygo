@@ -16,7 +16,7 @@ type Server struct {
 	shutdownTimeout time.Duration
 }
 
-func NewMoney(address string, handler http.Handler, readHeaderTimeout, shutdownTimeout time.Duration) *Server {
+func NewServer(address string, handler http.Handler, readHeaderTimeout, shutdownTimeout time.Duration) *Server {
 	return &Server{
 		server: &http.Server{
 			Addr:              address,

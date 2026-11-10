@@ -43,9 +43,7 @@ type statementPageResponse struct {
 	NextCursor string                  `json:"next_cursor,omitempty"`
 }
 
-type AccountPresenter struct{}
-
-func (AccountPresenter) toAccountResponse(output accountservice.AccountOutput) accountResponse {
+func toAccountResponse(output accountservice.AccountOutput) accountResponse {
 	return accountResponse{
 		ID:        output.ID,
 		OwnerID:   output.OwnerID,
@@ -56,15 +54,15 @@ func (AccountPresenter) toAccountResponse(output accountservice.AccountOutput) a
 	}
 }
 
-func (p AccountPresenter) toAccountPageResponse(page accountservice.AccountPage) accountPageResponse {
+func toAccountPageResponse(page accountservice.AccountPage) accountPageResponse {
 	items := make([]accountResponse, 0, len(page.Items))
 	for _, item := range page.Items {
-		items = append(items, p.toAccountResponse(item))
+		items = append(items, toAccountResponse(item))
 	}
 	return accountPageResponse{Items: items, NextCursor: page.NextCursor}
 }
 
-func (AccountPresenter) toBalanceResponse(output accountservice.BalanceOutput) balanceResponse {
+func toBalanceResponse(output accountservice.BalanceOutput) balanceResponse {
 	return balanceResponse{
 		AccountID: output.AccountID,
 		Amount:    formatAmount(output.AmountMinor, output.Currency),
@@ -72,7 +70,7 @@ func (AccountPresenter) toBalanceResponse(output accountservice.BalanceOutput) b
 	}
 }
 
-func (AccountPresenter) toStatementPageResponse(page accountservice.StatementPage) statementPageResponse {
+func toStatementPageResponse(page accountservice.StatementPage) statementPageResponse {
 	items := make([]statementLineResponse, 0, len(page.Items))
 	for _, line := range page.Items {
 		items = append(items, statementLineResponse{

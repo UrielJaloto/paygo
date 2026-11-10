@@ -29,9 +29,7 @@ type payoutResponse struct {
 	CreatedAt  string `json:"created_at"`
 }
 
-type PaymentPresenter struct{}
-
-func (PaymentPresenter) toChargeResponse(output paymentservice.ChargeOutput) chargeResponse {
+func toChargeResponse(output paymentservice.ChargeOutput) chargeResponse {
 	return chargeResponse{
 		ID:             output.ID,
 		AccountID:      output.AccountID,
@@ -45,7 +43,7 @@ func (PaymentPresenter) toChargeResponse(output paymentservice.ChargeOutput) cha
 	}
 }
 
-func (PaymentPresenter) toPayoutResponse(output paymentservice.PayoutOutput) payoutResponse {
+func toPayoutResponse(output paymentservice.PayoutOutput) payoutResponse {
 	return payoutResponse{
 		ID:         output.ID,
 		AccountID:  output.AccountID,
@@ -57,26 +55,31 @@ func (PaymentPresenter) toPayoutResponse(output paymentservice.PayoutOutput) pay
 	}
 }
 
-func (p PaymentPresenter) presentCreatedCharge(c *gin.Context, output paymentservice.ChargeOutput, err error) {
+func presentCreatedCharge(ginContext *gin.Context, output paymentservice.ChargeOutput, err error) {
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
-	c.JSON(markReplayed(c, output.IsReplay), p.toChargeResponse(output))
+	status := http.StatusCreated
+	if output.IsReplay {
+		status = markReplayed(ginContext)
+	}
+	ginContext.JSON(status, toChargeResponse(output))
 }
 
-func (p PaymentPresenter) presentCreatedPayout(c *gin.Context, output paymentservice.PayoutOutput, err error) {
+func presentCreatedPayout(ginContext *gin.Context, output paymentservice.PayoutOutput, err error) {
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
-	c.JSON(markReplayed(c, output.IsReplay), p.toPayoutResponse(output))
+	status := http.StatusCreated
+	if output.IsReplay {
+		status = markReplayed(ginContext)
+	}
+	ginContext.JSON(status, toPayoutResponse(output))
 }
 
-func markReplayed(c *gin.Context, isReplay bool) int {
-	if !isReplay {
-		return http.StatusCreated
-	}
-	c.Header(idempotentReplayedHeader, idempotentReplayedPresent)
+func markReplayed(ginContext *gin.Context) int {
+	ginContext.Header(idempotentReplayedHeader, idempotentReplayedPresent)
 	return http.StatusOK
 }

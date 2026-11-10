@@ -30,14 +30,14 @@ type AccountLocker interface {
 }
 
 type Ledger interface {
-	CalculateBalance(ctx context.Context, id account.ID) (money.Money, error)
+	FindBalance(ctx context.Context, id account.ID) (money.Money, error)
 	Append(ctx context.Context, journal ledger.JournalTransaction) error
 }
 
 type Repository interface {
-	FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (transfer.Transfer, transfer.Fingerprint, error)
-	FindByIDForUpdate(ctx context.Context, id transfer.ID) (transfer.Transfer, error)
-	Save(ctx context.Context, t transfer.Transfer, fingerprint transfer.Fingerprint) error
+	FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (transfer.Transfer, string, error)
+	FindByIDForUpdate(ctx context.Context, id string) (transfer.Transfer, error)
+	Save(ctx context.Context, t transfer.Transfer, fingerprint string) error
 	MarkReversed(ctx context.Context, t transfer.Transfer) error
 }
 
@@ -46,12 +46,8 @@ type Outbox interface {
 }
 
 type Reader interface {
-	FindByID(ctx context.Context, id transfer.ID) (transfer.Transfer, error)
+	FindByID(ctx context.Context, id string) (transfer.Transfer, error)
 	ListByAccount(ctx context.Context, id account.ID, cursor page.Cursor, limit page.Limit) ([]transfer.Transfer, error)
-}
-
-type Clock interface {
-	Now() time.Time
 }
 
 type IDGenerator interface {
@@ -59,14 +55,14 @@ type IDGenerator interface {
 }
 
 type Service struct {
-	unitOfWork    UnitOfWork
-	reader Reader
-	clock  Clock
-	ids    IDGenerator
+	unitOfWork UnitOfWork
+	reader     Reader
+	now        func() time.Time
+	ids        IDGenerator
 }
 
-func NewMoney(unitOfWork UnitOfWork, reader Reader, clock Clock, ids IDGenerator) *Service {
-	return &Service{unitOfWork: unitOfWork, reader: reader, clock: clock, ids: ids}
+func NewService(unitOfWork UnitOfWork, reader Reader, now func() time.Time, ids IDGenerator) *Service {
+	return &Service{unitOfWork: unitOfWork, reader: reader, now: now, ids: ids}
 }
 
 func (s *Service) Transfer(ctx context.Context, input TransferInput) (TransferOutput, error) {
@@ -107,7 +103,7 @@ func (s *Service) Reverse(ctx context.Context, input ReverseInput) (TransferOutp
 	}
 	var output TransferOutput
 	err = s.unitOfWork.Run(ctx, func(ctx context.Context, store Store) error {
-		reversed, err := s.reverseTransfer(ctx, store, reversal{owner: owner, key: key, id: transfer.ID(input.TransferID)})
+		reversed, err := s.reverseTransfer(ctx, store, reversal{owner: owner, key: key, id: input.TransferID})
 		output = reversed
 		return err
 	})
@@ -122,7 +118,7 @@ func (s *Service) Find(ctx context.Context, query TransferQuery) (TransferOutput
 	if err != nil {
 		return TransferOutput{}, err
 	}
-	found, err := s.reader.FindByID(ctx, transfer.ID(query.TransferID))
+	found, err := s.reader.FindByID(ctx, query.TransferID)
 	if err != nil {
 		return TransferOutput{}, fmt.Errorf("getting transfer: %w", err)
 	}

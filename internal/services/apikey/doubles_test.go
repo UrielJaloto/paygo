@@ -9,7 +9,7 @@ import (
 )
 
 type fakeRepository struct {
-	keys      map[apikey.ID]apikey.APIKey
+	keys      map[string]apikey.APIKey
 	saved     []apikey.APIKey
 	updated   []apikey.APIKey
 	findErr   error
@@ -18,7 +18,7 @@ type fakeRepository struct {
 }
 
 func newFakeRepository(keys ...apikey.APIKey) *fakeRepository {
-	repository := &fakeRepository{keys: map[apikey.ID]apikey.APIKey{}}
+	repository := &fakeRepository{keys: map[string]apikey.APIKey{}}
 	for _, key := range keys {
 		repository.keys[key.ID()] = key
 	}
@@ -30,7 +30,7 @@ func (f *fakeRepository) Save(_ context.Context, key apikey.APIKey) error {
 	return f.saveErr
 }
 
-func (f *fakeRepository) FindByPrefix(_ context.Context, prefix apikey.Prefix) (apikey.APIKey, error) {
+func (f *fakeRepository) FindByPrefix(_ context.Context, prefix string) (apikey.APIKey, error) {
 	if f.findErr != nil {
 		return apikey.APIKey{}, f.findErr
 	}
@@ -42,7 +42,7 @@ func (f *fakeRepository) FindByPrefix(_ context.Context, prefix apikey.Prefix) (
 	return apikey.APIKey{}, apikey.ErrAPIKeyNotFound
 }
 
-func (f *fakeRepository) FindByID(_ context.Context, id apikey.ID) (apikey.APIKey, error) {
+func (f *fakeRepository) FindByID(_ context.Context, id string) (apikey.APIKey, error) {
 	if f.findErr != nil {
 		return apikey.APIKey{}, f.findErr
 	}
@@ -71,12 +71,11 @@ type fakeHasher struct {
 	hash string
 }
 
-func (f fakeHasher) Hash(string) string {
+func (f fakeHasher) Hash(token string) string {
+	if token != validToken {
+		return "hash of another token"
+	}
 	return f.hash
-}
-
-func (f fakeHasher) Matches(token string, hash string) bool {
-	return token == validToken && hash == f.hash
 }
 
 type stubClock struct {

@@ -19,7 +19,7 @@ func decodeRequest(contentType, body string) (decodedBody, error) {
 	var decoded decodedBody
 	var decodeErr error
 	engine := gin.New()
-	engine.POST("/decode", func(c *gin.Context) { decodeErr = rest.DecodeJSON(c, &decoded) })
+	engine.POST("/decode", func(ginContext *gin.Context) { decodeErr = rest.DecodeJSON(ginContext, &decoded) })
 	request := httptest.NewRequest(http.MethodPost, "/decode", strings.NewReader(body))
 	request.Header.Set("Content-Type", contentType)
 	send(engine, request)

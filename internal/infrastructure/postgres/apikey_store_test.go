@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	keyPrefix apikey.Prefix = "abcdefgh"
-	keyHash                 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	keyPrefix string = "abcdefgh"
+	keyHash          = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 )
 
 func runAPIKeyContract(t *testing.T, newRepository func(t *testing.T) apikeyservice.Repository) {
@@ -35,7 +35,7 @@ func runAPIKeyContract(t *testing.T, newRepository func(t *testing.T) apikeyserv
 
 func newAPIKey(t *testing.T) apikey.APIKey {
 	t.Helper()
-	created, err := apikey.NewMoney(apikey.ID(testID(1)), testOwner, keyPrefix, keyHash, testTime)
+	created, err := apikey.NewAPIKey(testID(1), testOwner, keyPrefix, keyHash, testTime)
 	noError(t, err)
 	return created
 }
@@ -57,7 +57,7 @@ func apiKeyRoundTrip(t *testing.T, repository apikeyservice.Repository) {
 
 func apiKeyMissing(t *testing.T, repository apikeyservice.Repository) {
 	ctx := context.Background()
-	_, err := repository.FindByID(ctx, apikey.ID(testID(9)))
+	_, err := repository.FindByID(ctx, testID(9))
 	errorIs(t, err, apikey.ErrAPIKeyNotFound)
 	_, err = repository.FindByPrefix(ctx, keyPrefix)
 	errorIs(t, err, apikey.ErrAPIKeyNotFound)

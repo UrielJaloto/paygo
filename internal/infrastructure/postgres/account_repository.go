@@ -30,8 +30,8 @@ func NewAccountRepository(pool *pgxpool.Pool) *AccountRepository {
 	return &AccountRepository{database: pool}
 }
 
-func (r *AccountRepository) Save(ctx context.Context, acc account.Account) error {
-	_, err := r.database.Exec(ctx, insertAccount, acc.ID(), acc.OwnerID(), acc.Currency(), acc.Kind(), acc.Status(), acc.Version(), acc.CreatedAt())
+func (r *AccountRepository) Save(ctx context.Context, account account.Account) error {
+	_, err := r.database.Exec(ctx, insertAccount, account.ID(), account.OwnerID(), account.Currency(), account.Kind(), account.Status(), account.Version(), account.CreatedAt())
 	return err
 }
 
@@ -45,8 +45,8 @@ func (r *AccountRepository) ListByOwner(ctx context.Context, owner apikey.OwnerI
 	return pgx.CollectRows(rows, scanAccountRow)
 }
 
-func (r *AccountRepository) Update(ctx context.Context, acc account.Account, expectedVersion int64) error {
-	updated, err := r.database.Exec(ctx, updateAccount, acc.ID(), expectedVersion, acc.Status(), acc.Version())
+func (r *AccountRepository) Update(ctx context.Context, changed account.Account, expectedVersion int64) error {
+	updated, err := r.database.Exec(ctx, updateAccount, changed.ID(), expectedVersion, changed.Status(), changed.Version())
 	if err != nil {
 		return err
 	}

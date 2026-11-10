@@ -15,23 +15,23 @@ type Authenticator interface {
 }
 
 func NewAuthMiddleware(authenticator Authenticator) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		token, found := readBearerToken(c)
+	return func(ginContext *gin.Context) {
+		token, found := readBearerToken(ginContext)
 		if !found {
-			PresentError(c, apikeyservice.ErrUnauthenticated)
+			PresentError(ginContext, apikeyservice.ErrUnauthenticated)
 			return
 		}
-		principal, err := authenticator.Authenticate(c.Request.Context(), token)
+		principal, err := authenticator.Authenticate(ginContext.Request.Context(), token)
 		if err != nil {
-			PresentError(c, err)
+			PresentError(ginContext, err)
 			return
 		}
-		setOwner(c, principal.OwnerID)
-		c.Next()
+		setOwner(ginContext, principal.OwnerID)
+		ginContext.Next()
 	}
 }
 
-func readBearerToken(c *gin.Context) (string, bool) {
-	token, found := strings.CutPrefix(c.GetHeader("Authorization"), bearerPrefix)
+func readBearerToken(ginContext *gin.Context) (string, bool) {
+	token, found := strings.CutPrefix(ginContext.GetHeader("Authorization"), bearerPrefix)
 	return token, found && token != ""
 }

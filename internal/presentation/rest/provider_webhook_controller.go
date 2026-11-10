@@ -23,22 +23,22 @@ func NewProviderWebhookController(handler WebhookHandler) *ProviderWebhookContro
 	return &ProviderWebhookController{handler: handler}
 }
 
-func (p *ProviderWebhookController) Handle(c *gin.Context) {
-	body, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maximumProviderWebhookBytes))
+func (p *ProviderWebhookController) Handle(ginContext *gin.Context) {
+	body, err := io.ReadAll(http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maximumProviderWebhookBytes))
 	if err != nil {
-		PresentError(c, classifyDecodeError(err))
+		PresentError(ginContext, classifyDecodeError(err))
 		return
 	}
-	err = p.handler.HandleWebhook(c.Request.Context(), paymentservice.WebhookInput{
-		Provider: c.Param("provider"),
-		Header:   c.Request.Header,
+	err = p.handler.HandleWebhook(ginContext.Request.Context(), paymentservice.WebhookInput{
+		Provider: ginContext.Param("provider"),
+		Header:   ginContext.Request.Header,
 		Body:     body,
 	})
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	ginContext.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
 func registerProviderWebhookRoutes(engine *gin.Engine, controller *ProviderWebhookController) {

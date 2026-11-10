@@ -32,8 +32,7 @@ type PaymentServices struct {
 }
 
 type PaymentController struct {
-	services  PaymentServices
-	presenter PaymentPresenter
+	services PaymentServices
 }
 
 type payerRequest struct {
@@ -56,23 +55,23 @@ type createPayoutRequest struct {
 	PixKeyType string `json:"pix_key_type"`
 }
 
-func NewPaymentController(services PaymentServices, presenter PaymentPresenter) *PaymentController {
-	return &PaymentController{services: services, presenter: presenter}
+func NewPaymentController(services PaymentServices) *PaymentController {
+	return &PaymentController{services: services}
 }
 
-func (p *PaymentController) CreateCharge(c *gin.Context) {
-	key, err := readIdempotencyKey(c)
+func (p *PaymentController) CreateCharge(ginContext *gin.Context) {
+	key, err := readIdempotencyKey(ginContext)
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
 	var request createChargeRequest
-	if err := decodeJSON(c, &request); err != nil {
-		PresentError(c, err)
+	if err := decodeJSON(ginContext, &request); err != nil {
+		PresentError(ginContext, err)
 		return
 	}
-	output, err := p.services.ChargeCreator.CreateCharge(c.Request.Context(), paymentservice.ChargeInput{
-		OwnerID:        readOwner(c),
+	output, err := p.services.ChargeCreator.CreateCharge(ginContext.Request.Context(), paymentservice.ChargeInput{
+		OwnerID:        readOwner(ginContext),
 		IdempotencyKey: key,
 		AccountID:      request.AccountID,
 		Amount:         request.Amount,
@@ -80,32 +79,32 @@ func (p *PaymentController) CreateCharge(c *gin.Context) {
 		PayerName:      request.Payer.Name,
 		PayerDocument:  request.Payer.Document,
 	})
-	p.presenter.presentCreatedCharge(c, output, err)
+	presentCreatedCharge(ginContext, output, err)
 }
 
-func (p *PaymentController) FindCharge(c *gin.Context) {
-	query := paymentservice.ChargeQuery{OwnerID: readOwner(c), ChargeID: c.Param("id")}
-	output, err := p.services.ChargeReader.FindCharge(c.Request.Context(), query)
+func (p *PaymentController) FindCharge(ginContext *gin.Context) {
+	query := paymentservice.ChargeQuery{OwnerID: readOwner(ginContext), ChargeID: ginContext.Param("id")}
+	output, err := p.services.ChargeReader.FindCharge(ginContext.Request.Context(), query)
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
-	c.JSON(http.StatusOK, p.presenter.toChargeResponse(output))
+	ginContext.JSON(http.StatusOK, toChargeResponse(output))
 }
 
-func (p *PaymentController) CreatePayout(c *gin.Context) {
-	key, err := readIdempotencyKey(c)
+func (p *PaymentController) CreatePayout(ginContext *gin.Context) {
+	key, err := readIdempotencyKey(ginContext)
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
 	var request createPayoutRequest
-	if err := decodeJSON(c, &request); err != nil {
-		PresentError(c, err)
+	if err := decodeJSON(ginContext, &request); err != nil {
+		PresentError(ginContext, err)
 		return
 	}
-	output, err := p.services.PayoutCreator.CreatePayout(c.Request.Context(), paymentservice.PayoutInput{
-		OwnerID:        readOwner(c),
+	output, err := p.services.PayoutCreator.CreatePayout(ginContext.Request.Context(), paymentservice.PayoutInput{
+		OwnerID:        readOwner(ginContext),
 		IdempotencyKey: key,
 		AccountID:      request.AccountID,
 		Amount:         request.Amount,
@@ -113,17 +112,17 @@ func (p *PaymentController) CreatePayout(c *gin.Context) {
 		PixKey:         request.PixKey,
 		PixKeyType:     request.PixKeyType,
 	})
-	p.presenter.presentCreatedPayout(c, output, err)
+	presentCreatedPayout(ginContext, output, err)
 }
 
-func (p *PaymentController) FindPayout(c *gin.Context) {
-	query := paymentservice.PayoutQuery{OwnerID: readOwner(c), PayoutID: c.Param("id")}
-	output, err := p.services.PayoutReader.FindPayout(c.Request.Context(), query)
+func (p *PaymentController) FindPayout(ginContext *gin.Context) {
+	query := paymentservice.PayoutQuery{OwnerID: readOwner(ginContext), PayoutID: ginContext.Param("id")}
+	output, err := p.services.PayoutReader.FindPayout(ginContext.Request.Context(), query)
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
-	c.JSON(http.StatusOK, p.presenter.toPayoutResponse(output))
+	ginContext.JSON(http.StatusOK, toPayoutResponse(output))
 }
 
 func registerPaymentRoutes(group *gin.RouterGroup, controller *PaymentController) {

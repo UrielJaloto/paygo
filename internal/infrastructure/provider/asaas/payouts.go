@@ -41,7 +41,7 @@ func (p *Provider) SendPixPayout(ctx context.Context, request paymentservice.Pay
 	return paymentservice.PayoutResult{ProviderID: created.ID}, nil
 }
 
-func (p *Provider) FetchPayout(ctx context.Context, providerID string) (payment.EventKind, error) {
+func (p *Provider) FetchPayout(ctx context.Context, providerID string) (string, error) {
 	var found transferResponse
 	path := "/transfers/" + url.PathEscape(providerID)
 	if err := p.sendCall(ctx, apiCall{method: http.MethodGet, path: path, out: &found}); err != nil {
@@ -50,7 +50,7 @@ func (p *Provider) FetchPayout(ctx context.Context, providerID string) (payment.
 	return parsePayoutKind(found.Status), nil
 }
 
-func parsePayoutKind(status string) payment.EventKind {
+func parsePayoutKind(status string) string {
 	switch status {
 	case "DONE":
 		return payment.EventPayoutDone

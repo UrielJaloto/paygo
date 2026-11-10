@@ -13,6 +13,7 @@ const (
 	MaximumAmountMinor int64 = 100_000_000_00
 
 	minorPerUnit = 100
+	centDigits   = 2
 )
 
 var (
@@ -48,15 +49,14 @@ func ParseAmount(text string, currency Currency) (Money, error) {
 		return Money{}, fmt.Errorf("%w: %q", ErrInvalidAmount, text)
 	}
 	whole, fraction, _ := strings.Cut(text, ".")
-	units, err := strconv.ParseInt(whole, 10, 64)
-	if err != nil {
+	units, unitsErr := strconv.ParseInt(whole, 10, 64)
+	cents, centsErr := strconv.ParseInt((fraction + "00")[:centDigits], 10, 64)
+	if errors.Join(unitsErr, centsErr) != nil {
 		return Money{}, fmt.Errorf("%w: %q", ErrInvalidAmount, text)
 	}
 	if units > MaximumAmountMinor/minorPerUnit {
 		return Money{}, fmt.Errorf("%w: %q", ErrAmountTooLarge, text)
 	}
-	digits := fraction + "00"
-	cents := int64(digits[0]-'0')*10 + int64(digits[1]-'0')
 	return NewAmount(units*minorPerUnit+cents, currency)
 }
 

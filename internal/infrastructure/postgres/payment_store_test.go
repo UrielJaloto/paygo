@@ -52,7 +52,7 @@ func runPaymentContract(t *testing.T, newStores func(t *testing.T) PaymentStores
 
 func (s PaymentStores) newCharge(t *testing.T, sequence int, createdAt time.Time) payment.Charge {
 	t.Helper()
-	created, err := payment.NewCharge(payment.ChargeID(testID(sequence)), payment.ChargeDraft{
+	created, err := payment.NewCharge(testID(sequence), payment.ChargeDraft{
 		OwnerID:   testOwner,
 		AccountID: settlementBRL,
 		Amount:    money.NewMoney(1000, money.BRL),
@@ -70,7 +70,7 @@ func (s PaymentStores) newPayout(t *testing.T, sequence int, createdAt time.Time
 	accounts := pair{from: storeCustomer(t, s.Base, sequence+100).ID(), to: storeCustomer(t, s.Base, sequence+200).ID()}
 	hold := accounts.transfer(t, sequence+300, testOwner)
 	noError(t, s.Base.Transfers.Save(context.Background(), hold, testFingerprint))
-	created, err := payment.NewPayout(payment.PayoutID(testID(sequence)), payment.PayoutDraft{
+	created, err := payment.NewPayout(testID(sequence), payment.PayoutDraft{
 		OwnerID:        testOwner,
 		AccountID:      accounts.from,
 		Amount:         money.NewMoney(400, money.BRL),
@@ -107,14 +107,14 @@ func chargeRoundTrip(t *testing.T, stores PaymentStores) {
 
 func chargeMissing(t *testing.T, stores PaymentStores) {
 	ctx := context.Background()
-	_, err := stores.Charges.FindByID(ctx, payment.ChargeID(testID(9)))
+	_, err := stores.Charges.FindByID(ctx, testID(9))
 	errorIs(t, err, payment.ErrChargeNotFound)
 	_, err = stores.Charges.FindByProviderID(ctx, "missing")
 	errorIs(t, err, payment.ErrChargeNotFound)
 	_, _, err = stores.Charges.FindByIdempotencyKey(ctx, testOwner, contractKey)
 	errorIs(t, err, payment.ErrChargeNotFound)
 	noError(t, stores.Charges.Update(ctx, stores.newCharge(t, 9, testTime)))
-	_, err = stores.Charges.FindByID(ctx, payment.ChargeID(testID(9)))
+	_, err = stores.Charges.FindByID(ctx, testID(9))
 	errorIs(t, err, payment.ErrChargeNotFound)
 }
 
@@ -165,7 +165,7 @@ func payoutRoundTrip(t *testing.T, stores PaymentStores) {
 
 func payoutMissing(t *testing.T, stores PaymentStores) {
 	ctx := context.Background()
-	_, err := stores.Payouts.FindByID(ctx, payment.PayoutID(testID(9)))
+	_, err := stores.Payouts.FindByID(ctx, testID(9))
 	errorIs(t, err, payment.ErrPayoutNotFound)
 	_, err = stores.Payouts.FindByProviderID(ctx, "missing")
 	errorIs(t, err, payment.ErrPayoutNotFound)

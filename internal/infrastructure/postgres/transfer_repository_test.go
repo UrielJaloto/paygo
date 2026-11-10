@@ -23,9 +23,9 @@ import (
 )
 
 const (
-	testFingerprint transfer.Fingerprint = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	otherOwner      apikey.OwnerID       = "01900000-0000-7000-8000-00000000f002"
-	settlementBRL   account.ID           = "01900000-0000-7000-8000-000000000001"
+	testFingerprint                = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	otherOwner      apikey.OwnerID = "01900000-0000-7000-8000-00000000f002"
+	settlementBRL   account.ID     = "01900000-0000-7000-8000-000000000001"
 )
 
 type fixedClock struct{}
@@ -57,7 +57,7 @@ func newTransferFixture(t *testing.T) transferFixture {
 
 func (f transferFixture) newTransfer(t *testing.T, sequence int, owner apikey.OwnerID, key transfer.IdempotencyKey) transfer.Transfer {
 	t.Helper()
-	created, err := transfer.NewMoney(transfer.ID(testID(sequence)), transfer.Request{
+	created, err := transfer.NewTransfer(testID(sequence), transfer.Request{
 		OwnerID: owner,
 		Key:     key,
 		Kind:    transfer.KindTransfer,
@@ -66,7 +66,7 @@ func (f transferFixture) newTransfer(t *testing.T, sequence int, owner apikey.Ow
 		Amount:  money.NewMoney(100, money.BRL),
 	}, testTime)
 	if err != nil {
-		t.Fatalf("transfer.NewMoney() error = %v", err)
+		t.Fatalf("transfer.NewTransfer() error = %v", err)
 	}
 	return created
 }
@@ -89,7 +89,7 @@ func countRows(t *testing.T, pool *pgxpool.Pool, table string) int {
 	return rows
 }
 
-func TestPosting_BuildJournalSave_ThenFindByKey_RoundTrips(t *testing.T) {
+func TestTransferSave_ThenFindByKey_RoundTrips(t *testing.T) {
 	fixture := newTransferFixture(t)
 	saved := fixture.save(t, 100, "key-1")
 
@@ -124,12 +124,12 @@ func assertChecks(t *testing.T, checks map[string]bool) {
 	}
 }
 
-func TestPosting_BuildJournalFind_Missing_ReturnsNotFound(t *testing.T) {
+func TestTransferFind_Missing_ReturnsNotFound(t *testing.T) {
 	fixture := newTransferFixture(t)
 	ctx := context.Background()
 	_, _, keyErr := fixture.repository.FindByIdempotencyKey(ctx, testOwner, "missing")
-	_, idErr := fixture.repository.FindByID(ctx, transfer.ID(testID(9)))
-	_, lockErr := fixture.repository.FindByIDForUpdate(ctx, transfer.ID(testID(9)))
+	_, idErr := fixture.repository.FindByID(ctx, testID(9))
+	_, lockErr := fixture.repository.FindByIDForUpdate(ctx, testID(9))
 	for name, err := range map[string]error{"FindByIdempotencyKey": keyErr, "FindByID": idErr, "FindByIDForUpdate": lockErr} {
 		if !errors.Is(err, transfer.ErrTransferNotFound) {
 			t.Errorf("%s() error = %v, want %v", name, err, transfer.ErrTransferNotFound)
@@ -137,7 +137,7 @@ func TestPosting_BuildJournalFind_Missing_ReturnsNotFound(t *testing.T) {
 	}
 }
 
-func TestPosting_BuildJournalSave_DuplicateKey_ConflictsPerOwner(t *testing.T) {
+func TestTransferSave_DuplicateKey_ConflictsPerOwner(t *testing.T) {
 	fixture := newTransferFixture(t)
 	ctx := context.Background()
 	fixture.save(t, 100, "key-1")
@@ -150,7 +150,7 @@ func TestPosting_BuildJournalSave_DuplicateKey_ConflictsPerOwner(t *testing.T) {
 	}
 }
 
-func TestPosting_BuildJournalMarkReversed_Existing_ChangesStatus(t *testing.T) {
+func TestTransferMarkReversed_Existing_ChangesStatus(t *testing.T) {
 	fixture := newTransferFixture(t)
 	ctx := context.Background()
 	saved := fixture.save(t, 100, "key-1")
@@ -160,7 +160,7 @@ func TestPosting_BuildJournalMarkReversed_Existing_ChangesStatus(t *testing.T) {
 	if err := fixture.repository.MarkReversed(ctx, saved); err != nil {
 		t.Fatalf("MarkReversed() error = %v", err)
 	}
-	for name, find := range map[string]func(context.Context, transfer.ID) (transfer.Transfer, error){
+	for name, find := range map[string]func(context.Context, string) (transfer.Transfer, error){
 		"FindByID":          fixture.repository.FindByID,
 		"FindByIDForUpdate": fixture.repository.FindByIDForUpdate,
 	} {
@@ -174,7 +174,7 @@ func TestPosting_BuildJournalMarkReversed_Existing_ChangesStatus(t *testing.T) {
 	}
 }
 
-func TestPosting_BuildJournalListByAccount_Pages_NewestFirst(t *testing.T) {
+func TestTransferListByAccount_Pages_NewestFirst(t *testing.T) {
 	fixture := newTransferFixture(t)
 	ctx := context.Background()
 	for sequence, key := range map[int]transfer.IdempotencyKey{100: "key-1", 101: "key-2", 102: "key-3"} {
@@ -184,20 +184,20 @@ func TestPosting_BuildJournalListByAccount_Pages_NewestFirst(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListByAccount() error = %v", err)
 	}
-	if want := []transfer.ID{transfer.ID(testID(102)), transfer.ID(testID(101))}; !slices.Equal(transferIDs(first), want) {
+	if want := []string{testID(102), testID(101)}; !slices.Equal(transferIDs(first), want) {
 		t.Fatalf("first page = %v, want %v", transferIDs(first), want)
 	}
 	second, err := fixture.repository.ListByAccount(ctx, fixture.from, page.NewCursor(testID(101)), 2)
 	if err != nil {
 		t.Fatalf("ListByAccount() error = %v", err)
 	}
-	if want := []transfer.ID{transfer.ID(testID(100))}; !slices.Equal(transferIDs(second), want) {
+	if want := []string{testID(100)}; !slices.Equal(transferIDs(second), want) {
 		t.Fatalf("second page = %v, want %v", transferIDs(second), want)
 	}
 }
 
-func transferIDs(transfers []transfer.Transfer) []transfer.ID {
-	ids := make([]transfer.ID, 0, len(transfers))
+func transferIDs(transfers []transfer.Transfer) []string {
+	ids := make([]string, 0, len(transfers))
 	for _, found := range transfers {
 		ids = append(ids, found.ID())
 	}
@@ -208,7 +208,7 @@ func TestOutboxAdd_Event_StoresOwnerIDs(t *testing.T) {
 	fixture := newTransferFixture(t)
 	ctx := context.Background()
 	saved := fixture.save(t, 100, "key-1")
-	metadata := event.Metadata{ID: event.ID(testID(200)), At: testTime}
+	metadata := event.Metadata{ID: testID(200), At: testTime}
 	err := postgres.NewTransferUnitOfWork(fixture.pool).Run(ctx, func(ctx context.Context, store transferservice.Store) error {
 		return store.Outbox.Add(ctx, event.NewTransferEvent(metadata, saved, []apikey.OwnerID{testOwner, otherOwner}))
 	})
@@ -229,12 +229,12 @@ func TestOutboxAdd_Event_StoresOwnerIDs(t *testing.T) {
 	}
 }
 
-func TestPosting_BuildJournalUnitOfWork_WorkFails_RollsEverythingBack(t *testing.T) {
+func TestTransferUnitOfWork_WorkFails_RollsEverythingBack(t *testing.T) {
 	fixture := newTransferFixture(t)
 	created := fixture.newTransfer(t, 100, testOwner, "key-1")
 	journal, err := created.BuildJournal([2]string{testID(101), testID(102)})
 	if err != nil {
-		t.Fatalf("Journal() error = %v", err)
+		t.Fatalf("BuildJournal() error = %v", err)
 	}
 	err = postgres.NewTransferUnitOfWork(fixture.pool).Run(context.Background(), func(ctx context.Context, store transferservice.Store) error {
 		if err := store.Ledger.Append(ctx, journal); err != nil {
@@ -243,7 +243,7 @@ func TestPosting_BuildJournalUnitOfWork_WorkFails_RollsEverythingBack(t *testing
 		if err := store.Transfers.Save(ctx, created, testFingerprint); err != nil {
 			return err
 		}
-		metadata := event.Metadata{ID: event.ID(testID(200)), At: testTime}
+		metadata := event.Metadata{ID: testID(200), At: testTime}
 		if err := store.Outbox.Add(ctx, event.NewTransferEvent(metadata, created, []apikey.OwnerID{testOwner})); err != nil {
 			return err
 		}
@@ -260,10 +260,10 @@ func TestPosting_BuildJournalUnitOfWork_WorkFails_RollsEverythingBack(t *testing
 }
 
 func newRealService(fixture transferFixture) *transferservice.Service {
-	return transferservice.NewMoney(postgres.NewTransferUnitOfWork(fixture.pool), fixture.repository, fixedClock{}, &sequentialIDs{})
+	return transferservice.NewService(postgres.NewTransferUnitOfWork(fixture.pool), fixture.repository, fixedClock{}.Now, &sequentialIDs{})
 }
 
-func TestPosting_BuildJournalService_RealDatabase_MovesMoneyAndWritesOutbox(t *testing.T) {
+func TestTransferService_RealDatabase_MovesMoneyAndWritesOutbox(t *testing.T) {
 	fixture := newTransferFixture(t)
 	service := newRealService(fixture)
 	ctx := context.Background()
@@ -286,7 +286,7 @@ func TestPosting_BuildJournalService_RealDatabase_MovesMoneyAndWritesOutbox(t *t
 	}
 }
 
-func TestPosting_BuildJournalService_SameKeyTwice_Replays(t *testing.T) {
+func TestTransferService_SameKeyTwice_Replays(t *testing.T) {
 	fixture := newTransferFixture(t)
 	service := newRealService(fixture)
 	ctx := context.Background()
@@ -309,7 +309,7 @@ func TestPosting_BuildJournalService_SameKeyTwice_Replays(t *testing.T) {
 	}
 }
 
-func TestPosting_BuildJournalRepository_ClosedPool_ReturnsErrors(t *testing.T) {
+func TestTransferRepository_ClosedPool_ReturnsErrors(t *testing.T) {
 	fixture := newTransferFixture(t)
 	ctx := context.Background()
 	saved := fixture.newTransfer(t, 100, testOwner, "key-1")

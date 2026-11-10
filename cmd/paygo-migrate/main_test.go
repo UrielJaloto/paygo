@@ -23,10 +23,10 @@ type outcome struct {
 	stderr string
 }
 
-func runWith(env map[string]string) outcome {
+func runWith(environment map[string]string) outcome {
 	var stdout, stderr bytes.Buffer
 	lookup := func(name string) (string, bool) {
-		value, found := env[name]
+		value, found := environment[name]
 		return value, found
 	}
 	code := run(context.Background(), lookup, &stdout, &stderr)
@@ -36,8 +36,8 @@ func runWith(env map[string]string) outcome {
 func appliedFiles(t *testing.T, output string) []string {
 	t.Helper()
 	var entry struct {
-		Message   string   `json:"msg"`
-		Files []string `json:"files"`
+		Message string   `json:"msg"`
+		Files   []string `json:"files"`
 	}
 	if err := json.Unmarshal([]byte(output), &entry); err != nil {
 		t.Fatalf("decoding log %q: %v", output, err)
@@ -49,15 +49,15 @@ func appliedFiles(t *testing.T, output string) []string {
 }
 
 func TestRun_FreshDatabaseThenSecondRun_AppliesOnce(t *testing.T) {
-	env := map[string]string{"PAYGO_DATABASE_URL": newDatabaseURL(t)}
-	first := runWith(env)
+	environment := map[string]string{"PAYGO_DATABASE_URL": newDatabaseURL(t)}
+	first := runWith(environment)
 	if first.code != 0 {
 		t.Fatalf("first run = %d, stderr %q", first.code, first.stderr)
 	}
 	if files := appliedFiles(t, first.stdout); len(files) != 6 {
 		t.Errorf("first run applied %v, want 6 files", files)
 	}
-	second := runWith(env)
+	second := runWith(environment)
 	if second.code != 0 {
 		t.Fatalf("second run = %d, stderr %q", second.code, second.stderr)
 	}
@@ -70,17 +70,17 @@ func TestRun_Failure_ReturnsOneAndReportsOnStderr(t *testing.T) {
 	broken := newDatabaseURL(t)
 	execute(t, broken, "CREATE TABLE schema_migrations (id integer)")
 	tests := []struct {
-		name string
-		env  map[string]string
-		want string
+		name        string
+		environment map[string]string
+		want        string
 	}{
-		{name: "missing url", env: map[string]string{}, want: "PAYGO_DATABASE_URL"},
-		{name: "database down", env: map[string]string{"PAYGO_DATABASE_URL": "postgres://paygo:paygo@127.0.0.1:1/paygo?connect_timeout=1"}, want: "pinging database"},
-		{name: "migration fails", env: map[string]string{"PAYGO_DATABASE_URL": broken}, want: "applying migration"},
+		{name: "missing url", environment: map[string]string{}, want: "PAYGO_DATABASE_URL"},
+		{name: "database down", environment: map[string]string{"PAYGO_DATABASE_URL": "postgres://paygo:paygo@127.0.0.1:1/paygo?connect_timeout=1"}, want: "pinging database"},
+		{name: "migration fails", environment: map[string]string{"PAYGO_DATABASE_URL": broken}, want: "applying migration"},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			got := runWith(testCase.env)
+			got := runWith(testCase.environment)
 			if got.code != 1 {
 				t.Errorf("code = %d, want 1", got.code)
 			}
@@ -91,7 +91,7 @@ func TestRun_Failure_ReturnsOneAndReportsOnStderr(t *testing.T) {
 	}
 }
 
-const defaultAdminURL = "postgres://paygo:paygo@localhost:5432/postgres?sslmode=disable"
+const defaultAdminURL = "postgres://paygo:example-postgres-password@localhost:5432/postgres?sslmode=disable"
 
 func adminURL() string {
 	if configured := os.Getenv("PAYGO_TEST_DATABASE_URL"); configured != "" {

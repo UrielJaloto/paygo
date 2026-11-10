@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	contractPath   = moduleRoot + "/docs/openapi.yaml"
-	fakePixPrefix  = "00020126fake"
+	contractPath         = moduleRoot + "/docs/openapi.yaml"
+	fakePixPrefix        = "00020126fake"
 	schemaReferenceStart = "#/components/schemas/"
-	validDocument  = "52998224725"
+	validDocument        = "52998224725"
 )
 
 type documentedResponse struct {

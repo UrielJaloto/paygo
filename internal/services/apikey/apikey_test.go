@@ -23,9 +23,9 @@ var (
 
 func storedKey(t *testing.T) apikey.APIKey {
 	t.Helper()
-	key, err := apikey.NewMoney(keyID, owner, "abcdef01", validHash, now)
+	key, err := apikey.NewAPIKey(keyID, owner, "abcdef01", validHash, now)
 	if err != nil {
-		t.Fatalf("New: %v", err)
+		t.Fatalf("NewAPIKey: %v", err)
 	}
 	return key
 }
@@ -36,7 +36,7 @@ func newService(t *testing.T, repository *fakeRepository) *service.Service {
 	if err != nil {
 		t.Fatalf("ParseToken: %v", err)
 	}
-	return service.NewMoney(repository, stubGenerator{token: token}, fakeHasher{hash: validHash}, stubClock{now: now}, stubIDs{})
+	return service.NewService(repository, stubGenerator{token: token}, fakeHasher{hash: validHash}.Hash, stubClock{now: now}.Now, stubIDs{})
 }
 
 func TestIssue_Valid_ReturnsTokenAndStoresOnlyHash(t *testing.T) {
@@ -68,8 +68,8 @@ func TestIssue_InvalidOwner_ReturnsInvalidOwner(t *testing.T) {
 
 func TestIssue_GeneratorFails_DoesNotSave(t *testing.T) {
 	repository := newFakeRepository()
-	svc := service.NewMoney(repository, stubGenerator{err: errBoom}, fakeHasher{hash: validHash}, stubClock{now: now}, stubIDs{})
-	_, err := svc.Issue(context.Background(), service.IssueInput{OwnerID: owner})
+	keys := service.NewService(repository, stubGenerator{err: errBoom}, fakeHasher{hash: validHash}.Hash, stubClock{now: now}.Now, stubIDs{})
+	_, err := keys.Issue(context.Background(), service.IssueInput{OwnerID: owner})
 	if !errors.Is(err, errBoom) || len(repository.saved) != 0 {
 		t.Fatalf("error = %v, saved = %d", err, len(repository.saved))
 	}
@@ -81,8 +81,8 @@ func TestIssue_InvalidHash_DoesNotSave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseToken: %v", err)
 	}
-	svc := service.NewMoney(repository, stubGenerator{token: token}, fakeHasher{hash: "bad"}, stubClock{now: now}, stubIDs{})
-	_, err = svc.Issue(context.Background(), service.IssueInput{OwnerID: owner})
+	keys := service.NewService(repository, stubGenerator{token: token}, fakeHasher{hash: "bad"}.Hash, stubClock{now: now}.Now, stubIDs{})
+	_, err = keys.Issue(context.Background(), service.IssueInput{OwnerID: owner})
 	if !errors.Is(err, apikey.ErrInvalidToken) || len(repository.saved) != 0 {
 		t.Fatalf("error = %v, saved = %d", err, len(repository.saved))
 	}

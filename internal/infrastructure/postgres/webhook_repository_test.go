@@ -49,7 +49,7 @@ func newWebhookFixture(t *testing.T) webhookFixture {
 
 func (f webhookFixture) saveEndpoint(t *testing.T, sequence int, owner apikey.OwnerID) webhook.Endpoint {
 	t.Helper()
-	endpoint, err := webhook.NewEndpoint(webhook.EndpointID(testID(sequence)), owner, "https://example.com/hook", testSecret, testTime)
+	endpoint, err := webhook.NewEndpoint(testID(sequence), owner, "https://example.com/hook", testSecret, testTime)
 	if err != nil {
 		t.Fatalf("NewEndpoint() error = %v", err)
 	}
@@ -59,10 +59,10 @@ func (f webhookFixture) saveEndpoint(t *testing.T, sequence int, owner apikey.Ow
 	return endpoint
 }
 
-func (f webhookFixture) addEvent(t *testing.T, sequence int) event.ID {
+func (f webhookFixture) addEvent(t *testing.T, sequence int) string {
 	t.Helper()
 	saved := f.save(t, sequence, transfer.IdempotencyKey("key-"+testID(sequence)))
-	id := event.ID(testID(sequence + 1))
+	id := testID(sequence + 1)
 	metadata := event.Metadata{ID: id, At: testTime}
 	if err := f.outbox.Add(context.Background(), event.NewTransferEvent(metadata, saved, []apikey.OwnerID{testOwner})); err != nil {
 		t.Fatalf("Add() error = %v", err)
@@ -70,14 +70,14 @@ func (f webhookFixture) addEvent(t *testing.T, sequence int) event.ID {
 	return id
 }
 
-func (f webhookFixture) saveDeliveries(t *testing.T, base int, due time.Time, count int) []webhook.DeliveryID {
+func (f webhookFixture) saveDeliveries(t *testing.T, base int, due time.Time, count int) []string {
 	t.Helper()
 	endpoint := f.saveEndpoint(t, base, testOwner)
 	eventID := f.addEvent(t, base+1)
 	deliveries := make([]webhook.Delivery, 0, count)
-	ids := make([]webhook.DeliveryID, 0, count)
+	ids := make([]string, 0, count)
 	for offset := range count {
-		id := webhook.DeliveryID(testID(base + 10 + offset))
+		id := testID(base + 10 + offset)
 		deliveries = append(deliveries, webhook.NewDelivery(id, eventID, endpoint.ID(), testOwner, due))
 		ids = append(ids, id)
 	}
@@ -90,9 +90,9 @@ func (f webhookFixture) saveDeliveries(t *testing.T, base int, due time.Time, co
 func TestAPIKey_RoundTrip_FindsAndRevokes(t *testing.T) {
 	repository := postgres.NewAPIKeyRepository(newTestPool(t))
 	ctx := context.Background()
-	key, err := apikey.NewMoney(apikey.ID(testID(1)), testOwner, "abcd1234", testHash, testTime)
+	key, err := apikey.NewAPIKey(testID(1), testOwner, "abcd1234", testHash, testTime)
 	if err != nil {
-		t.Fatalf("NewMoney() error = %v", err)
+		t.Fatalf("NewAPIKey() error = %v", err)
 	}
 	if err := repository.Save(ctx, key); err != nil {
 		t.Fatalf("Save() error = %v", err)
@@ -125,7 +125,7 @@ func TestAPIKey_RoundTrip_FindsAndRevokes(t *testing.T) {
 
 func TestAPIKeyFind_Missing_ReturnsNotFound(t *testing.T) {
 	repository := postgres.NewAPIKeyRepository(newTestPool(t))
-	if _, err := repository.FindByID(context.Background(), apikey.ID(testID(1))); !errors.Is(err, apikey.ErrAPIKeyNotFound) {
+	if _, err := repository.FindByID(context.Background(), testID(1)); !errors.Is(err, apikey.ErrAPIKeyNotFound) {
 		t.Fatalf("FindByID() error = %v, want %v", err, apikey.ErrAPIKeyNotFound)
 	}
 }
@@ -165,7 +165,7 @@ func TestEndpointFindByID_SavedAndMissing_ReturnsEndpointOrNotFound(t *testing.T
 	if err != nil || found.OwnerID() != otherOwner || found.Secret() != testSecret || !found.IsActive() {
 		t.Fatalf("FindByID() = %+v, %v", found, err)
 	}
-	if _, err := fixture.endpoints.FindByID(ctx, webhook.EndpointID(testID(9))); !errors.Is(err, webhook.ErrEndpointNotFound) {
+	if _, err := fixture.endpoints.FindByID(ctx, testID(9)); !errors.Is(err, webhook.ErrEndpointNotFound) {
 		t.Fatalf("FindByID() error = %v, want %v", err, webhook.ErrEndpointNotFound)
 	}
 }
@@ -200,7 +200,7 @@ func TestOutboxMarkPublished_Event_IsNotClaimedAgain(t *testing.T) {
 	fixture := newWebhookFixture(t)
 	ctx := context.Background()
 	id := fixture.addEvent(t, 100)
-	if err := fixture.outbox.MarkPublished(ctx, []event.ID{id}); err != nil {
+	if err := fixture.outbox.MarkPublished(ctx, []string{id}); err != nil {
 		t.Fatalf("MarkPublished() error = %v", err)
 	}
 	claimed, err := fixture.outbox.ClaimUnpublished(ctx, 10)
@@ -245,7 +245,7 @@ func TestClaimDue_Concurrent_NeverReturnsSameDelivery(t *testing.T) {
 	if err := errors.Join(failures...); err != nil {
 		t.Fatalf("ClaimDue() error = %v", err)
 	}
-	seen := make(map[webhook.DeliveryID]bool)
+	seen := make(map[string]bool)
 	for _, claim := range slices.Concat(results...) {
 		if seen[claim.Delivery.ID()] {
 			t.Fatalf("delivery %s claimed twice", claim.Delivery.ID())
@@ -276,9 +276,9 @@ func TestDeliveries_DeadFilter_PagesAndUpdates(t *testing.T) {
 	assertOnlyPending(t, fixture, ids[2])
 }
 
-func assertOnlyPending(t *testing.T, fixture webhookFixture, want webhook.DeliveryID) {
+func assertOnlyPending(t *testing.T, fixture webhookFixture, want string) {
 	t.Helper()
-	pending, err := fixture.deliveries.ListPendingByEndpoint(context.Background(), webhook.EndpointID(testID(100)))
+	pending, err := fixture.deliveries.ListPendingByEndpoint(context.Background(), testID(100))
 	if err != nil || len(pending) != 1 || pending[0].ID() != want {
 		t.Fatalf("pending = %+v, %v, want only %s", pending, err, want)
 	}
@@ -286,7 +286,7 @@ func assertOnlyPending(t *testing.T, fixture webhookFixture, want webhook.Delive
 
 func TestDeliveryFindByID_Missing_ReturnsNotFound(t *testing.T) {
 	fixture := newWebhookFixture(t)
-	if _, err := fixture.deliveries.FindByID(context.Background(), webhook.DeliveryID(testID(9))); !errors.Is(err, webhook.ErrDeliveryNotFound) {
+	if _, err := fixture.deliveries.FindByID(context.Background(), testID(9)); !errors.Is(err, webhook.ErrDeliveryNotFound) {
 		t.Fatalf("FindByID() error = %v, want %v", err, webhook.ErrDeliveryNotFound)
 	}
 }
@@ -307,7 +307,7 @@ func TestClaims_TransferLookupFails_ReturnError(t *testing.T) {
 	}
 }
 
-func killDeliveries(ctx context.Context, store webhookservice.Store, ids []webhook.DeliveryID) error {
+func killDeliveries(ctx context.Context, store webhookservice.Store, ids []string) error {
 	for _, id := range ids {
 		found, err := store.Deliveries.FindByID(ctx, id)
 		if err != nil {
@@ -327,7 +327,7 @@ func TestFanOut_RealDatabase_CreatesOneDeliveryPerEndpoint(t *testing.T) {
 	fixture.saveEndpoint(t, 100, testOwner)
 	fixture.saveEndpoint(t, 101, testOwner)
 	fixture.addEvent(t, 110)
-	service := dispatch.NewMoney(postgres.NewDispatchUnitOfWork(fixture.pool, &sequentialIDs{}), fixture.deliveries, nil, fixedClock{}, nil)
+	service := dispatch.NewService(postgres.NewDispatchUnitOfWork(fixture.pool, &sequentialIDs{}), fixture.deliveries, nil, fixedClock{}.Now, nil)
 	result, err := service.FanOut(ctx, 10)
 	if err != nil {
 		t.Fatalf("FanOut() error = %v", err)

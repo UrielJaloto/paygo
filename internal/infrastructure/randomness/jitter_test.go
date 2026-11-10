@@ -18,8 +18,8 @@ func TestNext_ManyValues_StaysInRange(t *testing.T) {
 func TestNext_SameSeed_ReturnsSameSequence(t *testing.T) {
 	first, second := randomness.NewJitter(42), randomness.NewJitter(42)
 	for range 5 {
-		if a, b := first.Next(), second.Next(); a != b {
-			t.Fatalf("values differ: %v and %v", a, b)
+		if firstValue, secondValue := first.Next(), second.Next(); firstValue != secondValue {
+			t.Fatalf("values differ: %v and %v", firstValue, secondValue)
 		}
 	}
 }

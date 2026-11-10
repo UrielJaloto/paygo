@@ -20,7 +20,7 @@ import (
 
 func failing(err error) http.Handler {
 	engine := gin.New()
-	engine.GET("/fail", func(c *gin.Context) { rest.PresentError(c, err) })
+	engine.GET("/fail", func(ginContext *gin.Context) { rest.PresentError(ginContext, err) })
 	return engine
 }
 

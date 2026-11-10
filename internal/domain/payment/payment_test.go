@@ -211,7 +211,7 @@ func TestMarkPaid_Twice_AppliesOnce(t *testing.T) {
 }
 
 func TestMarkPaid_FromFinalState_ReturnsErrInvalidTransition(t *testing.T) {
-	for _, status := range []payment.ChargeStatus{payment.ChargeExpired, payment.ChargeFailed} {
+	for _, status := range []string{payment.ChargeExpired, payment.ChargeFailed} {
 		target := payment.RestoreCharge(payment.ChargeSnapshot{Status: status})
 		if _, err := target.MarkPaid("t1", later); !errors.Is(err, payment.ErrInvalidTransition) {
 			t.Fatalf("%s: error = %v", status, err)

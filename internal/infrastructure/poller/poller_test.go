@@ -52,7 +52,7 @@ func receive[T any](t *testing.T, source <-chan T) T {
 func start(ctx context.Context, task poller.Task, reporter poller.ErrorReporter, limit time.Duration) <-chan error {
 	result := make(chan error, 1)
 	go func() {
-		result <- poller.NewMoney(interval, reporter).Run(ctx, "sync", task, limit)
+		result <- poller.NewPoller(interval, reporter).Run(ctx, "sync", task, limit)
 	}()
 	return result
 }
@@ -72,7 +72,7 @@ func TestRun_Started_RunsBeforeFirstTick(t *testing.T) {
 	defer cancel()
 	calls := make(chan struct{}, 1)
 	before := time.Now()
-	long := poller.NewMoney(time.Hour, newSpyReporter())
+	long := poller.NewPoller(time.Hour, newSpyReporter())
 	result := make(chan error, 1)
 	go func() { result <- long.Run(ctx, "sync", signalling(calls), drain) }()
 

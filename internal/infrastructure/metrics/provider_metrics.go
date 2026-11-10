@@ -13,8 +13,8 @@ type paymentProvider interface {
 	Name() string
 	CreatePixCharge(ctx context.Context, request payment.ChargeRequest) (payment.ChargeResult, error)
 	SendPixPayout(ctx context.Context, request payment.PayoutRequest) (payment.PayoutResult, error)
-	FetchCharge(ctx context.Context, providerID string) (domainpayment.EventKind, error)
-	FetchPayout(ctx context.Context, providerID string) (domainpayment.EventKind, error)
+	FetchCharge(ctx context.Context, providerID string) (string, error)
+	FetchPayout(ctx context.Context, providerID string) (string, error)
 	ParseWebhook(ctx context.Context, header http.Header, body []byte) (domainpayment.ProviderEvent, error)
 }
 
@@ -33,35 +33,35 @@ func (m *ProviderMetrics) Name() string {
 
 func (m *ProviderMetrics) CreatePixCharge(ctx context.Context, request payment.ChargeRequest) (payment.ChargeResult, error) {
 	result, err := m.next.CreatePixCharge(ctx, request)
-	m.count("create_charge", err)
+	m.countProviderCall("create_charge", err)
 	return result, err
 }
 
 func (m *ProviderMetrics) SendPixPayout(ctx context.Context, request payment.PayoutRequest) (payment.PayoutResult, error) {
 	result, err := m.next.SendPixPayout(ctx, request)
-	m.count("send_payout", err)
+	m.countProviderCall("send_payout", err)
 	return result, err
 }
 
-func (m *ProviderMetrics) FetchCharge(ctx context.Context, providerID string) (domainpayment.EventKind, error) {
+func (m *ProviderMetrics) FetchCharge(ctx context.Context, providerID string) (string, error) {
 	kind, err := m.next.FetchCharge(ctx, providerID)
-	m.count("fetch_charge", err)
+	m.countProviderCall("fetch_charge", err)
 	return kind, err
 }
 
-func (m *ProviderMetrics) FetchPayout(ctx context.Context, providerID string) (domainpayment.EventKind, error) {
+func (m *ProviderMetrics) FetchPayout(ctx context.Context, providerID string) (string, error) {
 	kind, err := m.next.FetchPayout(ctx, providerID)
-	m.count("fetch_payout", err)
+	m.countProviderCall("fetch_payout", err)
 	return kind, err
 }
 
 func (m *ProviderMetrics) ParseWebhook(ctx context.Context, header http.Header, body []byte) (domainpayment.ProviderEvent, error) {
 	occurred, err := m.next.ParseWebhook(ctx, header, body)
-	m.count("parse_webhook", err)
+	m.countProviderCall("parse_webhook", err)
 	return occurred, err
 }
 
-func (m *ProviderMetrics) count(operation string, err error) {
+func (m *ProviderMetrics) countProviderCall(operation string, err error) {
 	m.registry.providerRequests.WithLabelValues(m.next.Name(), operation, resolveProviderResult(err)).Inc()
 }
 

@@ -14,26 +14,26 @@ const (
 var ErrInvalidConfig = errors.New("invalid configuration")
 
 type Database struct {
-	URL      string
-	MaxConns int32
+	URL                string
+	MaximumConnections int32
 }
 
 type HTTP struct {
-	Addr            string
-	RequestTimeout  time.Duration
-	ShutdownTimeout time.Duration
-	AdminToken      string
-	RateLimitPerSecond    int
-	RateLimitBurst  int
+	Addr               string
+	RequestTimeout     time.Duration
+	ShutdownTimeout    time.Duration
+	AdminToken         string
+	RateLimitPerSecond int
+	RateLimitBurst     int
 }
 
 type Worker struct {
-	Addr               string
-	PollInterval       time.Duration
-	Concurrency        int
-	WebhookTimeout     time.Duration
+	Addr                   string
+	PollInterval           time.Duration
+	Concurrency            int
+	WebhookTimeout         time.Duration
 	WebhookMaximumAttempts int
-	ShutdownTimeout    time.Duration
+	ShutdownTimeout        time.Duration
 }
 
 type Telemetry struct {
@@ -42,7 +42,7 @@ type Telemetry struct {
 }
 
 type Asaas struct {
-	Env             string
+	Environment     string
 	AllowProduction bool
 	APIKey          string
 	WebhookToken    string
@@ -75,27 +75,27 @@ type MigrateSettings struct {
 }
 
 func ReadAPI(lookup func(string) (string, bool)) (APISettings, error) {
-	r := reader{lookup: lookup}
-	settings := APISettings{Database: r.readDatabase(), HTTP: r.readHTTP(), Telemetry: r.readTelemetry(), Payments: r.readPayments()}
-	if err := r.err(); err != nil {
+	values := reader{lookup: lookup}
+	settings := APISettings{Database: values.readDatabase(), HTTP: values.readHTTP(), Telemetry: values.readTelemetry(), Payments: values.readPayments()}
+	if err := values.err(); err != nil {
 		return APISettings{}, err
 	}
 	return settings, nil
 }
 
 func ReadWorker(lookup func(string) (string, bool)) (WorkerSettings, error) {
-	r := reader{lookup: lookup}
-	settings := WorkerSettings{Database: r.readDatabase(), Worker: r.readWorker(), Telemetry: r.readTelemetry(), Payments: r.readPayments()}
-	if err := r.err(); err != nil {
+	values := reader{lookup: lookup}
+	settings := WorkerSettings{Database: values.readDatabase(), Worker: values.readWorker(), Telemetry: values.readTelemetry(), Payments: values.readPayments()}
+	if err := values.err(); err != nil {
 		return WorkerSettings{}, err
 	}
 	return settings, nil
 }
 
 func ReadMigrate(lookup func(string) (string, bool)) (MigrateSettings, error) {
-	r := reader{lookup: lookup}
-	settings := MigrateSettings{Database: r.readDatabase()}
-	if err := r.err(); err != nil {
+	values := reader{lookup: lookup}
+	settings := MigrateSettings{Database: values.readDatabase()}
+	if err := values.err(); err != nil {
 		return MigrateSettings{}, err
 	}
 	return settings, nil

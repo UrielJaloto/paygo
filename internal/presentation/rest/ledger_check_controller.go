@@ -27,17 +27,17 @@ func NewLedgerCheckController(checker LedgerChecker) *LedgerCheckController {
 	return &LedgerCheckController{checker: checker}
 }
 
-func (l *LedgerCheckController) Check(c *gin.Context) {
-	output, err := l.checker.Check(c.Request.Context())
+func (l *LedgerCheckController) Check(ginContext *gin.Context) {
+	output, err := l.checker.Check(ginContext.Request.Context())
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
 	status := http.StatusOK
 	if !output.OK {
 		status = http.StatusConflict
 	}
-	c.JSON(status, ledgerCheckResponse(output))
+	ginContext.JSON(status, ledgerCheckResponse(output))
 }
 
 func registerLedgerCheckRoutes(group *gin.RouterGroup, controller *LedgerCheckController) {

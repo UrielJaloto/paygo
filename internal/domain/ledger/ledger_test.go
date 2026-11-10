@@ -18,7 +18,7 @@ const (
 
 var postedAt = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
-func entry(t *testing.T, direction ledger.Direction, minor int64, currency money.Currency) ledger.Entry {
+func entry(t *testing.T, direction string, minor int64, currency money.Currency) ledger.Entry {
 	t.Helper()
 	created, err := ledger.NewEntry("entry", accountA, direction, money.NewMoney(minor, currency), postedAt)
 	if err != nil {
@@ -131,7 +131,7 @@ func TestPosting_BuildJournal_BuildsDebitThenCredit(t *testing.T) {
 		At:       postedAt,
 	}.BuildJournal()
 	if err != nil {
-		t.Fatalf("Posting.BuildJournal: %v", err)
+		t.Fatalf("Transfer: %v", err)
 	}
 	got := journal.Entries()
 	if journal.ID() != "j1" || len(got) != 2 {
@@ -155,7 +155,7 @@ func TestPosting_BuildJournal_StampsJournalIDOnEntries(t *testing.T) {
 		At:       postedAt,
 	}.BuildJournal()
 	if err != nil {
-		t.Fatalf("Posting.BuildJournal: %v", err)
+		t.Fatalf("Transfer: %v", err)
 	}
 	for _, got := range journal.Entries() {
 		if got.JournalID() != "j1" {

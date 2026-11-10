@@ -31,10 +31,9 @@ type TransferReader interface {
 }
 
 type TransferController struct {
-	creator   TransferCreator
-	reverser  TransferReverser
-	reader    TransferReader
-	presenter TransferPresenter
+	creator  TransferCreator
+	reverser TransferReverser
+	reader   TransferReader
 }
 
 type createTransferRequest struct {
@@ -44,72 +43,72 @@ type createTransferRequest struct {
 	Currency      string `json:"currency"`
 }
 
-func NewTransferController(creator TransferCreator, reverser TransferReverser, reader TransferReader, presenter TransferPresenter) *TransferController {
-	return &TransferController{creator: creator, reverser: reverser, reader: reader, presenter: presenter}
+func NewTransferController(creator TransferCreator, reverser TransferReverser, reader TransferReader) *TransferController {
+	return &TransferController{creator: creator, reverser: reverser, reader: reader}
 }
 
-func (t *TransferController) Create(c *gin.Context) {
-	key, err := readIdempotencyKey(c)
+func (t *TransferController) Create(ginContext *gin.Context) {
+	key, err := readIdempotencyKey(ginContext)
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
 	var request createTransferRequest
-	if err := decodeJSON(c, &request); err != nil {
-		PresentError(c, err)
+	if err := decodeJSON(ginContext, &request); err != nil {
+		PresentError(ginContext, err)
 		return
 	}
-	output, err := t.creator.Transfer(c.Request.Context(), transferservice.TransferInput{
-		OwnerID:        readOwner(c),
+	output, err := t.creator.Transfer(ginContext.Request.Context(), transferservice.TransferInput{
+		OwnerID:        readOwner(ginContext),
 		IdempotencyKey: key,
 		FromAccountID:  request.FromAccountID,
 		ToAccountID:    request.ToAccountID,
 		Amount:         request.Amount,
 		Currency:       request.Currency,
 	})
-	t.presenter.presentMoneyMovement(c, output, err)
+	presentMoneyMovement(ginContext, output, err)
 }
 
-func (t *TransferController) Reverse(c *gin.Context) {
-	key, err := readIdempotencyKey(c)
+func (t *TransferController) Reverse(ginContext *gin.Context) {
+	key, err := readIdempotencyKey(ginContext)
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
-	output, err := t.reverser.Reverse(c.Request.Context(), transferservice.ReverseInput{
-		OwnerID:        readOwner(c),
+	output, err := t.reverser.Reverse(ginContext.Request.Context(), transferservice.ReverseInput{
+		OwnerID:        readOwner(ginContext),
 		IdempotencyKey: key,
-		TransferID:     c.Param("id"),
+		TransferID:     ginContext.Param("id"),
 	})
-	t.presenter.presentMoneyMovement(c, output, err)
+	presentMoneyMovement(ginContext, output, err)
 }
 
-func (t *TransferController) Find(c *gin.Context) {
-	query := transferservice.TransferQuery{OwnerID: readOwner(c), TransferID: c.Param("id")}
-	output, err := t.reader.Find(c.Request.Context(), query)
+func (t *TransferController) Find(ginContext *gin.Context) {
+	query := transferservice.TransferQuery{OwnerID: readOwner(ginContext), TransferID: ginContext.Param("id")}
+	output, err := t.reader.Find(ginContext.Request.Context(), query)
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
-	c.JSON(http.StatusOK, t.presenter.toTransferResponse(output))
+	ginContext.JSON(http.StatusOK, toTransferResponse(output))
 }
 
-func (t *TransferController) List(c *gin.Context) {
-	page, err := t.reader.List(c.Request.Context(), transferservice.ListInput{
-		OwnerID:   readOwner(c),
-		AccountID: c.Query("account_id"),
-		Cursor:    c.Query("cursor"),
-		Limit:     c.Query("limit"),
+func (t *TransferController) List(ginContext *gin.Context) {
+	page, err := t.reader.List(ginContext.Request.Context(), transferservice.ListInput{
+		OwnerID:   readOwner(ginContext),
+		AccountID: ginContext.Query("account_id"),
+		Cursor:    ginContext.Query("cursor"),
+		Limit:     ginContext.Query("limit"),
 	})
 	if err != nil {
-		PresentError(c, err)
+		PresentError(ginContext, err)
 		return
 	}
-	c.JSON(http.StatusOK, t.presenter.toTransferPageResponse(page))
+	ginContext.JSON(http.StatusOK, toTransferPageResponse(page))
 }
 
-func readIdempotencyKey(c *gin.Context) (string, error) {
-	key := c.GetHeader(idempotencyKeyHeader)
+func readIdempotencyKey(ginContext *gin.Context) (string, error) {
+	key := ginContext.GetHeader(idempotencyKeyHeader)
 	if key == "" {
 		return "", errIdempotencyKeyRequired
 	}

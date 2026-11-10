@@ -18,10 +18,10 @@ import (
 )
 
 const (
-	chargeBody = `{"account_id":"acc-1","amount":"10.50","currency":"BRL","payer":{"name":"Ana","document":"12345678909"}}`
-	payoutBody = `{"account_id":"acc-1","amount":"10.50","currency":"BRL","pix_key":"a@b.co","pix_key_type":"email"}`
-	chargeJSON = `{"id":"chg-1","account_id":"acc-1","status":"pending","amount":"10.50","currency":"BRL","pix_copy_paste":"pix","pix_qr_png_base64":"qr","expires_at":"2026-01-02T03:04:05.678Z","created_at":"2026-01-02T03:04:05.678Z"}`
-	payoutJSON = `{"id":"pay-1","account_id":"acc-1","status":"processing","amount":"10.50","currency":"BRL","pix_key_type":"email","created_at":"2026-01-02T03:04:05.678Z"}`
+	chargeBody = `{"account_id":"account-1","amount":"10.50","currency":"BRL","payer":{"name":"Ana","document":"12345678909"}}`
+	payoutBody = `{"account_id":"account-1","amount":"10.50","currency":"BRL","pix_key":"a@b.co","pix_key_type":"email"}`
+	chargeJSON = `{"id":"chg-1","account_id":"account-1","status":"pending","amount":"10.50","currency":"BRL","pix_copy_paste":"pix","pix_qr_png_base64":"qr","expires_at":"2026-01-02T03:04:05.678Z","created_at":"2026-01-02T03:04:05.678Z"}`
+	payoutJSON = `{"id":"pay-1","account_id":"account-1","status":"processing","amount":"10.50","currency":"BRL","pix_key_type":"email","created_at":"2026-01-02T03:04:05.678Z"}`
 )
 
 var paymentAt = time.Date(2026, 1, 2, 3, 4, 5, 678_000_000, time.UTC)
@@ -40,7 +40,7 @@ type stubPayments struct {
 func (s *stubPayments) charge() paymentservice.ChargeOutput {
 	return paymentservice.ChargeOutput{
 		ID:           "chg-1",
-		AccountID:    "acc-1",
+		AccountID:    "account-1",
 		Status:       "pending",
 		PixCopyPaste: "pix",
 		PixQRBase64:  "qr",
@@ -55,7 +55,7 @@ func (s *stubPayments) charge() paymentservice.ChargeOutput {
 func (s *stubPayments) payout() paymentservice.PayoutOutput {
 	return paymentservice.PayoutOutput{
 		ID:          "pay-1",
-		AccountID:   "acc-1",
+		AccountID:   "account-1",
 		Status:      "processing",
 		PixKeyType:  "email",
 		AmountMinor: 1050,
@@ -97,7 +97,7 @@ func (s *stubPayments) Check(context.Context) (ledgercheck.CheckOutput, error) {
 func paymentRouter(payments *stubPayments) *gin.Engine {
 	services := rest.PaymentServices{ChargeCreator: payments, ChargeReader: payments, PayoutCreator: payments, PayoutReader: payments}
 	return apiRouter(rest.Controllers{
-		Payment:         rest.NewPaymentController(services, rest.PaymentPresenter{}),
+		Payment:         rest.NewPaymentController(services),
 		ProviderWebhook: rest.NewProviderWebhookController(payments),
 		LedgerCheck:     rest.NewLedgerCheckController(payments),
 	})
@@ -116,7 +116,7 @@ func TestPaymentCreateCharge_New_Returns201(t *testing.T) {
 	want := paymentservice.ChargeInput{
 		OwnerID:        ownerID,
 		IdempotencyKey: idempotencyKey,
-		AccountID:      "acc-1",
+		AccountID:      "account-1",
 		Amount:         "10.50",
 		Currency:       "BRL",
 		PayerName:      "Ana",
@@ -142,7 +142,7 @@ func TestPaymentCreatePayout_New_Returns201(t *testing.T) {
 	want := paymentservice.PayoutInput{
 		OwnerID:        ownerID,
 		IdempotencyKey: idempotencyKey,
-		AccountID:      "acc-1",
+		AccountID:      "account-1",
 		Amount:         "10.50",
 		Currency:       "BRL",
 		PixKey:         "a@b.co",
@@ -277,7 +277,7 @@ func TestLedgerCheck_Results_ReturnStatusAndBody(t *testing.T) {
 		body   string
 	}{
 		{"ok", ledgercheck.CheckOutput{OK: true, Accounts: 3}, http.StatusOK, `{"ok":true,"accounts":3}`},
-		{"mismatch", ledgercheck.CheckOutput{Mismatches: []string{"acc-1"}}, http.StatusConflict, `{"ok":false,"mismatches":["acc-1"]}`},
+		{"mismatch", ledgercheck.CheckOutput{Mismatches: []string{"account-1"}}, http.StatusConflict, `{"ok":false,"mismatches":["account-1"]}`},
 		{"unbalanced", ledgercheck.CheckOutput{UnbalancedCurrencies: []string{"BRL"}}, http.StatusConflict, `{"ok":false,"unbalanced_currencies":["BRL"]}`},
 	}
 	for _, testCase := range cases {

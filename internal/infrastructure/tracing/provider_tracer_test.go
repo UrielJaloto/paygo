@@ -62,7 +62,7 @@ func assertSpanOnError[D any](t *testing.T, build func(err error, tracer trace.T
 type stubProvider struct {
 	charge   payment.ChargeResult
 	payout   payment.PayoutResult
-	kind     domainpayment.EventKind
+	kind     string
 	occurred domainpayment.ProviderEvent
 	err      error
 }
@@ -79,11 +79,11 @@ func (s stubProvider) SendPixPayout(context.Context, payment.PayoutRequest) (pay
 	return s.payout, s.err
 }
 
-func (s stubProvider) FetchCharge(context.Context, string) (domainpayment.EventKind, error) {
+func (s stubProvider) FetchCharge(context.Context, string) (string, error) {
 	return s.kind, s.err
 }
 
-func (s stubProvider) FetchPayout(context.Context, string) (domainpayment.EventKind, error) {
+func (s stubProvider) FetchPayout(context.Context, string) (string, error) {
 	return s.kind, s.err
 }
 
@@ -99,20 +99,20 @@ func TestProviderTracer_EveryMethod_RecordsSpan(t *testing.T) {
 	runSuite(t, func(err error, tracer trace.Tracer) *tracing.ProviderTracer {
 		return tracing.NewProviderTracer(stubProvider{charge: charge, payout: payout, kind: kind, occurred: occurred, err: err}, tracer)
 	}, []methodCase[*tracing.ProviderTracer]{
-		{span: "provider.CreatePixCharge", want: charge, call: func(ctx context.Context, d *tracing.ProviderTracer) (any, error) {
-			return d.CreatePixCharge(ctx, payment.ChargeRequest{})
+		{span: "provider.CreatePixCharge", want: charge, call: func(ctx context.Context, tracer *tracing.ProviderTracer) (any, error) {
+			return tracer.CreatePixCharge(ctx, payment.ChargeRequest{})
 		}},
-		{span: "provider.SendPixPayout", want: payout, call: func(ctx context.Context, d *tracing.ProviderTracer) (any, error) {
-			return d.SendPixPayout(ctx, payment.PayoutRequest{})
+		{span: "provider.SendPixPayout", want: payout, call: func(ctx context.Context, tracer *tracing.ProviderTracer) (any, error) {
+			return tracer.SendPixPayout(ctx, payment.PayoutRequest{})
 		}},
-		{span: "provider.FetchCharge", want: kind, call: func(ctx context.Context, d *tracing.ProviderTracer) (any, error) {
-			return d.FetchCharge(ctx, "id")
+		{span: "provider.FetchCharge", want: kind, call: func(ctx context.Context, tracer *tracing.ProviderTracer) (any, error) {
+			return tracer.FetchCharge(ctx, "id")
 		}},
-		{span: "provider.FetchPayout", want: kind, call: func(ctx context.Context, d *tracing.ProviderTracer) (any, error) {
-			return d.FetchPayout(ctx, "id")
+		{span: "provider.FetchPayout", want: kind, call: func(ctx context.Context, tracer *tracing.ProviderTracer) (any, error) {
+			return tracer.FetchPayout(ctx, "id")
 		}},
-		{span: "provider.ParseWebhook", want: occurred, call: func(ctx context.Context, d *tracing.ProviderTracer) (any, error) {
-			return d.ParseWebhook(ctx, nil, nil)
+		{span: "provider.ParseWebhook", want: occurred, call: func(ctx context.Context, tracer *tracing.ProviderTracer) (any, error) {
+			return tracer.ParseWebhook(ctx, nil, nil)
 		}},
 	})
 }

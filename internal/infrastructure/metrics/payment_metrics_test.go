@@ -112,7 +112,7 @@ func TestPaymentServiceMetrics_OtherMethods_PassThroughWithoutCounting(t *testin
 type stubProvider struct {
 	charge   payment.ChargeResult
 	payout   payment.PayoutResult
-	kind     domainpayment.EventKind
+	kind     string
 	occurred domainpayment.ProviderEvent
 	err      error
 }
@@ -129,11 +129,11 @@ func (s stubProvider) SendPixPayout(context.Context, payment.PayoutRequest) (pay
 	return s.payout, s.err
 }
 
-func (s stubProvider) FetchCharge(context.Context, string) (domainpayment.EventKind, error) {
+func (s stubProvider) FetchCharge(context.Context, string) (string, error) {
 	return s.kind, s.err
 }
 
-func (s stubProvider) FetchPayout(context.Context, string) (domainpayment.EventKind, error) {
+func (s stubProvider) FetchPayout(context.Context, string) (string, error) {
 	return s.kind, s.err
 }
 
