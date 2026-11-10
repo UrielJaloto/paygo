@@ -13,7 +13,7 @@ type AccountOpener interface {
 }
 
 type AccountReader interface {
-	Get(ctx context.Context, query accountservice.AccountQuery) (accountservice.AccountOutput, error)
+	Find(ctx context.Context, query accountservice.AccountQuery) (accountservice.AccountOutput, error)
 	List(ctx context.Context, input accountservice.ListInput) (accountservice.AccountPage, error)
 	CalculateBalance(ctx context.Context, query accountservice.AccountQuery) (accountservice.BalanceOutput, error)
 	ListStatement(ctx context.Context, input accountservice.PageInput) (accountservice.StatementPage, error)
@@ -45,45 +45,45 @@ func (a *AccountController) Open(c *gin.Context) {
 		PresentError(c, err)
 		return
 	}
-	output, err := a.opener.Open(c.Request.Context(), accountservice.OpenInput{OwnerID: ownerFrom(c), Currency: request.Currency})
+	output, err := a.opener.Open(c.Request.Context(), accountservice.OpenInput{OwnerID: readOwner(c), Currency: request.Currency})
 	if err != nil {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, a.presenter.account(output))
+	c.JSON(http.StatusCreated, a.presenter.toAccountResponse(output))
 }
 
-func (a *AccountController) Get(c *gin.Context) {
-	output, err := a.reader.Get(c.Request.Context(), accountQueryFrom(c))
+func (a *AccountController) Find(c *gin.Context) {
+	output, err := a.reader.Find(c.Request.Context(), readAccountQuery(c))
 	if err != nil {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, a.presenter.account(output))
+	c.JSON(http.StatusOK, a.presenter.toAccountResponse(output))
 }
 
 func (a *AccountController) List(c *gin.Context) {
-	input := accountservice.ListInput{OwnerID: ownerFrom(c), Cursor: c.Query("cursor"), Limit: c.Query("limit")}
+	input := accountservice.ListInput{OwnerID: readOwner(c), Cursor: c.Query("cursor"), Limit: c.Query("limit")}
 	page, err := a.reader.List(c.Request.Context(), input)
 	if err != nil {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, a.presenter.accountPage(page))
+	c.JSON(http.StatusOK, a.presenter.toAccountPageResponse(page))
 }
 
 func (a *AccountController) CalculateBalance(c *gin.Context) {
-	output, err := a.reader.CalculateBalance(c.Request.Context(), accountQueryFrom(c))
+	output, err := a.reader.CalculateBalance(c.Request.Context(), readAccountQuery(c))
 	if err != nil {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, a.presenter.balance(output))
+	c.JSON(http.StatusOK, a.presenter.toBalanceResponse(output))
 }
 
 func (a *AccountController) ListStatement(c *gin.Context) {
 	input := accountservice.PageInput{
-		OwnerID:   ownerFrom(c),
+		OwnerID:   readOwner(c),
 		AccountID: c.Param("id"),
 		Cursor:    c.Query("cursor"),
 		Limit:     c.Query("limit"),
@@ -93,35 +93,35 @@ func (a *AccountController) ListStatement(c *gin.Context) {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, a.presenter.statementPage(page))
+	c.JSON(http.StatusOK, a.presenter.toStatementPageResponse(page))
 }
 
 func (a *AccountController) Freeze(c *gin.Context) {
-	output, err := a.freezer.Freeze(c.Request.Context(), accountQueryFrom(c))
+	output, err := a.freezer.Freeze(c.Request.Context(), readAccountQuery(c))
 	if err != nil {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, a.presenter.account(output))
+	c.JSON(http.StatusOK, a.presenter.toAccountResponse(output))
 }
 
 func (a *AccountController) Unfreeze(c *gin.Context) {
-	output, err := a.freezer.Unfreeze(c.Request.Context(), accountQueryFrom(c))
+	output, err := a.freezer.Unfreeze(c.Request.Context(), readAccountQuery(c))
 	if err != nil {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, a.presenter.account(output))
+	c.JSON(http.StatusOK, a.presenter.toAccountResponse(output))
 }
 
-func accountQueryFrom(c *gin.Context) accountservice.AccountQuery {
-	return accountservice.AccountQuery{OwnerID: ownerFrom(c), AccountID: c.Param("id")}
+func readAccountQuery(c *gin.Context) accountservice.AccountQuery {
+	return accountservice.AccountQuery{OwnerID: readOwner(c), AccountID: c.Param("id")}
 }
 
 func registerAccountRoutes(group *gin.RouterGroup, controller *AccountController) {
 	group.POST("/accounts", controller.Open)
 	group.GET("/accounts", controller.List)
-	group.GET("/accounts/:id", controller.Get)
+	group.GET("/accounts/:id", controller.Find)
 	group.GET("/accounts/:id/balance", controller.CalculateBalance)
 	group.GET("/accounts/:id/statement", controller.ListStatement)
 	group.POST("/accounts/:id/freeze", controller.Freeze)

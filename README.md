@@ -115,7 +115,7 @@ docker compose -f env/compose.yaml up -d postgres
 go test -race -tags integration ./...
 ```
 
-Every push is verified locally first: formatting, vet, govulncheck, race tests on Linux and Windows, the integration and end-to-end suites, a 100% coverage gate and the image build.
+Every push is verified locally first: `gofmt`, `go vet`, builds for Linux, macOS and Windows, the unit, integration and end-to-end suites and a 100% coverage gate. The race detector needs cgo, so `-race` runs where a C toolchain is present.
 
 ## Quickstart
 
@@ -201,7 +201,7 @@ The full contract is in [docs/openapi.yaml](docs/openapi.yaml). A unit test chec
 
 ## Tech stack
 
-Go 1.26, Gin, PostgreSQL 18 with pgx, OpenTelemetry, Prometheus, Docker Compose and GitHub Actions.
+Go 1.26, Gin, PostgreSQL 18 with pgx, OpenTelemetry, Prometheus and Docker Compose.
 
 ## Project layout
 

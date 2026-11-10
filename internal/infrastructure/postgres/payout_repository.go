@@ -56,18 +56,18 @@ func (r *PayoutRepository) Update(ctx context.Context, payout payment.Payout) er
 
 func (r *PayoutRepository) FindByID(ctx context.Context, id payment.PayoutID) (payment.Payout, error) {
 	found, err := scanPayout(r.database.QueryRow(ctx, selectPayout, id))
-	return found, notFound(err, payment.ErrPayoutNotFound)
+	return found, mapNotFound(err, payment.ErrPayoutNotFound)
 }
 
 func (r *PayoutRepository) FindByProviderID(ctx context.Context, providerID string) (payment.Payout, error) {
 	found, err := scanPayout(r.database.QueryRow(ctx, lockPayoutByProviderID, providerID))
-	return found, notFound(err, payment.ErrPayoutNotFound)
+	return found, mapNotFound(err, payment.ErrPayoutNotFound)
 }
 
 func (r *PayoutRepository) FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (payment.Payout, transfer.Fingerprint, error) {
 	var fingerprint transfer.Fingerprint
 	found, err := scanPayout(r.database.QueryRow(ctx, selectPayoutByKey, owner, key), &fingerprint)
-	return found, fingerprint, notFound(err, payment.ErrPayoutNotFound)
+	return found, fingerprint, mapNotFound(err, payment.ErrPayoutNotFound)
 }
 
 func (r *PayoutRepository) ListPending(ctx context.Context, olderThan time.Time, limit int) ([]payment.Payout, error) {

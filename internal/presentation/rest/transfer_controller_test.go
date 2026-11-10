@@ -61,7 +61,7 @@ func (s *stubTransfers) Reverse(_ context.Context, input transferservice.Reverse
 	return s.output(), s.err
 }
 
-func (s *stubTransfers) Get(_ context.Context, query transferservice.TransferQuery) (transferservice.TransferOutput, error) {
+func (s *stubTransfers) Find(_ context.Context, query transferservice.TransferQuery) (transferservice.TransferOutput, error) {
 	s.query = query
 	return s.output(), s.err
 }

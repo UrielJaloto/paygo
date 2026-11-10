@@ -22,8 +22,8 @@ import (
 	"github.com/UrielJaloto/paygo/internal/infrastructure/logging"
 	"github.com/UrielJaloto/paygo/internal/infrastructure/metrics"
 	"github.com/UrielJaloto/paygo/internal/infrastructure/postgres"
+	"github.com/UrielJaloto/paygo/internal/infrastructure/provider"
 	"github.com/UrielJaloto/paygo/internal/infrastructure/provider/asaas"
-	"github.com/UrielJaloto/paygo/internal/infrastructure/provider/fake"
 	"github.com/UrielJaloto/paygo/internal/infrastructure/ratelimit"
 	"github.com/UrielJaloto/paygo/internal/infrastructure/secret"
 	"github.com/UrielJaloto/paygo/internal/infrastructure/tracing"
@@ -37,10 +37,9 @@ import (
 )
 
 const (
-	serviceName           = "paygo-api"
-	readHeaderTimeout     = 5 * time.Second
-	tracingFlushTimeout   = 5 * time.Second
-	providerClientTimeout = 30 * time.Second
+	serviceName         = "paygo-api"
+	readHeaderTimeout   = 5 * time.Second
+	tracingFlushTimeout = 5 * time.Second
 )
 
 func main() {
@@ -67,13 +66,13 @@ func serve(ctx context.Context, lookup func(string) (string, bool), stdout io.Wr
 	if err != nil {
 		return err
 	}
-	served := serveTraced(ctx, settings, newToolkit(settings.Telemetry, stdout, traces))
+	served := serveRequests(ctx, settings, newToolkit(settings.Telemetry, stdout, traces))
 	flush, cancel := context.WithTimeout(context.WithoutCancel(ctx), tracingFlushTimeout)
 	defer cancel()
 	return errors.Join(served, traces.Shutdown(flush))
 }
 
-func serveTraced(ctx context.Context, settings config.APISettings, kit toolkit) error {
+func serveRequests(ctx context.Context, settings config.APISettings, kit toolkit) error {
 	services, err := openServices(ctx, settings, kit)
 	if err != nil {
 		return err
@@ -125,13 +124,13 @@ func openServices(ctx context.Context, settings config.APISettings, kit toolkit)
 	}
 	ledger := postgres.NewLedgerRepository(pool)
 	tokens := secret.NewTokenGenerator(rand.Reader)
-	provider := newProvider(settings.Payments, postgres.NewProviderCustomerCache(pool), kit)
+	selected := newProvider(settings.Payments, postgres.NewProviderCustomerCache(pool), kit)
 	return serviceSet{
 		accounts:  account.NewMoney(postgres.NewAccountRepository(pool), ledger, kit.clock, kit.ids),
 		keys:      apikey.NewMoney(postgres.NewAPIKeyRepository(pool), tokens, secret.TokenHasher{}, kit.clock, kit.ids),
 		transfers: transfer.NewMoney(postgres.NewTransferUnitOfWork(pool), postgres.NewTransferRepository(pool), kit.clock, kit.ids),
 		webhooks:  webhook.NewMoney(postgres.NewWebhookUnitOfWork(pool), tokens, kit.clock, kit.ids),
-		payments:  payment.NewMoney(postgres.NewPaymentUnitOfWork(pool), provider, kit.clock, kit.ids),
+		payments:  payment.NewMoney(postgres.NewPaymentUnitOfWork(pool), selected, kit.clock, kit.ids),
 		ledger:    ledgercheck.NewMoney(ledger),
 		readiness: postgres.NewHealthChecker(pool),
 		close:     pool.Close,
@@ -139,12 +138,8 @@ func openServices(ctx context.Context, settings config.APISettings, kit toolkit)
 }
 
 func newProvider(settings config.Payments, customers asaas.CustomerCache, kit toolkit) payment.PaymentProvider {
-	var base payment.PaymentProvider = fake.NewMoney(settings.FakeWebhookToken, kit.ids)
-	if settings.Provider == config.ProviderAsaas {
-		client := &http.Client{Timeout: providerClientTimeout}
-		base = asaas.NewMoney(settings.Asaas.BaseURL, settings.Asaas.APIKey, settings.Asaas.WebhookToken, customers, client)
-	}
-	return metrics.NewProviderMetrics(tracing.NewProviderTracer(base, kit.tracer), kit.registry)
+	selected := provider.NewMoney(settings, customers, kit.ids)
+	return metrics.NewProviderMetrics(tracing.NewProviderTracer(selected, kit.tracer), kit.registry)
 }
 
 func newRouter(settings config.HTTP, services serviceSet, kit toolkit) http.Handler {

@@ -37,10 +37,10 @@ func (s *Service) disableEndpoint(ctx context.Context, store Store, owner apikey
 	if err := store.Endpoints.Update(ctx, endpoint); err != nil {
 		return fmt.Errorf("updating endpoint: %w", err)
 	}
-	return s.killPending(ctx, store, id)
+	return s.killPendingDeliveries(ctx, store, id)
 }
 
-func (s *Service) killPending(ctx context.Context, store Store, id webhook.EndpointID) error {
+func (s *Service) killPendingDeliveries(ctx context.Context, store Store, id webhook.EndpointID) error {
 	pending, err := store.Deliveries.ListPendingByEndpoint(ctx, id)
 	if err != nil {
 		return fmt.Errorf("listing pending deliveries: %w", err)

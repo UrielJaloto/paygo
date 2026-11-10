@@ -62,7 +62,7 @@ func (s *Service) Open(ctx context.Context, input OpenInput) (AccountOutput, err
 	return toOutput(opened), nil
 }
 
-func (s *Service) Get(ctx context.Context, query AccountQuery) (AccountOutput, error) {
+func (s *Service) Find(ctx context.Context, query AccountQuery) (AccountOutput, error) {
 	found, err := s.findOwnedAccount(ctx, query)
 	if err != nil {
 		return AccountOutput{}, err

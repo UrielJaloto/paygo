@@ -232,7 +232,7 @@ func TestCreateCharge_StoreCallFails_ReturnsWrappedError(t *testing.T) {
 	}
 }
 
-func TestGetCharge_Queries_ReturnOnlyOwnCharges(t *testing.T) {
+func TestFindCharge_Queries_ReturnOnlyOwnCharges(t *testing.T) {
 	tests := []struct {
 		name  string
 		query service.ChargeQuery
@@ -250,12 +250,12 @@ func TestGetCharge_Queries_ReturnOnlyOwnCharges(t *testing.T) {
 			store := paymentStore()
 			seedCharge(t, store, payment.ChargePending)
 			store.failures["charge.find"] = testCase.fail
-			got, err := newService(store, &spyProvider{}).GetCharge(context.Background(), testCase.query)
+			got, err := newService(store, &spyProvider{}).FindCharge(context.Background(), testCase.query)
 			if !errors.Is(err, testCase.want) {
-				t.Fatalf("GetCharge() error = %v, want %v", err, testCase.want)
+				t.Fatalf("FindCharge() error = %v, want %v", err, testCase.want)
 			}
 			if testCase.want == nil && got.ID != "charge-1" {
-				t.Errorf("GetCharge() id = %q, want charge-1", got.ID)
+				t.Errorf("FindCharge() id = %q, want charge-1", got.ID)
 			}
 		})
 	}

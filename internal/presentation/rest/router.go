@@ -57,9 +57,7 @@ func NewRouter(dependencies Dependencies) *gin.Engine {
 		NewRecoveryMiddleware(dependencies.Middleware.Panics),
 		NewTimeoutMiddleware(dependencies.Middleware.RequestTimeout),
 	)
-	engine.NoRoute(func(c *gin.Context) {
-		presentProblem(c, problemKind{http.StatusNotFound, "not-found", "Not found"}, "route not found")
-	})
+	engine.NoRoute(presentRouteNotFound)
 	registerHealthRoutes(engine, dependencies.Controllers.Health)
 	registerProviderWebhookRoutes(engine, dependencies.Controllers.ProviderWebhook)
 	owner := newOwnerGroup(engine, dependencies.Access)
@@ -79,4 +77,8 @@ func newOwnerGroup(engine *gin.Engine, access Access) *gin.RouterGroup {
 
 func newAdminGroup(engine *gin.Engine, access Access) *gin.RouterGroup {
 	return engine.Group("/admin/v1", NewAdminAuthMiddleware(access.Admin))
+}
+
+func presentRouteNotFound(c *gin.Context) {
+	presentProblem(c, problemKind{http.StatusNotFound, "not-found", "Not found"}, "route not found")
 }

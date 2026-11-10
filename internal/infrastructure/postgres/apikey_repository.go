@@ -52,7 +52,7 @@ func scanAPIKey(row pgx.Row) (apikey.APIKey, error) {
 	var createdAt time.Time
 	var revokedAt *time.Time
 	if err := row.Scan(&id, &owner, &prefix, &hash, &createdAt, &revokedAt); err != nil {
-		return apikey.APIKey{}, notFound(err, apikey.ErrAPIKeyNotFound)
+		return apikey.APIKey{}, mapNotFound(err, apikey.ErrAPIKeyNotFound)
 	}
 	key, err := apikey.NewMoney(id, owner, prefix, hash, createdAt)
 	if revokedAt != nil {

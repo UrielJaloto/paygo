@@ -62,7 +62,7 @@ func TestSendPixPayout_Failures_ReturnMappedError(t *testing.T) {
 	}
 }
 
-func TestGetPayout_Statuses_MapToKinds(t *testing.T) {
+func TestFetchPayout_Statuses_MapToKinds(t *testing.T) {
 	tests := []struct {
 		status string
 		want   payment.EventKind
@@ -80,9 +80,9 @@ func TestGetPayout_Statuses_MapToKinds(t *testing.T) {
 			}))
 			defer server.Close()
 			provider := asaas.NewMoney(server.URL, apiKey, webhookToken, emptyCache(), server.Client())
-			got, err := provider.GetPayout(context.Background(), "tra")
+			got, err := provider.FetchPayout(context.Background(), "tra")
 			if err != nil {
-				t.Fatalf("GetPayout: %v", err)
+				t.Fatalf("FetchPayout: %v", err)
 			}
 			if got != testCase.want {
 				t.Fatalf("kind = %q, want %q", got, testCase.want)
@@ -91,9 +91,9 @@ func TestGetPayout_Statuses_MapToKinds(t *testing.T) {
 	}
 }
 
-func TestGetPayout_ServerError_ReturnsUnavailable(t *testing.T) {
+func TestFetchPayout_ServerError_ReturnsUnavailable(t *testing.T) {
 	provider, _ := newStub(t, emptyCache(), reply{http.StatusServiceUnavailable, ""})
-	if _, err := provider.GetPayout(context.Background(), "tra"); !errors.Is(err, payment.ErrProviderUnavailable) {
+	if _, err := provider.FetchPayout(context.Background(), "tra"); !errors.Is(err, payment.ErrProviderUnavailable) {
 		t.Fatalf("err = %v, want ErrProviderUnavailable", err)
 	}
 }

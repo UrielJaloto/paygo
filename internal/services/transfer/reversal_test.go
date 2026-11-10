@@ -186,7 +186,7 @@ func TestFind_Outcomes_ReturnExactResult(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			svc := newQueryService(&fakeReader{found: found})
-			got, err := svc.Get(context.Background(), service.TransferQuery{OwnerID: ownerOne, TransferID: testCase.id})
+			got, err := svc.Find(context.Background(), service.TransferQuery{OwnerID: ownerOne, TransferID: testCase.id})
 			if !errors.Is(err, testCase.want) {
 				t.Fatalf("error = %v, want %v", err, testCase.want)
 			}
@@ -199,10 +199,10 @@ func TestFind_Outcomes_ReturnExactResult(t *testing.T) {
 
 func TestFind_Failures_ReturnExactError(t *testing.T) {
 	svc := newQueryService(&fakeReader{findErr: errBoom})
-	if _, err := svc.Get(context.Background(), service.TransferQuery{OwnerID: ownerOne, TransferID: "t"}); !errors.Is(err, errBoom) {
+	if _, err := svc.Find(context.Background(), service.TransferQuery{OwnerID: ownerOne, TransferID: "t"}); !errors.Is(err, errBoom) {
 		t.Fatalf("error = %v", err)
 	}
-	if _, err := svc.Get(context.Background(), service.TransferQuery{OwnerID: "x"}); !errors.Is(err, apikey.ErrInvalidOwner) {
+	if _, err := svc.Find(context.Background(), service.TransferQuery{OwnerID: "x"}); !errors.Is(err, apikey.ErrInvalidOwner) {
 		t.Fatalf("error = %v", err)
 	}
 }

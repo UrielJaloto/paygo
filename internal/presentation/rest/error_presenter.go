@@ -41,7 +41,7 @@ func PresentError(c *gin.Context, err error) {
 	_ = c.Error(err)
 	for _, mapping := range listErrorMappings() {
 		if errors.Is(err, mapping.target) {
-			presentProblem(c, mapping.kind, problemDetail(err, mapping))
+			presentProblem(c, mapping.kind, formatProblemDetail(err, mapping))
 			return
 		}
 	}
@@ -53,7 +53,7 @@ func presentProblem(c *gin.Context, kind problemKind, detail string) {
 	c.AbortWithStatusJSON(kind.status, problem{Type: "/problems/" + kind.slug, Title: kind.title, Status: kind.status, Detail: detail})
 }
 
-func problemDetail(err error, mapping errorMapping) string {
+func formatProblemDetail(err error, mapping errorMapping) string {
 	if mapping.kind.status == http.StatusBadRequest {
 		return err.Error()
 	}

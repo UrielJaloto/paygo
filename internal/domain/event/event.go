@@ -38,16 +38,16 @@ type Event struct {
 }
 
 func NewTransferEvent(metadata Metadata, t transfer.Transfer, owners []apikey.OwnerID) Event {
-	return Event{metadata: metadata, eventType: typeOf(t), transfer: t, transferID: string(t.ID()), ownerIDs: recipients(owners)}
+	return Event{metadata: metadata, eventType: resolveTransferType(t), transfer: t, transferID: string(t.ID()), ownerIDs: removeDuplicateRecipients(owners)}
 }
 
 func NewChargeEvent(metadata Metadata, eventType Type, charge payment.Charge) Event {
-	owners := recipients([]apikey.OwnerID{charge.OwnerID()})
+	owners := removeDuplicateRecipients([]apikey.OwnerID{charge.OwnerID()})
 	return Event{metadata: metadata, eventType: eventType, charge: charge, transferID: charge.TransferID(), ownerIDs: owners}
 }
 
 func NewPayoutEvent(metadata Metadata, eventType Type, payout payment.Payout) Event {
-	owners := recipients([]apikey.OwnerID{payout.OwnerID()})
+	owners := removeDuplicateRecipients([]apikey.OwnerID{payout.OwnerID()})
 	return Event{metadata: metadata, eventType: eventType, payout: payout, transferID: payout.Transfers().Final, ownerIDs: owners}
 }
 
@@ -69,14 +69,14 @@ func Restore(snapshot Snapshot) Event {
 	}
 }
 
-func typeOf(t transfer.Transfer) Type {
+func resolveTransferType(t transfer.Transfer) Type {
 	if t.Kind() == transfer.KindReversal {
 		return TypeTransferReversed
 	}
 	return TypeTransferCompleted
 }
 
-func recipients(owners []apikey.OwnerID) []apikey.OwnerID {
+func removeDuplicateRecipients(owners []apikey.OwnerID) []apikey.OwnerID {
 	unique := make([]apikey.OwnerID, 0, len(owners))
 	for _, owner := range owners {
 		if owner != apikey.SystemOwnerID && !slices.Contains(unique, owner) {

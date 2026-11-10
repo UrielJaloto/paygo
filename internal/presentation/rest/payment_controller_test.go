@@ -70,7 +70,7 @@ func (s *stubPayments) CreateCharge(_ context.Context, input paymentservice.Char
 	return s.charge(), s.err
 }
 
-func (s *stubPayments) GetCharge(_ context.Context, query paymentservice.ChargeQuery) (paymentservice.ChargeOutput, error) {
+func (s *stubPayments) FindCharge(_ context.Context, query paymentservice.ChargeQuery) (paymentservice.ChargeOutput, error) {
 	s.chargeQuery = query
 	return s.charge(), s.err
 }
@@ -80,7 +80,7 @@ func (s *stubPayments) CreatePayout(_ context.Context, input paymentservice.Payo
 	return s.payout(), s.err
 }
 
-func (s *stubPayments) GetPayout(_ context.Context, query paymentservice.PayoutQuery) (paymentservice.PayoutOutput, error) {
+func (s *stubPayments) FindPayout(_ context.Context, query paymentservice.PayoutQuery) (paymentservice.PayoutOutput, error) {
 	s.payoutQuery = query
 	return s.payout(), s.err
 }
@@ -204,7 +204,7 @@ func TestPaymentCreate_ServiceError_ReturnsMappedProblem(t *testing.T) {
 	}
 }
 
-func TestPaymentGetCharge_Own_Returns200(t *testing.T) {
+func TestPaymentFindCharge_Own_Returns200(t *testing.T) {
 	payments := &stubPayments{}
 	recorder := call(paymentRouter(payments), http.MethodGet, "/v1/charges/chg-1", "")
 	assertResponse(t, recorder, http.StatusOK, chargeJSON)
@@ -213,7 +213,7 @@ func TestPaymentGetCharge_Own_Returns200(t *testing.T) {
 	}
 }
 
-func TestPaymentGetPayout_Own_Returns200(t *testing.T) {
+func TestPaymentFindPayout_Own_Returns200(t *testing.T) {
 	payments := &stubPayments{}
 	recorder := call(paymentRouter(payments), http.MethodGet, "/v1/payouts/pay-1", "")
 	assertResponse(t, recorder, http.StatusOK, payoutJSON)

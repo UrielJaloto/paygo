@@ -85,9 +85,9 @@ func (c *apiClient) openFunded(ctx context.Context) (string, error) {
 	return account.ID, nil
 }
 
-func (c *apiClient) Transfer(ctx context.Context, from, to string, amountMinor int64, key string) error {
-	body := map[string]string{"from_account_id": from, "to_account_id": to, "amount": formatMinor(amountMinor), "currency": currency}
-	return c.post(ctx, request{path: "/v1/transfers", token: c.token, key: key, body: body}, nil)
+func (c *apiClient) Transfer(ctx context.Context, move movement) error {
+	body := map[string]string{"from_account_id": move.from, "to_account_id": move.to, "amount": formatMinor(move.amountMinor), "currency": currency}
+	return c.post(ctx, request{path: "/v1/transfers", token: c.token, key: move.key, body: body}, nil)
 }
 
 func (c *apiClient) Balances(ctx context.Context) (map[string]int64, error) {

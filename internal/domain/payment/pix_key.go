@@ -40,9 +40,9 @@ func ParsePixKey(kind, value string) (PixKey, error) {
 func normalizePixValue(kind PixKeyType, value string) (string, bool) {
 	switch kind {
 	case PixKeyCPF:
-		return documentOfLength(value, cpfLength)
+		return trimDocument(value, cpfLength)
 	case PixKeyCNPJ:
-		return documentOfLength(value, cnpjLength)
+		return trimDocument(value, cnpjLength)
 	case PixKeyEmail:
 		return value, isValidEmail(value)
 	case PixKeyPhone:
@@ -53,7 +53,7 @@ func normalizePixValue(kind PixKeyType, value string) (string, bool) {
 	return "", false
 }
 
-func documentOfLength(value string, length int) (string, bool) {
+func trimDocument(value string, length int) (string, bool) {
 	document, err := ParseDocument(value)
 	return string(document), err == nil && len(document) == length
 }

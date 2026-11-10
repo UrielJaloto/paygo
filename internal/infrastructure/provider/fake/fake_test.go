@@ -87,7 +87,7 @@ func TestSendPixPayout_MarkPayoutState_ReportsStatus(t *testing.T) {
 	}
 }
 
-func TestGetCharge_Unknown_ReturnsIgnored(t *testing.T) {
+func TestFetchCharge_Unknown_ReturnsIgnored(t *testing.T) {
 	assertCharge(t, newProvider(), "missing", payment.EventIgnored)
 }
 
@@ -165,9 +165,9 @@ func TestParseWebhook_PayoutEvent_UpdatesState(t *testing.T) {
 
 func assertCharge(t *testing.T, provider *fake.Provider, id string, want payment.EventKind) {
 	t.Helper()
-	got, err := provider.GetCharge(context.Background(), id)
+	got, err := provider.FetchCharge(context.Background(), id)
 	if err != nil {
-		t.Fatalf("GetCharge: %v", err)
+		t.Fatalf("FetchCharge: %v", err)
 	}
 	if got != want {
 		t.Fatalf("charge status = %q, want %q", got, want)
@@ -176,9 +176,9 @@ func assertCharge(t *testing.T, provider *fake.Provider, id string, want payment
 
 func assertPayout(t *testing.T, provider *fake.Provider, id string, want payment.EventKind) {
 	t.Helper()
-	got, err := provider.GetPayout(context.Background(), id)
+	got, err := provider.FetchPayout(context.Background(), id)
 	if err != nil {
-		t.Fatalf("GetPayout: %v", err)
+		t.Fatalf("FetchPayout: %v", err)
 	}
 	if got != want {
 		t.Fatalf("payout status = %q, want %q", got, want)

@@ -17,7 +17,7 @@ func isUniqueViolation(err error, constraint string) bool {
 	return postgresError.Code == uniqueViolation && postgresError.ConstraintName == constraint
 }
 
-func notFound(err error, domainErr error) error {
+func mapNotFound(err error, domainErr error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domainErr
 	}

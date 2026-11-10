@@ -56,7 +56,7 @@ func (r *LedgerRepository) CalculateBalance(ctx context.Context, id account.ID) 
 	var minor int64
 	var currency money.Currency
 	err := r.database.QueryRow(ctx, selectBalance, id).Scan(&minor, &currency)
-	return money.NewMoney(minor, currency), notFound(err, account.ErrAccountNotFound)
+	return money.NewMoney(minor, currency), mapNotFound(err, account.ErrAccountNotFound)
 }
 
 func (r *LedgerRepository) ListStatement(ctx context.Context, id account.ID, cursor page.Cursor, limit page.Limit) ([]ledger.Entry, error) {

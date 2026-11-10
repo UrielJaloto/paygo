@@ -36,8 +36,8 @@ func (r *EndpointRepository) Save(ctx context.Context, endpoint webhook.Endpoint
 
 func (r *EndpointRepository) FindByID(ctx context.Context, id webhook.EndpointID) (webhook.Endpoint, error) {
 	var snapshot webhook.EndpointSnapshot
-	err := r.database.QueryRow(ctx, selectEndpoint, id).Scan(endpointDestinations(&snapshot)...)
-	return webhook.RestoreEndpoint(snapshot), notFound(err, webhook.ErrEndpointNotFound)
+	err := r.database.QueryRow(ctx, selectEndpoint, id).Scan(scanEndpointTargets(&snapshot)...)
+	return webhook.RestoreEndpoint(snapshot), mapNotFound(err, webhook.ErrEndpointNotFound)
 }
 
 func (r *EndpointRepository) ListByOwner(ctx context.Context, owner apikey.OwnerID) ([]webhook.Endpoint, error) {
@@ -63,10 +63,10 @@ func (r *EndpointRepository) ListActiveByOwners(ctx context.Context, owners []ap
 
 func scanEndpointRow(row pgx.CollectableRow) (webhook.Endpoint, error) {
 	var snapshot webhook.EndpointSnapshot
-	err := row.Scan(endpointDestinations(&snapshot)...)
+	err := row.Scan(scanEndpointTargets(&snapshot)...)
 	return webhook.RestoreEndpoint(snapshot), err
 }
 
-func endpointDestinations(snapshot *webhook.EndpointSnapshot) []any {
+func scanEndpointTargets(snapshot *webhook.EndpointSnapshot) []any {
 	return []any{&snapshot.ID, &snapshot.OwnerID, &snapshot.URL, &snapshot.Secret, &snapshot.IsActive, &snapshot.CreatedAt}
 }

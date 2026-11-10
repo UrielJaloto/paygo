@@ -10,9 +10,16 @@ import (
 
 const transferMinor = 100
 
+type movement struct {
+	from        string
+	to          string
+	amountMinor int64
+	key         string
+}
+
 type wallet interface {
 	Setup(ctx context.Context, accounts int) ([]string, error)
-	Transfer(ctx context.Context, from, to string, amountMinor int64, key string) error
+	Transfer(ctx context.Context, move movement) error
 	Balances(ctx context.Context) (map[string]int64, error)
 }
 
@@ -72,7 +79,7 @@ func runClient(ctx context.Context, target wallet, load workload, state clientSt
 		from, to := state.picker.next()
 		key := fmt.Sprintf("%s-%d-%d", load.run, state.index, sequence)
 		started := time.Now()
-		err := target.Transfer(ctx, load.accounts[from], load.accounts[to], transferMinor, key)
+		err := target.Transfer(ctx, movement{from: load.accounts[from], to: load.accounts[to], amountMinor: transferMinor, key: key})
 		result.samples = append(result.samples, time.Since(started))
 		if err != nil {
 			result.failures++

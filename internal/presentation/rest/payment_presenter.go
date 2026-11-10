@@ -31,7 +31,7 @@ type payoutResponse struct {
 
 type PaymentPresenter struct{}
 
-func (PaymentPresenter) charge(output paymentservice.ChargeOutput) chargeResponse {
+func (PaymentPresenter) toChargeResponse(output paymentservice.ChargeOutput) chargeResponse {
 	return chargeResponse{
 		ID:             output.ID,
 		AccountID:      output.AccountID,
@@ -45,7 +45,7 @@ func (PaymentPresenter) charge(output paymentservice.ChargeOutput) chargeRespons
 	}
 }
 
-func (PaymentPresenter) payout(output paymentservice.PayoutOutput) payoutResponse {
+func (PaymentPresenter) toPayoutResponse(output paymentservice.PayoutOutput) payoutResponse {
 	return payoutResponse{
 		ID:         output.ID,
 		AccountID:  output.AccountID,
@@ -57,23 +57,23 @@ func (PaymentPresenter) payout(output paymentservice.PayoutOutput) payoutRespons
 	}
 }
 
-func (p PaymentPresenter) createdCharge(c *gin.Context, output paymentservice.ChargeOutput, err error) {
+func (p PaymentPresenter) presentCreatedCharge(c *gin.Context, output paymentservice.ChargeOutput, err error) {
 	if err != nil {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(creationStatus(c, output.IsReplay), p.charge(output))
+	c.JSON(markReplayed(c, output.IsReplay), p.toChargeResponse(output))
 }
 
-func (p PaymentPresenter) createdPayout(c *gin.Context, output paymentservice.PayoutOutput, err error) {
+func (p PaymentPresenter) presentCreatedPayout(c *gin.Context, output paymentservice.PayoutOutput, err error) {
 	if err != nil {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(creationStatus(c, output.IsReplay), p.payout(output))
+	c.JSON(markReplayed(c, output.IsReplay), p.toPayoutResponse(output))
 }
 
-func creationStatus(c *gin.Context, isReplay bool) int {
+func markReplayed(c *gin.Context, isReplay bool) int {
 	if !isReplay {
 		return http.StatusCreated
 	}

@@ -294,11 +294,11 @@ func (s *spyProvider) SendPixPayout(_ context.Context, request service.PayoutReq
 	return s.payoutResult, s.payoutErr
 }
 
-func (s *spyProvider) GetCharge(_ context.Context, providerID string) (payment.EventKind, error) {
+func (s *spyProvider) FetchCharge(_ context.Context, providerID string) (payment.EventKind, error) {
 	return s.kinds[providerID], s.statusFailures[providerID]
 }
 
-func (s *spyProvider) GetPayout(_ context.Context, providerID string) (payment.EventKind, error) {
+func (s *spyProvider) FetchPayout(_ context.Context, providerID string) (payment.EventKind, error) {
 	return s.kinds[providerID], s.statusFailures[providerID]
 }
 

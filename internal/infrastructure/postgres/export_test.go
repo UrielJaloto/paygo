@@ -9,7 +9,7 @@ import (
 var (
 	RunInTransaction  = runInTransaction
 	IsUniqueViolation = isUniqueViolation
-	NotFound          = notFound
+	NotFound          = mapNotFound
 )
 
 func NewMigratorFrom(pool *pgxpool.Pool, files fs.FS) *Migrator {

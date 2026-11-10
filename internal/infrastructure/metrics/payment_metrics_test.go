@@ -26,7 +26,7 @@ func (s stubPayments) CreateCharge(context.Context, payment.ChargeInput) (paymen
 	return s.charge, s.err
 }
 
-func (s stubPayments) GetCharge(context.Context, payment.ChargeQuery) (payment.ChargeOutput, error) {
+func (s stubPayments) FindCharge(context.Context, payment.ChargeQuery) (payment.ChargeOutput, error) {
 	return s.charge, s.err
 }
 
@@ -34,7 +34,7 @@ func (s stubPayments) CreatePayout(context.Context, payment.PayoutInput) (paymen
 	return s.payout, s.err
 }
 
-func (s stubPayments) GetPayout(context.Context, payment.PayoutQuery) (payment.PayoutOutput, error) {
+func (s stubPayments) FindPayout(context.Context, payment.PayoutQuery) (payment.PayoutOutput, error) {
 	return s.payout, s.err
 }
 
@@ -92,8 +92,8 @@ func TestPaymentServiceMetrics_OtherMethods_PassThroughWithoutCounting(t *testin
 	}
 	decorator := metrics.NewPaymentServiceMetrics(stub, registry)
 	ctx := context.Background()
-	charge, chargeErr := decorator.GetCharge(ctx, payment.ChargeQuery{})
-	payout, payoutErr := decorator.GetPayout(ctx, payment.PayoutQuery{})
+	charge, chargeErr := decorator.FindCharge(ctx, payment.ChargeQuery{})
+	payout, payoutErr := decorator.FindPayout(ctx, payment.PayoutQuery{})
 	synced, syncErr := decorator.Sync(ctx, 1)
 	hookErr := decorator.HandleWebhook(ctx, payment.WebhookInput{})
 	for _, err := range []error{chargeErr, payoutErr, syncErr, hookErr} {
@@ -129,11 +129,11 @@ func (s stubProvider) SendPixPayout(context.Context, payment.PayoutRequest) (pay
 	return s.payout, s.err
 }
 
-func (s stubProvider) GetCharge(context.Context, string) (domainpayment.EventKind, error) {
+func (s stubProvider) FetchCharge(context.Context, string) (domainpayment.EventKind, error) {
 	return s.kind, s.err
 }
 
-func (s stubProvider) GetPayout(context.Context, string) (domainpayment.EventKind, error) {
+func (s stubProvider) FetchPayout(context.Context, string) (domainpayment.EventKind, error) {
 	return s.kind, s.err
 }
 
@@ -178,8 +178,8 @@ func assertProviderCalls(t *testing.T, want error, result string) {
 	}{
 		{"create_charge", stub.charge, func() (any, error) { return decorator.CreatePixCharge(ctx, payment.ChargeRequest{}) }},
 		{"send_payout", stub.payout, func() (any, error) { return decorator.SendPixPayout(ctx, payment.PayoutRequest{}) }},
-		{"get_charge", stub.kind, func() (any, error) { return decorator.GetCharge(ctx, "id") }},
-		{"get_payout", stub.kind, func() (any, error) { return decorator.GetPayout(ctx, "id") }},
+		{"fetch_charge", stub.kind, func() (any, error) { return decorator.FetchCharge(ctx, "id") }},
+		{"fetch_payout", stub.kind, func() (any, error) { return decorator.FetchPayout(ctx, "id") }},
 		{"parse_webhook", stub.occurred, func() (any, error) { return decorator.ParseWebhook(ctx, nil, nil) }},
 	}
 	for _, call := range calls {

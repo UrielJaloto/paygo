@@ -69,7 +69,7 @@ func lockAccountPair(ctx context.Context, store Store, request transfer.Request)
 }
 
 func validateAccounts(request transfer.Request, from, to account.Account) error {
-	if !allowedToMove(request, from, to) {
+	if !canMoveFunds(request, from, to) {
 		return fmt.Errorf("%w: %s", account.ErrAccountNotFound, request.From)
 	}
 	if from.Currency() != request.Amount.Currency() || to.Currency() != request.Amount.Currency() {
@@ -81,7 +81,7 @@ func validateAccounts(request transfer.Request, from, to account.Account) error 
 	return nil
 }
 
-func allowedToMove(request transfer.Request, from, to account.Account) bool {
+func canMoveFunds(request transfer.Request, from, to account.Account) bool {
 	switch request.Kind {
 	case transfer.KindTransfer:
 		return from.IsOwnedBy(request.OwnerID)

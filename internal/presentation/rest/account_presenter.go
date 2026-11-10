@@ -45,7 +45,7 @@ type statementPageResponse struct {
 
 type AccountPresenter struct{}
 
-func (AccountPresenter) account(output accountservice.AccountOutput) accountResponse {
+func (AccountPresenter) toAccountResponse(output accountservice.AccountOutput) accountResponse {
 	return accountResponse{
 		ID:        output.ID,
 		OwnerID:   output.OwnerID,
@@ -56,15 +56,15 @@ func (AccountPresenter) account(output accountservice.AccountOutput) accountResp
 	}
 }
 
-func (p AccountPresenter) accountPage(page accountservice.AccountPage) accountPageResponse {
+func (p AccountPresenter) toAccountPageResponse(page accountservice.AccountPage) accountPageResponse {
 	items := make([]accountResponse, 0, len(page.Items))
 	for _, item := range page.Items {
-		items = append(items, p.account(item))
+		items = append(items, p.toAccountResponse(item))
 	}
 	return accountPageResponse{Items: items, NextCursor: page.NextCursor}
 }
 
-func (AccountPresenter) balance(output accountservice.BalanceOutput) balanceResponse {
+func (AccountPresenter) toBalanceResponse(output accountservice.BalanceOutput) balanceResponse {
 	return balanceResponse{
 		AccountID: output.AccountID,
 		Amount:    formatAmount(output.AmountMinor, output.Currency),
@@ -72,7 +72,7 @@ func (AccountPresenter) balance(output accountservice.BalanceOutput) balanceResp
 	}
 }
 
-func (AccountPresenter) statementPage(page accountservice.StatementPage) statementPageResponse {
+func (AccountPresenter) toStatementPageResponse(page accountservice.StatementPage) statementPageResponse {
 	items := make([]statementLineResponse, 0, len(page.Items))
 	for _, line := range page.Items {
 		items = append(items, statementLineResponse{

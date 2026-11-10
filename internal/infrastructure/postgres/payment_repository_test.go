@@ -346,11 +346,11 @@ func (*stubProvider) SendPixPayout(context.Context, paymentservice.PayoutRequest
 	return paymentservice.PayoutResult{ProviderID: stubPayoutID}, nil
 }
 
-func (*stubProvider) GetCharge(context.Context, string) (payment.EventKind, error) {
+func (*stubProvider) FetchCharge(context.Context, string) (payment.EventKind, error) {
 	return payment.EventChargePaid, nil
 }
 
-func (*stubProvider) GetPayout(context.Context, string) (payment.EventKind, error) {
+func (*stubProvider) FetchPayout(context.Context, string) (payment.EventKind, error) {
 	return payment.EventPayoutDone, nil
 }
 

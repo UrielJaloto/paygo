@@ -235,7 +235,7 @@ func TestCreatePixCharge_Rejected_CarriesAsaasDescription(t *testing.T) {
 	}
 }
 
-func TestGetCharge_Statuses_MapToKinds(t *testing.T) {
+func TestFetchCharge_Statuses_MapToKinds(t *testing.T) {
 	tests := []struct {
 		status string
 		want   payment.EventKind
@@ -252,9 +252,9 @@ func TestGetCharge_Statuses_MapToKinds(t *testing.T) {
 			}))
 			defer server.Close()
 			provider := asaas.NewMoney(server.URL, apiKey, webhookToken, emptyCache(), server.Client())
-			got, err := provider.GetCharge(context.Background(), "pay")
+			got, err := provider.FetchCharge(context.Background(), "pay")
 			if err != nil {
-				t.Fatalf("GetCharge: %v", err)
+				t.Fatalf("FetchCharge: %v", err)
 			}
 			if got != testCase.want {
 				t.Fatalf("kind = %q, want %q", got, testCase.want)
@@ -263,14 +263,14 @@ func TestGetCharge_Statuses_MapToKinds(t *testing.T) {
 	}
 }
 
-func TestGetCharge_ServerError_ReturnsUnavailable(t *testing.T) {
+func TestFetchCharge_ServerError_ReturnsUnavailable(t *testing.T) {
 	provider, _ := newStub(t, emptyCache(), reply{http.StatusServiceUnavailable, ""})
-	if _, err := provider.GetCharge(context.Background(), "pay"); !errors.Is(err, payment.ErrProviderUnavailable) {
+	if _, err := provider.FetchCharge(context.Background(), "pay"); !errors.Is(err, payment.ErrProviderUnavailable) {
 		t.Fatalf("err = %v, want ErrProviderUnavailable", err)
 	}
 }
 
-func TestGetCharge_TransportFailures_ReturnUnavailable(t *testing.T) {
+func TestFetchCharge_TransportFailures_ReturnUnavailable(t *testing.T) {
 	tests := []struct {
 		name      string
 		transport http.RoundTripper
@@ -281,7 +281,7 @@ func TestGetCharge_TransportFailures_ReturnUnavailable(t *testing.T) {
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
 			provider := asaas.NewMoney("http://asaas.test", apiKey, webhookToken, emptyCache(), &http.Client{Transport: testCase.transport})
-			_, err := provider.GetCharge(context.Background(), "pay")
+			_, err := provider.FetchCharge(context.Background(), "pay")
 			if !errors.Is(err, payment.ErrProviderUnavailable) {
 				t.Fatalf("err = %v, want ErrProviderUnavailable", err)
 			}
@@ -292,23 +292,23 @@ func TestGetCharge_TransportFailures_ReturnUnavailable(t *testing.T) {
 	}
 }
 
-func TestGetCharge_MalformedResponse_ReturnsUnavailable(t *testing.T) {
+func TestFetchCharge_MalformedResponse_ReturnsUnavailable(t *testing.T) {
 	provider, _ := newStub(t, emptyCache(), reply{http.StatusOK, malformedBody})
-	if _, err := provider.GetCharge(context.Background(), "pay"); !errors.Is(err, payment.ErrProviderUnavailable) {
+	if _, err := provider.FetchCharge(context.Background(), "pay"); !errors.Is(err, payment.ErrProviderUnavailable) {
 		t.Fatalf("err = %v, want ErrProviderUnavailable", err)
 	}
 }
 
-func TestGetCharge_MalformedErrorBody_ReturnsRejected(t *testing.T) {
+func TestFetchCharge_MalformedErrorBody_ReturnsRejected(t *testing.T) {
 	provider, _ := newStub(t, emptyCache(), reply{http.StatusBadRequest, malformedBody})
-	if _, err := provider.GetCharge(context.Background(), "pay"); !errors.Is(err, payment.ErrProviderRejected) {
+	if _, err := provider.FetchCharge(context.Background(), "pay"); !errors.Is(err, payment.ErrProviderRejected) {
 		t.Fatalf("err = %v, want ErrProviderRejected", err)
 	}
 }
 
-func TestGetCharge_InvalidBaseURL_ReturnsError(t *testing.T) {
+func TestFetchCharge_InvalidBaseURL_ReturnsError(t *testing.T) {
 	provider := asaas.NewMoney("http://[::1", apiKey, webhookToken, emptyCache(), &http.Client{})
-	if _, err := provider.GetCharge(context.Background(), "pay"); err == nil {
+	if _, err := provider.FetchCharge(context.Background(), "pay"); err == nil {
 		t.Fatal("err = nil, want build error")
 	}
 }

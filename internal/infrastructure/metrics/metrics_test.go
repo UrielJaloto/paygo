@@ -77,7 +77,7 @@ func (s stubTransfers) Reverse(context.Context, transfer.ReverseInput) (transfer
 	return s.output, s.err
 }
 
-func (s stubTransfers) Get(context.Context, transfer.TransferQuery) (transfer.TransferOutput, error) {
+func (s stubTransfers) Find(context.Context, transfer.TransferQuery) (transfer.TransferOutput, error) {
 	return s.output, s.err
 }
 
@@ -135,9 +135,9 @@ func TestPosting_BuildJournalServiceMetrics_Queries_PassThroughWithoutCounting(t
 	registry := metrics.NewRegistry()
 	next := stubTransfers{output: transfer.TransferOutput{ID: "trf-1"}, page: transfer.TransferPage{NextCursor: "next"}, err: errBoom}
 	decorator := metrics.NewTransferServiceMetrics(next, registry)
-	output, err := decorator.Get(context.Background(), transfer.TransferQuery{})
+	output, err := decorator.Find(context.Background(), transfer.TransferQuery{})
 	if !errors.Is(err, errBoom) || output.ID != "trf-1" {
-		t.Errorf("Get = %+v, %v", output, err)
+		t.Errorf("Find = %+v, %v", output, err)
 	}
 	page, err := decorator.List(context.Background(), transfer.ListInput{})
 	if !errors.Is(err, errBoom) || page.NextCursor != "next" {

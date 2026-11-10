@@ -107,7 +107,7 @@ func (s *Service) CreateCharge(ctx context.Context, input ChargeInput) (ChargeOu
 	return s.requestPix(ctx, opening.charge)
 }
 
-func (s *Service) GetCharge(ctx context.Context, query ChargeQuery) (ChargeOutput, error) {
+func (s *Service) FindCharge(ctx context.Context, query ChargeQuery) (ChargeOutput, error) {
 	owner, err := apikey.ParseOwnerID(query.OwnerID)
 	if err != nil {
 		return ChargeOutput{}, err
@@ -143,7 +143,7 @@ func (s *Service) parseCharge(input ChargeInput) (chargeOpening, error) {
 	}
 	fingerprint := transfer.Request{
 		Kind:   transfer.KindCharge,
-		From:   clearingAccountFor(draft.Amount.Currency()),
+		From:   findClearingAccountID(draft.Amount.Currency()),
 		To:     draft.AccountID,
 		Amount: draft.Amount,
 	}.CalculateFingerprint()

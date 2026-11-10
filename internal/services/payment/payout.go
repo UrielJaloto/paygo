@@ -8,7 +8,6 @@ import (
 
 	"github.com/UrielJaloto/paygo/internal/domain/account"
 	"github.com/UrielJaloto/paygo/internal/domain/apikey"
-	"github.com/UrielJaloto/paygo/internal/domain/event"
 	"github.com/UrielJaloto/paygo/internal/domain/payment"
 	"github.com/UrielJaloto/paygo/internal/domain/transfer"
 )
@@ -17,12 +16,6 @@ type payoutOpening struct {
 	payout      payment.Payout
 	key         transfer.IdempotencyKey
 	fingerprint transfer.Fingerprint
-}
-
-type payoutSettlement struct {
-	payout    payment.Payout
-	plan      posting
-	eventType event.Type
 }
 
 func (s *Service) CreatePayout(ctx context.Context, input PayoutInput) (PayoutOutput, error) {
@@ -44,7 +37,7 @@ func (s *Service) CreatePayout(ctx context.Context, input PayoutInput) (PayoutOu
 	return toPayoutOutput(sent), nil
 }
 
-func (s *Service) GetPayout(ctx context.Context, query PayoutQuery) (PayoutOutput, error) {
+func (s *Service) FindPayout(ctx context.Context, query PayoutQuery) (PayoutOutput, error) {
 	owner, err := apikey.ParseOwnerID(query.OwnerID)
 	if err != nil {
 		return PayoutOutput{}, err
@@ -80,7 +73,7 @@ func (s *Service) parsePayout(input PayoutInput) (payoutOpening, error) {
 	fingerprint := transfer.Request{
 		Kind:   transfer.KindPayout,
 		From:   draft.AccountID,
-		To:     holdAccountFor(draft.Amount.Currency()),
+		To:     findHoldAccountID(draft.Amount.Currency()),
 		Amount: draft.Amount,
 	}.CalculateFingerprint()
 	return payoutOpening{payout: created, key: key, fingerprint: fingerprint}, nil
@@ -159,7 +152,7 @@ func findPayoutReplay(ctx context.Context, store Store, opening payoutOpening) (
 
 func (s *Service) holdFunds(ctx context.Context, store Store, opening payoutOpening) error {
 	created := opening.payout
-	hold := holdAccountFor(created.Amount().Currency())
+	hold := findHoldAccountID(created.Amount().Currency())
 	err := s.recordPosting(ctx, store, posting{id: created.Transfers().Hold, build: transfer.NewPayout, movement: transfer.Movement{
 		OwnerID: created.OwnerID(),
 		Key:     transfer.IdempotencyKey("payout-" + string(created.ID())),
@@ -175,7 +168,7 @@ func (s *Service) holdFunds(ctx context.Context, store Store, opening payoutOpen
 
 func lockPayoutCustomer(ctx context.Context, store Store, created payment.Payout) (account.Account, error) {
 	id := created.AccountID()
-	ids := []account.ID{id, holdAccountFor(created.Amount().Currency())}
+	ids := []account.ID{id, findHoldAccountID(created.Amount().Currency())}
 	slices.Sort(ids)
 	locked, err := store.Accounts.LockByIDs(ctx, ids)
 	if err != nil {
@@ -234,69 +227,6 @@ func (s *Service) rejectPayout(ctx context.Context, pending payment.Payout, caus
 		return s.markPayoutFailed(ctx, store, pending)
 	})
 	return fmt.Errorf("sending pix payout: %w", errors.Join(cause, err))
-}
-
-func (s *Service) applyPayoutEvent(ctx context.Context, store Store, occurred payment.ProviderEvent) error {
-	found, err := store.Payouts.FindByProviderID(ctx, occurred.ProviderID)
-	if err != nil {
-		return fmt.Errorf("finding payout: %w", err)
-	}
-	if occurred.Kind == payment.EventPayoutDone {
-		return s.markPayoutCompleted(ctx, store, found)
-	}
-	return s.markPayoutFailed(ctx, store, found)
-}
-
-func (s *Service) markPayoutCompleted(ctx context.Context, store Store, found payment.Payout) error {
-	transferID := s.ids.NewID()
-	changed, err := found.MarkCompleted(transferID, s.clock.Now())
-	if err != nil || !changed {
-		return nil
-	}
-	return s.settlePayout(ctx, store, payoutSettlement{payout: found, eventType: event.TypePayoutCompleted, plan: posting{
-		id:    transferID,
-		build: transfer.NewPayoutCompletion,
-		movement: transfer.Movement{
-			OwnerID: found.OwnerID(),
-			Key:     transfer.IdempotencyKey("payout-completion-" + string(found.ID())),
-			From:    holdAccountFor(found.Amount().Currency()),
-			To:      clearingAccountFor(found.Amount().Currency()),
-			Amount:  found.Amount(),
-		},
-	}})
-}
-
-func (s *Service) markPayoutFailed(ctx context.Context, store Store, found payment.Payout) error {
-	transferID := s.ids.NewID()
-	changed, err := found.MarkFailed(transferID, s.clock.Now())
-	if err != nil || !changed {
-		return nil
-	}
-	return s.settlePayout(ctx, store, payoutSettlement{payout: found, eventType: event.TypePayoutFailed, plan: posting{
-		id:    transferID,
-		build: transfer.NewPayoutFailure,
-		movement: transfer.Movement{
-			OwnerID: found.OwnerID(),
-			Key:     transfer.IdempotencyKey("payout-failure-" + string(found.ID())),
-			From:    holdAccountFor(found.Amount().Currency()),
-			To:      found.AccountID(),
-			Amount:  found.Amount(),
-		},
-	}})
-}
-
-func (s *Service) settlePayout(ctx context.Context, store Store, settlement payoutSettlement) error {
-	if err := s.postJournal(ctx, store, settlement.plan); err != nil {
-		return err
-	}
-	if err := store.Payouts.Update(ctx, settlement.payout); err != nil {
-		return fmt.Errorf("updating payout: %w", err)
-	}
-	metadata := event.Metadata{ID: event.ID(s.ids.NewID()), At: s.clock.Now()}
-	if err := store.Outbox.Add(ctx, event.NewPayoutEvent(metadata, settlement.eventType, settlement.payout)); err != nil {
-		return fmt.Errorf("adding event: %w", err)
-	}
-	return nil
 }
 
 func toPayoutOutput(found payment.Payout) PayoutOutput {

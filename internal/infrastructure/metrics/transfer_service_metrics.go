@@ -17,7 +17,7 @@ type transferService interface {
 	Deposit(ctx context.Context, input transfer.FundingInput) (transfer.TransferOutput, error)
 	Withdraw(ctx context.Context, input transfer.FundingInput) (transfer.TransferOutput, error)
 	Reverse(ctx context.Context, input transfer.ReverseInput) (transfer.TransferOutput, error)
-	Get(ctx context.Context, query transfer.TransferQuery) (transfer.TransferOutput, error)
+	Find(ctx context.Context, query transfer.TransferQuery) (transfer.TransferOutput, error)
 	List(ctx context.Context, input transfer.ListInput) (transfer.TransferPage, error)
 }
 
@@ -54,8 +54,8 @@ func (m *TransferServiceMetrics) Reverse(ctx context.Context, input transfer.Rev
 	return output, err
 }
 
-func (m *TransferServiceMetrics) Get(ctx context.Context, query transfer.TransferQuery) (transfer.TransferOutput, error) {
-	return m.next.Get(ctx, query)
+func (m *TransferServiceMetrics) Find(ctx context.Context, query transfer.TransferQuery) (transfer.TransferOutput, error) {
+	return m.next.Find(ctx, query)
 }
 
 func (m *TransferServiceMetrics) List(ctx context.Context, input transfer.ListInput) (transfer.TransferPage, error) {
@@ -63,12 +63,12 @@ func (m *TransferServiceMetrics) List(ctx context.Context, input transfer.ListIn
 }
 
 func (m *TransferServiceMetrics) count(kind string, output transfer.TransferOutput, err error) {
-	m.registry.transfers.WithLabelValues(kind, transferResult(output, err)).Inc()
+	m.registry.transfers.WithLabelValues(kind, resolveTransferResult(output, err)).Inc()
 }
 
-func transferResult(output transfer.TransferOutput, err error) string {
+func resolveTransferResult(output transfer.TransferOutput, err error) string {
 	if err != nil {
-		return failureResult(err)
+		return classifyFailure(err)
 	}
 	if output.IsReplay {
 		return "replay"
@@ -76,8 +76,8 @@ func transferResult(output transfer.TransferOutput, err error) string {
 	return "success"
 }
 
-func failureResult(err error) string {
-	for _, rejection := range transferRejections() {
+func classifyFailure(err error) string {
+	for _, rejection := range listTransferRejections() {
 		if errors.Is(err, rejection) {
 			return "rejected"
 		}
@@ -85,7 +85,7 @@ func failureResult(err error) string {
 	return "error"
 }
 
-func transferRejections() []error {
+func listTransferRejections() []error {
 	return []error{
 		account.ErrInvalidAccountID, account.ErrAccountNotFound, account.ErrAccountFrozen, account.ErrConcurrentModification,
 		ledger.ErrTooFewEntries, ledger.ErrUnbalancedTransaction,

@@ -44,7 +44,7 @@ func (s *stubAccounts) Open(_ context.Context, input accountservice.OpenInput) (
 	return accountOutput(), s.err
 }
 
-func (s *stubAccounts) Get(_ context.Context, query accountservice.AccountQuery) (accountservice.AccountOutput, error) {
+func (s *stubAccounts) Find(_ context.Context, query accountservice.AccountQuery) (accountservice.AccountOutput, error) {
 	s.query = query
 	return accountOutput(), s.err
 }

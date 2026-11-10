@@ -14,7 +14,7 @@ type Limiter interface {
 
 func NewRateLimitMiddleware(limiter Limiter) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !limiter.Allow(ownerFrom(c)) {
+		if !limiter.Allow(readOwner(c)) {
 			c.Header("Retry-After", "1")
 			PresentError(c, errRateLimited)
 			return

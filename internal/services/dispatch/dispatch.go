@@ -122,7 +122,7 @@ func (s *Service) fanOutBatch(ctx context.Context, store Store, limit int) (FanO
 	if len(events) == 0 {
 		return FanOutResult{}, nil
 	}
-	endpoints, err := store.Endpoints.ListActiveByOwners(ctx, uniqueOwners(events))
+	endpoints, err := store.Endpoints.ListActiveByOwners(ctx, collectUniqueOwners(events))
 	if err != nil {
 		return FanOutResult{}, fmt.Errorf("listing endpoints: %w", err)
 	}
@@ -130,7 +130,7 @@ func (s *Service) fanOutBatch(ctx context.Context, store Store, limit int) (FanO
 	if err := store.Deliveries.SaveAll(ctx, deliveries); err != nil {
 		return FanOutResult{}, fmt.Errorf("saving deliveries: %w", err)
 	}
-	if err := store.Outbox.MarkPublished(ctx, eventIDs(events)); err != nil {
+	if err := store.Outbox.MarkPublished(ctx, collectEventIDs(events)); err != nil {
 		return FanOutResult{}, fmt.Errorf("marking events published: %w", err)
 	}
 	return FanOutResult{Events: len(events), Deliveries: len(deliveries)}, nil
@@ -144,14 +144,14 @@ func (s *Service) buildDeliveries(ids IDGenerator, events []event.Event, endpoin
 	now := s.clock.Now()
 	var deliveries []webhook.Delivery
 	for _, occurred := range events {
-		for _, endpoint := range subscribers(occurred, byOwner) {
+		for _, endpoint := range selectSubscribers(occurred, byOwner) {
 			deliveries = append(deliveries, webhook.NewDelivery(webhook.DeliveryID(ids.NewID()), occurred.ID(), endpoint.ID(), endpoint.OwnerID(), now))
 		}
 	}
 	return deliveries
 }
 
-func subscribers(occurred event.Event, byOwner map[apikey.OwnerID][]webhook.Endpoint) []webhook.Endpoint {
+func selectSubscribers(occurred event.Event, byOwner map[apikey.OwnerID][]webhook.Endpoint) []webhook.Endpoint {
 	var endpoints []webhook.Endpoint
 	for _, owner := range occurred.OwnerIDs() {
 		endpoints = append(endpoints, byOwner[owner]...)
@@ -191,7 +191,7 @@ func (s *Service) applySendOutcome(delivery *webhook.Delivery, sendErr error, po
 	return delivery.MarkFailed(webhook.Failure{Reason: truncateReason(sendErr.Error()), At: now, Policy: policy, Jitter: s.jitter.Next()})
 }
 
-func uniqueOwners(events []event.Event) []apikey.OwnerID {
+func collectUniqueOwners(events []event.Event) []apikey.OwnerID {
 	var owners []apikey.OwnerID
 	for _, occurred := range events {
 		owners = append(owners, occurred.OwnerIDs()...)
@@ -200,7 +200,7 @@ func uniqueOwners(events []event.Event) []apikey.OwnerID {
 	return slices.Compact(owners)
 }
 
-func eventIDs(events []event.Event) []event.ID {
+func collectEventIDs(events []event.Event) []event.ID {
 	ids := make([]event.ID, 0, len(events))
 	for _, occurred := range events {
 		ids = append(ids, occurred.ID())

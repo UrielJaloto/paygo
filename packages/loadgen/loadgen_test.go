@@ -18,14 +18,14 @@ type ledgerStub struct {
 
 func (l *ledgerStub) Setup(context.Context, int) ([]string, error) { return nil, nil }
 
-func (l *ledgerStub) Transfer(_ context.Context, from, to string, amount int64, key string) error {
+func (l *ledgerStub) Transfer(_ context.Context, move movement) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	if key == l.failKey {
+	if move.key == l.failKey {
 		return errors.NewMoney("rejected")
 	}
-	l.balances[from] -= amount
-	l.balances[to] += amount
+	l.balances[move.from] -= move.amountMinor
+	l.balances[move.to] += move.amountMinor
 	return nil
 }
 

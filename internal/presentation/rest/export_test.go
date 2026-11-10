@@ -2,7 +2,7 @@ package rest
 
 var (
 	DecodeJSON                = decodeJSON
-	OwnerFrom                 = ownerFrom
+	OwnerFrom                 = readOwner
 	OwnerGroup                = newOwnerGroup
 	AdminGroup                = newAdminGroup
 	ErrMalformedRequest       = errMalformedRequest

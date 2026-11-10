@@ -26,7 +26,7 @@ type TransferReverser interface {
 }
 
 type TransferReader interface {
-	Get(ctx context.Context, query transferservice.TransferQuery) (transferservice.TransferOutput, error)
+	Find(ctx context.Context, query transferservice.TransferQuery) (transferservice.TransferOutput, error)
 	List(ctx context.Context, input transferservice.ListInput) (transferservice.TransferPage, error)
 }
 
@@ -49,7 +49,7 @@ func NewTransferController(creator TransferCreator, reverser TransferReverser, r
 }
 
 func (t *TransferController) Create(c *gin.Context) {
-	key, err := idempotencyKeyFrom(c)
+	key, err := readIdempotencyKey(c)
 	if err != nil {
 		PresentError(c, err)
 		return
@@ -60,43 +60,43 @@ func (t *TransferController) Create(c *gin.Context) {
 		return
 	}
 	output, err := t.creator.Transfer(c.Request.Context(), transferservice.TransferInput{
-		OwnerID:        ownerFrom(c),
+		OwnerID:        readOwner(c),
 		IdempotencyKey: key,
 		FromAccountID:  request.FromAccountID,
 		ToAccountID:    request.ToAccountID,
 		Amount:         request.Amount,
 		Currency:       request.Currency,
 	})
-	t.presenter.moneyMovement(c, output, err)
+	t.presenter.presentMoneyMovement(c, output, err)
 }
 
 func (t *TransferController) Reverse(c *gin.Context) {
-	key, err := idempotencyKeyFrom(c)
+	key, err := readIdempotencyKey(c)
 	if err != nil {
 		PresentError(c, err)
 		return
 	}
 	output, err := t.reverser.Reverse(c.Request.Context(), transferservice.ReverseInput{
-		OwnerID:        ownerFrom(c),
+		OwnerID:        readOwner(c),
 		IdempotencyKey: key,
 		TransferID:     c.Param("id"),
 	})
-	t.presenter.moneyMovement(c, output, err)
+	t.presenter.presentMoneyMovement(c, output, err)
 }
 
-func (t *TransferController) Get(c *gin.Context) {
-	query := transferservice.TransferQuery{OwnerID: ownerFrom(c), TransferID: c.Param("id")}
-	output, err := t.reader.Get(c.Request.Context(), query)
+func (t *TransferController) Find(c *gin.Context) {
+	query := transferservice.TransferQuery{OwnerID: readOwner(c), TransferID: c.Param("id")}
+	output, err := t.reader.Find(c.Request.Context(), query)
 	if err != nil {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, t.presenter.transfer(output))
+	c.JSON(http.StatusOK, t.presenter.toTransferResponse(output))
 }
 
 func (t *TransferController) List(c *gin.Context) {
 	page, err := t.reader.List(c.Request.Context(), transferservice.ListInput{
-		OwnerID:   ownerFrom(c),
+		OwnerID:   readOwner(c),
 		AccountID: c.Query("account_id"),
 		Cursor:    c.Query("cursor"),
 		Limit:     c.Query("limit"),
@@ -105,10 +105,10 @@ func (t *TransferController) List(c *gin.Context) {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, t.presenter.transferPage(page))
+	c.JSON(http.StatusOK, t.presenter.toTransferPageResponse(page))
 }
 
-func idempotencyKeyFrom(c *gin.Context) (string, error) {
+func readIdempotencyKey(c *gin.Context) (string, error) {
 	key := c.GetHeader(idempotencyKeyHeader)
 	if key == "" {
 		return "", errIdempotencyKeyRequired
@@ -119,6 +119,6 @@ func idempotencyKeyFrom(c *gin.Context) (string, error) {
 func registerTransferRoutes(group *gin.RouterGroup, controller *TransferController) {
 	group.POST("/transfers", controller.Create)
 	group.GET("/transfers", controller.List)
-	group.GET("/transfers/:id", controller.Get)
+	group.GET("/transfers/:id", controller.Find)
 	group.POST("/transfers/:id/reversal", controller.Reverse)
 }

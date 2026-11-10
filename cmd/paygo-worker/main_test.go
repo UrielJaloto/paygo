@@ -8,7 +8,6 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -16,8 +15,6 @@ import (
 
 	"github.com/UrielJaloto/paygo/internal/domain/webhook"
 	"github.com/UrielJaloto/paygo/internal/infrastructure/config"
-	"github.com/UrielJaloto/paygo/internal/infrastructure/provider/fake"
-	"github.com/UrielJaloto/paygo/internal/services/payment"
 )
 
 const (
@@ -133,41 +130,20 @@ func TestRun_StartupFailure_ReturnsOneAndNamesTheCause(t *testing.T) {
 	}
 }
 
-func TestDeliverInput_ValidAttempts_AddsTheLeaseMargin(t *testing.T) {
-	input, err := deliverInput(config.Worker{Concurrency: 4, WebhookTimeout: 5 * time.Second, WebhookMaximumAttempts: 3})
+func TestNewDeliverInput_ValidAttempts_AddsTheLeaseMargin(t *testing.T) {
+	input, err := newDeliverInput(config.Worker{Concurrency: 4, WebhookTimeout: 5 * time.Second, WebhookMaximumAttempts: 3})
 	if err != nil {
-		t.Fatalf("deliverInput: %v", err)
+		t.Fatalf("newDeliverInput: %v", err)
 	}
 	if input.Limit != 4 || input.Lease != 35*time.Second {
 		t.Errorf("input = %+v", input)
 	}
 }
 
-func TestDeliverInput_InvalidAttempts_ReturnsPolicyError(t *testing.T) {
-	_, err := deliverInput(config.Worker{WebhookMaximumAttempts: 0})
+func TestNewDeliverInput_InvalidAttempts_ReturnsPolicyError(t *testing.T) {
+	_, err := newDeliverInput(config.Worker{WebhookMaximumAttempts: 0})
 	if !errors.Is(err, webhook.ErrInvalidRetryPolicy) {
 		t.Errorf("err = %v, want ErrInvalidRetryPolicy", err)
-	}
-}
-
-func TestNewMux_Routes_ServeOnlyHealthAndMetrics(t *testing.T) {
-	metrics := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
-	tests := []struct {
-		path string
-		want int
-	}{
-		{path: "/healthz", want: http.StatusOK},
-		{path: "/metrics", want: http.StatusTeapot},
-		{path: "/v1/accounts", want: http.StatusNotFound},
-	}
-	for _, testCase := range tests {
-		t.Run(testCase.path, func(t *testing.T) {
-			recorder := httptest.NewRecorder()
-			newMux(metrics, fake.NewMoney(markToken, nil)).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, testCase.path, nil))
-			if recorder.Code != testCase.want {
-				t.Errorf("status = %d, want %d", recorder.Code, testCase.want)
-			}
-		})
 	}
 }
 
@@ -183,59 +159,10 @@ func TestRun_TracingFailure_ReturnsOneAndNamesTheCause(t *testing.T) {
 	}
 }
 
-func TestWorkTraced_InvalidAttempts_ReturnsPolicyError(t *testing.T) {
-	err := workTraced(context.Background(), config.WorkerSettings{}, toolkit{})
+func TestRunPollers_InvalidAttempts_ReturnsPolicyError(t *testing.T) {
+	err := runPollers(context.Background(), config.WorkerSettings{}, toolkit{})
 	if !errors.Is(err, webhook.ErrInvalidRetryPolicy) {
 		t.Errorf("err = %v, want ErrInvalidRetryPolicy", err)
-	}
-}
-
-const (
-	markToken = "fake-token"
-	markRoute = "/provider/v1/webhooks/fake"
-)
-
-type namedProvider struct {
-	payment.PaymentProvider
-}
-
-func (namedProvider) Name() string {
-	return "asaas"
-}
-
-func postMark(handler http.Handler, token, body string) int {
-	request := httptest.NewRequest(http.MethodPost, markRoute, strings.NewReader(body))
-	request.Header.Set("Paygo-Fake-Token", token)
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, request)
-	return recorder.Code
-}
-
-func TestNewMux_FakeMark_ReportsParseOutcome(t *testing.T) {
-	tests := []struct {
-		name  string
-		token string
-		body  string
-		want  int
-	}{
-		{name: "valid", token: markToken, body: `{"event_id":"e","type":"charge.paid","provider_id":"p"}`, want: http.StatusOK},
-		{name: "bad token", token: "wrong", body: `{}`, want: http.StatusUnauthorized},
-		{name: "malformed body", token: markToken, body: `{`, want: http.StatusBadRequest},
-	}
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			mux := newMux(http.NotFoundHandler(), fake.NewMoney(markToken, nil))
-			if got := postMark(mux, testCase.token, testCase.body); got != testCase.want {
-				t.Errorf("status = %d, want %d", got, testCase.want)
-			}
-		})
-	}
-}
-
-func TestNewMux_RealProvider_HasNoFakeMark(t *testing.T) {
-	mux := newMux(http.NotFoundHandler(), namedProvider{})
-	if got := postMark(mux, markToken, `{}`); got != http.StatusNotFound {
-		t.Errorf("status = %d, want %d", got, http.StatusNotFound)
 	}
 }
 

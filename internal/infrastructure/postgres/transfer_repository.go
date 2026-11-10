@@ -42,17 +42,17 @@ func NewTransferRepository(pool *pgxpool.Pool) *TransferRepository {
 func (r *TransferRepository) FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (transfer.Transfer, transfer.Fingerprint, error) {
 	var fingerprint transfer.Fingerprint
 	found, err := scanTransfer(r.database.QueryRow(ctx, selectTransferByKey, owner, key), &fingerprint)
-	return found, fingerprint, notFound(err, transfer.ErrTransferNotFound)
+	return found, fingerprint, mapNotFound(err, transfer.ErrTransferNotFound)
 }
 
 func (r *TransferRepository) FindByIDForUpdate(ctx context.Context, id transfer.ID) (transfer.Transfer, error) {
 	found, err := scanTransfer(r.database.QueryRow(ctx, lockTransfer, id))
-	return found, notFound(err, transfer.ErrTransferNotFound)
+	return found, mapNotFound(err, transfer.ErrTransferNotFound)
 }
 
 func (r *TransferRepository) FindByID(ctx context.Context, id transfer.ID) (transfer.Transfer, error) {
 	found, err := scanTransfer(r.database.QueryRow(ctx, selectTransfer, id))
-	return found, notFound(err, transfer.ErrTransferNotFound)
+	return found, mapNotFound(err, transfer.ErrTransferNotFound)
 }
 
 func (r *TransferRepository) ListByAccount(ctx context.Context, id account.ID, cursor page.Cursor, limit page.Limit) ([]transfer.Transfer, error) {

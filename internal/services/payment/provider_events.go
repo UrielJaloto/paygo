@@ -69,12 +69,12 @@ func (s *Service) markChargePaid(ctx context.Context, store Store, providerID st
 	transferID := s.ids.NewID()
 	changed, err := charge.MarkPaid(transferID, s.clock.Now())
 	if err != nil || !changed {
-		return ignoreStale(err)
+		return ignoreInvalidTransition(err)
 	}
 	err = s.postJournal(ctx, store, posting{id: transferID, build: transfer.NewCharge, movement: transfer.Movement{
 		OwnerID: charge.OwnerID(),
 		Key:     transfer.IdempotencyKey("charge-" + string(charge.ID())),
-		From:    clearingAccountFor(charge.Amount().Currency()),
+		From:    findClearingAccountID(charge.Amount().Currency()),
 		To:      charge.AccountID(),
 		Amount:  charge.Amount(),
 	}})
@@ -90,12 +90,12 @@ func (s *Service) markChargeExpired(ctx context.Context, store Store, providerID
 		return fmt.Errorf("finding charge: %w", err)
 	}
 	if err := charge.MarkExpired(s.clock.Now()); err != nil {
-		return ignoreStale(err)
+		return ignoreInvalidTransition(err)
 	}
 	return s.publishCharge(ctx, store, charge, event.TypeChargeExpired)
 }
 
-func ignoreStale(err error) error {
+func ignoreInvalidTransition(err error) error {
 	if errors.Is(err, payment.ErrInvalidTransition) {
 		return nil
 	}

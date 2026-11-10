@@ -34,8 +34,8 @@ func (s *Service) Check(ctx context.Context) (CheckOutput, error) {
 	if err != nil {
 		return CheckOutput{}, fmt.Errorf("summing journal by currency: %w", err)
 	}
-	ids := mismatchedIDs(mismatches)
-	currencies := unbalancedCurrencies(totals)
+	ids := collectMismatchedIDs(mismatches)
+	currencies := collectUnbalancedCurrencies(totals)
 	return CheckOutput{
 		OK:                   len(ids) == 0 && len(currencies) == 0,
 		Accounts:             accounts,
@@ -44,7 +44,7 @@ func (s *Service) Check(ctx context.Context) (CheckOutput, error) {
 	}, nil
 }
 
-func mismatchedIDs(mismatches []Mismatch) []string {
+func collectMismatchedIDs(mismatches []Mismatch) []string {
 	ids := make([]string, 0, len(mismatches))
 	for _, mismatch := range mismatches {
 		ids = append(ids, mismatch.AccountID)
@@ -53,7 +53,7 @@ func mismatchedIDs(mismatches []Mismatch) []string {
 	return ids
 }
 
-func unbalancedCurrencies(totals map[string]int64) []string {
+func collectUnbalancedCurrencies(totals map[string]int64) []string {
 	currencies := make([]string, 0, len(totals))
 	for currency, sum := range totals {
 		if sum != 0 {

@@ -34,7 +34,7 @@ func TestIsUniqueViolation_Errors_MatchNamedConstraintOnly(t *testing.T) {
 	}
 }
 
-func TestNotFound_Errors_MapOnlyMissingRows(t *testing.T) {
+func TestMapNotFound_Errors_MapOnlyMissingRows(t *testing.T) {
 	other := errors.New("connection lost")
 	tests := []struct {
 		name string

@@ -22,11 +22,11 @@ func NewAccessLogMiddleware(logger RequestLogger, clock Clock) gin.HandlerFunc {
 		startedAt := clock.Now()
 		finish := logger.LogRequest(c.Request.Context(), c.Request.Method, readRoute(c))
 		c.Next()
-		finish(c.Writer.Status(), clock.Now().Sub(startedAt), handlerError(c))
+		finish(c.Writer.Status(), clock.Now().Sub(startedAt), findHandlerError(c))
 	}
 }
 
-func handlerError(c *gin.Context) error {
+func findHandlerError(c *gin.Context) error {
 	if last := c.Errors.Last(); last != nil {
 		return last.Err
 	}

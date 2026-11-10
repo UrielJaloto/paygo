@@ -43,26 +43,26 @@ func (w *WebhookController) Register(c *gin.Context) {
 		PresentError(c, err)
 		return
 	}
-	input := webhookservice.RegisterInput{OwnerID: ownerFrom(c), URL: request.URL}
+	input := webhookservice.RegisterInput{OwnerID: readOwner(c), URL: request.URL}
 	registered, err := w.registrar.Register(c.Request.Context(), input)
 	if err != nil {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, w.presenter.registered(registered))
+	c.JSON(http.StatusCreated, w.presenter.toRegisteredEndpointResponse(registered))
 }
 
 func (w *WebhookController) ListEndpoints(c *gin.Context) {
-	endpoints, err := w.endpoints.ListEndpoints(c.Request.Context(), ownerFrom(c))
+	endpoints, err := w.endpoints.ListEndpoints(c.Request.Context(), readOwner(c))
 	if err != nil {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, w.presenter.endpointList(endpoints))
+	c.JSON(http.StatusOK, w.presenter.toEndpointListResponse(endpoints))
 }
 
 func (w *WebhookController) Disable(c *gin.Context) {
-	query := webhookservice.EndpointQuery{OwnerID: ownerFrom(c), EndpointID: c.Param("id")}
+	query := webhookservice.EndpointQuery{OwnerID: readOwner(c), EndpointID: c.Param("id")}
 	if err := w.endpoints.Disable(c.Request.Context(), query); err != nil {
 		PresentError(c, err)
 		return
@@ -72,7 +72,7 @@ func (w *WebhookController) Disable(c *gin.Context) {
 
 func (w *WebhookController) ListDeliveries(c *gin.Context) {
 	page, err := w.deliveries.ListDeliveries(c.Request.Context(), webhookservice.DeliveryListInput{
-		OwnerID: ownerFrom(c),
+		OwnerID: readOwner(c),
 		Status:  c.Query("status"),
 		Cursor:  c.Query("cursor"),
 		Limit:   c.Query("limit"),
@@ -81,17 +81,17 @@ func (w *WebhookController) ListDeliveries(c *gin.Context) {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, w.presenter.deliveryPage(page))
+	c.JSON(http.StatusOK, w.presenter.toDeliveryPageResponse(page))
 }
 
 func (w *WebhookController) Replay(c *gin.Context) {
-	query := webhookservice.DeliveryQuery{OwnerID: ownerFrom(c), DeliveryID: c.Param("id")}
+	query := webhookservice.DeliveryQuery{OwnerID: readOwner(c), DeliveryID: c.Param("id")}
 	delivery, err := w.deliveries.Replay(c.Request.Context(), query)
 	if err != nil {
 		PresentError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, w.presenter.delivery(delivery))
+	c.JSON(http.StatusOK, w.presenter.toDeliveryResponse(delivery))
 }
 
 func registerWebhookRoutes(group *gin.RouterGroup, controller *WebhookController) {

@@ -79,11 +79,11 @@ func (s stubProvider) SendPixPayout(context.Context, payment.PayoutRequest) (pay
 	return s.payout, s.err
 }
 
-func (s stubProvider) GetCharge(context.Context, string) (domainpayment.EventKind, error) {
+func (s stubProvider) FetchCharge(context.Context, string) (domainpayment.EventKind, error) {
 	return s.kind, s.err
 }
 
-func (s stubProvider) GetPayout(context.Context, string) (domainpayment.EventKind, error) {
+func (s stubProvider) FetchPayout(context.Context, string) (domainpayment.EventKind, error) {
 	return s.kind, s.err
 }
 
@@ -105,11 +105,11 @@ func TestProviderTracer_EveryMethod_RecordsSpan(t *testing.T) {
 		{span: "provider.SendPixPayout", want: payout, call: func(ctx context.Context, d *tracing.ProviderTracer) (any, error) {
 			return d.SendPixPayout(ctx, payment.PayoutRequest{})
 		}},
-		{span: "provider.GetCharge", want: kind, call: func(ctx context.Context, d *tracing.ProviderTracer) (any, error) {
-			return d.GetCharge(ctx, "id")
+		{span: "provider.FetchCharge", want: kind, call: func(ctx context.Context, d *tracing.ProviderTracer) (any, error) {
+			return d.FetchCharge(ctx, "id")
 		}},
-		{span: "provider.GetPayout", want: kind, call: func(ctx context.Context, d *tracing.ProviderTracer) (any, error) {
-			return d.GetPayout(ctx, "id")
+		{span: "provider.FetchPayout", want: kind, call: func(ctx context.Context, d *tracing.ProviderTracer) (any, error) {
+			return d.FetchPayout(ctx, "id")
 		}},
 		{span: "provider.ParseWebhook", want: occurred, call: func(ctx context.Context, d *tracing.ProviderTracer) (any, error) {
 			return d.ParseWebhook(ctx, nil, nil)

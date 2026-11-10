@@ -67,7 +67,7 @@ func restoreEvents(ctx context.Context, database querier, stored []storedEvent) 
 	for _, s := range stored {
 		ids = append(ids, s.transferID)
 	}
-	transfers, err := transfersByID(ctx, database, ids)
+	transfers, err := findTransfersByID(ctx, database, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func restoreEvents(ctx context.Context, database querier, stored []storedEvent) 
 	return events, nil
 }
 
-func transfersByID(ctx context.Context, database querier, ids []transfer.ID) (map[transfer.ID]transfer.Transfer, error) {
+func findTransfersByID(ctx context.Context, database querier, ids []transfer.ID) (map[transfer.ID]transfer.Transfer, error) {
 	present := make([]transfer.ID, 0, len(ids))
 	for _, id := range ids {
 		if id != "" {

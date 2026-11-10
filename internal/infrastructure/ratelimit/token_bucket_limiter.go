@@ -43,8 +43,8 @@ func (l *TokenBucketLimiter) Allow(key string) bool {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	now := l.clock.Now()
-	l.sweep(now)
-	current := l.refilled(key, now)
+	l.sweepIdleBuckets(now)
+	current := l.refillBucket(key, now)
 	if current.tokens < 1 {
 		return false
 	}
@@ -52,7 +52,7 @@ func (l *TokenBucketLimiter) Allow(key string) bool {
 	return true
 }
 
-func (l *TokenBucketLimiter) refilled(key string, now time.Time) *bucket {
+func (l *TokenBucketLimiter) refillBucket(key string, now time.Time) *bucket {
 	current, found := l.buckets[key]
 	if !found {
 		current = &bucket{tokens: l.burst, updated: now}
@@ -65,7 +65,7 @@ func (l *TokenBucketLimiter) refilled(key string, now time.Time) *bucket {
 	return current
 }
 
-func (l *TokenBucketLimiter) sweep(now time.Time) {
+func (l *TokenBucketLimiter) sweepIdleBuckets(now time.Time) {
 	if now.Sub(l.lastSweep) < sweepInterval {
 		return
 	}

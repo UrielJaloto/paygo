@@ -29,7 +29,7 @@ type transferResponse struct {
 func (p *Provider) SendPixPayout(ctx context.Context, request paymentservice.PayoutRequest) (paymentservice.PayoutResult, error) {
 	var created transferResponse
 	err := p.sendCall(ctx, apiCall{method: http.MethodPost, path: "/transfers", input: transferRequest{
-		Value:             decimalValue(request.AmountMinor),
+		Value:             formatDecimal(request.AmountMinor),
 		PixAddressKey:     request.PixKey,
 		PixAddressKeyType: strings.ToUpper(request.PixKeyType),
 		OperationType:     operationTypePix,
@@ -41,16 +41,16 @@ func (p *Provider) SendPixPayout(ctx context.Context, request paymentservice.Pay
 	return paymentservice.PayoutResult{ProviderID: created.ID}, nil
 }
 
-func (p *Provider) GetPayout(ctx context.Context, providerID string) (payment.EventKind, error) {
+func (p *Provider) FetchPayout(ctx context.Context, providerID string) (payment.EventKind, error) {
 	var found transferResponse
 	path := "/transfers/" + url.PathEscape(providerID)
 	if err := p.sendCall(ctx, apiCall{method: http.MethodGet, path: path, out: &found}); err != nil {
 		return "", err
 	}
-	return payoutKind(found.Status), nil
+	return parsePayoutKind(found.Status), nil
 }
 
-func payoutKind(status string) payment.EventKind {
+func parsePayoutKind(status string) payment.EventKind {
 	switch status {
 	case "DONE":
 		return payment.EventPayoutDone

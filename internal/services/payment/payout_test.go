@@ -263,7 +263,7 @@ func TestCreatePayout_SameKey_ReplaysOrConflicts(t *testing.T) {
 	}
 }
 
-func TestGetPayout_ReturnsOnlyOwnPayouts(t *testing.T) {
+func TestFindPayout_ReturnsOnlyOwnPayouts(t *testing.T) {
 	tests := []struct {
 		name  string
 		query service.PayoutQuery
@@ -279,10 +279,10 @@ func TestGetPayout_ReturnsOnlyOwnPayouts(t *testing.T) {
 			store := paymentStore()
 			seedPayout(t, store, "payout-1", providerReference)
 
-			_, err := newService(store, &spyProvider{}).GetPayout(context.Background(), testCase.query)
+			_, err := newService(store, &spyProvider{}).FindPayout(context.Background(), testCase.query)
 
 			if !errors.Is(err, testCase.want) {
-				t.Errorf("GetPayout() error = %v, want %v", err, testCase.want)
+				t.Errorf("FindPayout() error = %v, want %v", err, testCase.want)
 			}
 		})
 	}

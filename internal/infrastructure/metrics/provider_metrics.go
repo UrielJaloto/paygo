@@ -13,8 +13,8 @@ type paymentProvider interface {
 	Name() string
 	CreatePixCharge(ctx context.Context, request payment.ChargeRequest) (payment.ChargeResult, error)
 	SendPixPayout(ctx context.Context, request payment.PayoutRequest) (payment.PayoutResult, error)
-	GetCharge(ctx context.Context, providerID string) (domainpayment.EventKind, error)
-	GetPayout(ctx context.Context, providerID string) (domainpayment.EventKind, error)
+	FetchCharge(ctx context.Context, providerID string) (domainpayment.EventKind, error)
+	FetchPayout(ctx context.Context, providerID string) (domainpayment.EventKind, error)
 	ParseWebhook(ctx context.Context, header http.Header, body []byte) (domainpayment.ProviderEvent, error)
 }
 
@@ -43,15 +43,15 @@ func (m *ProviderMetrics) SendPixPayout(ctx context.Context, request payment.Pay
 	return result, err
 }
 
-func (m *ProviderMetrics) GetCharge(ctx context.Context, providerID string) (domainpayment.EventKind, error) {
-	kind, err := m.next.GetCharge(ctx, providerID)
-	m.count("get_charge", err)
+func (m *ProviderMetrics) FetchCharge(ctx context.Context, providerID string) (domainpayment.EventKind, error) {
+	kind, err := m.next.FetchCharge(ctx, providerID)
+	m.count("fetch_charge", err)
 	return kind, err
 }
 
-func (m *ProviderMetrics) GetPayout(ctx context.Context, providerID string) (domainpayment.EventKind, error) {
-	kind, err := m.next.GetPayout(ctx, providerID)
-	m.count("get_payout", err)
+func (m *ProviderMetrics) FetchPayout(ctx context.Context, providerID string) (domainpayment.EventKind, error) {
+	kind, err := m.next.FetchPayout(ctx, providerID)
+	m.count("fetch_payout", err)
 	return kind, err
 }
 
@@ -62,10 +62,10 @@ func (m *ProviderMetrics) ParseWebhook(ctx context.Context, header http.Header, 
 }
 
 func (m *ProviderMetrics) count(operation string, err error) {
-	m.registry.providerRequests.WithLabelValues(m.next.Name(), operation, providerResult(err)).Inc()
+	m.registry.providerRequests.WithLabelValues(m.next.Name(), operation, resolveProviderResult(err)).Inc()
 }
 
-func providerResult(err error) string {
+func resolveProviderResult(err error) string {
 	switch {
 	case err == nil:
 		return "ok"

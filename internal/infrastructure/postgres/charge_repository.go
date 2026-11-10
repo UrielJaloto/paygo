@@ -61,18 +61,18 @@ func (r *ChargeRepository) Update(ctx context.Context, charge payment.Charge) er
 
 func (r *ChargeRepository) FindByID(ctx context.Context, id payment.ChargeID) (payment.Charge, error) {
 	found, err := scanCharge(r.database.QueryRow(ctx, selectCharge, id))
-	return found, notFound(err, payment.ErrChargeNotFound)
+	return found, mapNotFound(err, payment.ErrChargeNotFound)
 }
 
 func (r *ChargeRepository) FindByProviderID(ctx context.Context, providerID string) (payment.Charge, error) {
 	found, err := scanCharge(r.database.QueryRow(ctx, lockChargeByProviderID, providerID))
-	return found, notFound(err, payment.ErrChargeNotFound)
+	return found, mapNotFound(err, payment.ErrChargeNotFound)
 }
 
 func (r *ChargeRepository) FindByIdempotencyKey(ctx context.Context, owner apikey.OwnerID, key transfer.IdempotencyKey) (payment.Charge, transfer.Fingerprint, error) {
 	var fingerprint transfer.Fingerprint
 	found, err := scanCharge(r.database.QueryRow(ctx, selectChargeByKey, owner, key), &fingerprint)
-	return found, fingerprint, notFound(err, payment.ErrChargeNotFound)
+	return found, fingerprint, mapNotFound(err, payment.ErrChargeNotFound)
 }
 
 func (r *ChargeRepository) ListPending(ctx context.Context, olderThan time.Time, limit int) ([]payment.Charge, error) {

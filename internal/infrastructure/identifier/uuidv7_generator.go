@@ -34,11 +34,11 @@ func NewMoney(clock interface{ Now() time.Time }, random io.Reader) *UUIDv7Gener
 func (g *UUIDv7Generator) NewID() string {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	g.advance()
+	g.advanceSequence()
 	return formatUUID(g.encodeID())
 }
 
-func (g *UUIDv7Generator) advance() {
+func (g *UUIDv7Generator) advanceSequence() {
 	milliseconds := uint64(g.clock.Now().UnixMilli())
 	if milliseconds > g.last {
 		g.last = milliseconds

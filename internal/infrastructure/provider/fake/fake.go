@@ -68,16 +68,16 @@ func (p *Provider) SendPixPayout(context.Context, paymentservice.PayoutRequest) 
 	return paymentservice.PayoutResult{ProviderID: id}, nil
 }
 
-func (p *Provider) GetCharge(_ context.Context, providerID string) (payment.EventKind, error) {
+func (p *Provider) FetchCharge(_ context.Context, providerID string) (payment.EventKind, error) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	return statusOf(p.charges, providerID), nil
+	return lookupStatus(p.charges, providerID), nil
 }
 
-func (p *Provider) GetPayout(_ context.Context, providerID string) (payment.EventKind, error) {
+func (p *Provider) FetchPayout(_ context.Context, providerID string) (payment.EventKind, error) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	return statusOf(p.payouts, providerID), nil
+	return lookupStatus(p.payouts, providerID), nil
 }
 
 func (p *Provider) MarkPaid(providerID string) {
@@ -104,7 +104,7 @@ func (p *Provider) ParseWebhook(_ context.Context, header http.Header, body []by
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return payment.ProviderEvent{}, fmt.Errorf("%w: decoding fake webhook: %v", payment.ErrProviderRejected, err)
 	}
-	kind := kindOf(parsed.Type)
+	kind := parseEventKind(parsed.Type)
 	p.apply(parsed.ProviderID, kind)
 	if parsed.SyncOnly {
 		kind = payment.EventIgnored
@@ -121,7 +121,7 @@ func (p *Provider) apply(providerID string, kind payment.EventKind) {
 	}
 }
 
-func kindOf(webhookType string) payment.EventKind {
+func parseEventKind(webhookType string) payment.EventKind {
 	switch webhookType {
 	case "charge.paid":
 		return payment.EventChargePaid
@@ -133,7 +133,7 @@ func kindOf(webhookType string) payment.EventKind {
 	return payment.EventIgnored
 }
 
-func statusOf(states map[string]payment.EventKind, providerID string) payment.EventKind {
+func lookupStatus(states map[string]payment.EventKind, providerID string) payment.EventKind {
 	if kind, found := states[providerID]; found {
 		return kind
 	}

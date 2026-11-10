@@ -26,11 +26,11 @@ func (l RequestLogger) LogRequest(ctx context.Context, method, route string) fun
 		if err != nil {
 			attributes = append(attributes, slog.String("error", err.Error()))
 		}
-		l.logger.LogAttrs(ctx, statusLevel(status), "http.request", attributes...)
+		l.logger.LogAttrs(ctx, resolveStatusLevel(status), "http.request", attributes...)
 	}
 }
 
-func statusLevel(status int) slog.Level {
+func resolveStatusLevel(status int) slog.Level {
 	switch {
 	case status >= 500:
 		return slog.LevelError

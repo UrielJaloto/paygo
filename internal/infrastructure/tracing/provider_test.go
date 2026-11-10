@@ -129,8 +129,8 @@ func TestProviderTracer_InsideServerSpan_IsChildOfServerSpan(t *testing.T) {
 	exporter, tracer := newRecorder(t)
 	ctx, end := tracing.NewHTTPSpanStarter(tracer).StartServerSpan(context.Background(), "GET", "/health", http.Header{})
 	decorator := tracing.NewProviderTracer(stubProvider{}, tracer)
-	if _, err := decorator.GetCharge(ctx, "id"); err != nil {
-		t.Fatalf("GetCharge: %v", err)
+	if _, err := decorator.FetchCharge(ctx, "id"); err != nil {
+		t.Fatalf("FetchCharge: %v", err)
 	}
 	end(http.StatusOK)
 	spans := exporter.GetSpans()

@@ -53,7 +53,7 @@ func (s *Service) listPending(ctx context.Context, limit int) ([]payment.Charge,
 }
 
 func (s *Service) syncCharge(ctx context.Context, charge payment.Charge) (bool, error) {
-	kind, err := s.chargeStatus(ctx, charge)
+	kind, err := s.fetchChargeStatus(ctx, charge)
 	if err != nil {
 		return false, fmt.Errorf("checking charge %s: %w", charge.ID(), err)
 	}
@@ -66,11 +66,11 @@ func (s *Service) syncCharge(ctx context.Context, charge payment.Charge) (bool, 
 	return true, s.expireStaleCharge(ctx, charge.ID())
 }
 
-func (s *Service) chargeStatus(ctx context.Context, charge payment.Charge) (payment.EventKind, error) {
+func (s *Service) fetchChargeStatus(ctx context.Context, charge payment.Charge) (payment.EventKind, error) {
 	if charge.Reference().ProviderID == "" {
 		return payment.EventIgnored, nil
 	}
-	return s.provider.GetCharge(ctx, charge.Reference().ProviderID)
+	return s.provider.FetchCharge(ctx, charge.Reference().ProviderID)
 }
 
 func (s *Service) expireStaleCharge(ctx context.Context, id payment.ChargeID) error {
@@ -80,7 +80,7 @@ func (s *Service) expireStaleCharge(ctx context.Context, id payment.ChargeID) er
 			return err
 		}
 		if err := charge.MarkExpired(s.clock.Now()); err != nil {
-			return ignoreStale(err)
+			return ignoreInvalidTransition(err)
 		}
 		return s.publishCharge(ctx, store, charge, event.TypeChargeExpired)
 	})
@@ -96,7 +96,7 @@ func (s *Service) syncPayout(ctx context.Context, pending payment.Payout) (SyncR
 		_, err := s.sendPayout(ctx, pending)
 		return SyncResult{Retried: 1}, err
 	}
-	kind, err := s.provider.GetPayout(ctx, providerID)
+	kind, err := s.provider.FetchPayout(ctx, providerID)
 	if err != nil {
 		return SyncResult{}, fmt.Errorf("checking payout %s: %w", pending.ID(), err)
 	}

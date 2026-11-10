@@ -69,7 +69,7 @@ func (a *AdminController) Withdraw(c *gin.Context) {
 }
 
 func (a *AdminController) handleFunding(c *gin.Context, operation fundingOperation) {
-	key, err := idempotencyKeyFrom(c)
+	key, err := readIdempotencyKey(c)
 	if err != nil {
 		PresentError(c, err)
 		return
@@ -86,7 +86,7 @@ func (a *AdminController) handleFunding(c *gin.Context, operation fundingOperati
 		Amount:         request.Amount,
 		Currency:       request.Currency,
 	})
-	a.transfers.moneyMovement(c, output, err)
+	a.transfers.presentMoneyMovement(c, output, err)
 }
 
 func registerAdminRoutes(group *gin.RouterGroup, controller *AdminController) {

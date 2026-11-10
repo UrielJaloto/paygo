@@ -26,7 +26,7 @@ type transferPageResponse struct {
 
 type TransferPresenter struct{}
 
-func (TransferPresenter) transfer(output transferservice.TransferOutput) transferResponse {
+func (TransferPresenter) toTransferResponse(output transferservice.TransferOutput) transferResponse {
 	return transferResponse{
 		ID:            output.ID,
 		Kind:          output.Kind,
@@ -40,7 +40,7 @@ func (TransferPresenter) transfer(output transferservice.TransferOutput) transfe
 	}
 }
 
-func (p TransferPresenter) moneyMovement(c *gin.Context, output transferservice.TransferOutput, err error) {
+func (p TransferPresenter) presentMoneyMovement(c *gin.Context, output transferservice.TransferOutput, err error) {
 	if err != nil {
 		PresentError(c, err)
 		return
@@ -50,13 +50,13 @@ func (p TransferPresenter) moneyMovement(c *gin.Context, output transferservice.
 		status = http.StatusOK
 		c.Header(idempotentReplayedHeader, idempotentReplayedPresent)
 	}
-	c.JSON(status, p.transfer(output))
+	c.JSON(status, p.toTransferResponse(output))
 }
 
-func (p TransferPresenter) transferPage(page transferservice.TransferPage) transferPageResponse {
+func (p TransferPresenter) toTransferPageResponse(page transferservice.TransferPage) transferPageResponse {
 	items := make([]transferResponse, 0, len(page.Items))
 	for _, item := range page.Items {
-		items = append(items, p.transfer(item))
+		items = append(items, p.toTransferResponse(item))
 	}
 	return transferPageResponse{Items: items, NextCursor: page.NextCursor}
 }

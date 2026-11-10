@@ -16,7 +16,7 @@ type Authenticator interface {
 
 func NewAuthMiddleware(authenticator Authenticator) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token, found := bearerToken(c)
+		token, found := readBearerToken(c)
 		if !found {
 			PresentError(c, apikeyservice.ErrUnauthenticated)
 			return
@@ -31,7 +31,7 @@ func NewAuthMiddleware(authenticator Authenticator) gin.HandlerFunc {
 	}
 }
 
-func bearerToken(c *gin.Context) (string, bool) {
+func readBearerToken(c *gin.Context) (string, bool) {
 	token, found := strings.CutPrefix(c.GetHeader("Authorization"), bearerPrefix)
 	return token, found && token != ""
 }

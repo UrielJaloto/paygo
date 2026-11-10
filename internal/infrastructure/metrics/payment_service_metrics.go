@@ -13,9 +13,9 @@ import (
 
 type paymentService interface {
 	CreateCharge(ctx context.Context, input payment.ChargeInput) (payment.ChargeOutput, error)
-	GetCharge(ctx context.Context, query payment.ChargeQuery) (payment.ChargeOutput, error)
+	FindCharge(ctx context.Context, query payment.ChargeQuery) (payment.ChargeOutput, error)
 	CreatePayout(ctx context.Context, input payment.PayoutInput) (payment.PayoutOutput, error)
-	GetPayout(ctx context.Context, query payment.PayoutQuery) (payment.PayoutOutput, error)
+	FindPayout(ctx context.Context, query payment.PayoutQuery) (payment.PayoutOutput, error)
 	HandleWebhook(ctx context.Context, input payment.WebhookInput) error
 	Sync(ctx context.Context, limit int) (payment.SyncResult, error)
 }
@@ -31,22 +31,22 @@ func NewPaymentServiceMetrics(next paymentService, registry *Registry) *PaymentS
 
 func (m *PaymentServiceMetrics) CreateCharge(ctx context.Context, input payment.ChargeInput) (payment.ChargeOutput, error) {
 	output, err := m.next.CreateCharge(ctx, input)
-	m.count("charge", paymentStatus(output.Status, err))
+	m.count("charge", resolvePaymentResult(output.Status, err))
 	return output, err
 }
 
-func (m *PaymentServiceMetrics) GetCharge(ctx context.Context, query payment.ChargeQuery) (payment.ChargeOutput, error) {
-	return m.next.GetCharge(ctx, query)
+func (m *PaymentServiceMetrics) FindCharge(ctx context.Context, query payment.ChargeQuery) (payment.ChargeOutput, error) {
+	return m.next.FindCharge(ctx, query)
 }
 
 func (m *PaymentServiceMetrics) CreatePayout(ctx context.Context, input payment.PayoutInput) (payment.PayoutOutput, error) {
 	output, err := m.next.CreatePayout(ctx, input)
-	m.count("payout", paymentStatus(output.Status, err))
+	m.count("payout", resolvePaymentResult(output.Status, err))
 	return output, err
 }
 
-func (m *PaymentServiceMetrics) GetPayout(ctx context.Context, query payment.PayoutQuery) (payment.PayoutOutput, error) {
-	return m.next.GetPayout(ctx, query)
+func (m *PaymentServiceMetrics) FindPayout(ctx context.Context, query payment.PayoutQuery) (payment.PayoutOutput, error) {
+	return m.next.FindPayout(ctx, query)
 }
 
 func (m *PaymentServiceMetrics) HandleWebhook(ctx context.Context, input payment.WebhookInput) error {
@@ -61,11 +61,11 @@ func (m *PaymentServiceMetrics) count(kind, status string) {
 	m.registry.payments.WithLabelValues(kind, status).Inc()
 }
 
-func paymentStatus(status string, err error) string {
+func resolvePaymentResult(status string, err error) string {
 	if err == nil {
 		return status
 	}
-	for _, rejection := range paymentRejections() {
+	for _, rejection := range listPaymentRejections() {
 		if errors.Is(err, rejection) {
 			return "rejected"
 		}
@@ -73,7 +73,7 @@ func paymentStatus(status string, err error) string {
 	return "error"
 }
 
-func paymentRejections() []error {
+func listPaymentRejections() []error {
 	return []error{
 		account.ErrInvalidAccountID, account.ErrAccountNotFound, account.ErrAccountFrozen,
 		money.ErrUnsupportedCurrency, money.ErrInvalidAmount, money.ErrAmountTooLarge, money.ErrCurrencyMismatch,

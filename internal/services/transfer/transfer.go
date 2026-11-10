@@ -74,7 +74,7 @@ func (s *Service) Transfer(ctx context.Context, input TransferInput) (TransferOu
 	if err != nil {
 		return TransferOutput{}, err
 	}
-	return s.execute(ctx, request)
+	return s.runPosting(ctx, request)
 }
 
 func (s *Service) Deposit(ctx context.Context, input FundingInput) (TransferOutput, error) {
@@ -83,7 +83,7 @@ func (s *Service) Deposit(ctx context.Context, input FundingInput) (TransferOutp
 		return TransferOutput{}, err
 	}
 	request.Kind = transfer.KindDeposit
-	return s.execute(ctx, request)
+	return s.runPosting(ctx, request)
 }
 
 func (s *Service) Withdraw(ctx context.Context, input FundingInput) (TransferOutput, error) {
@@ -93,7 +93,7 @@ func (s *Service) Withdraw(ctx context.Context, input FundingInput) (TransferOut
 	}
 	request.Kind = transfer.KindWithdrawal
 	request.From, request.To = request.To, request.From
-	return s.execute(ctx, request)
+	return s.runPosting(ctx, request)
 }
 
 func (s *Service) Reverse(ctx context.Context, input ReverseInput) (TransferOutput, error) {
@@ -117,7 +117,7 @@ func (s *Service) Reverse(ctx context.Context, input ReverseInput) (TransferOutp
 	return output, nil
 }
 
-func (s *Service) Get(ctx context.Context, query TransferQuery) (TransferOutput, error) {
+func (s *Service) Find(ctx context.Context, query TransferQuery) (TransferOutput, error) {
 	owner, err := apikey.ParseOwnerID(query.OwnerID)
 	if err != nil {
 		return TransferOutput{}, err
@@ -152,7 +152,7 @@ func (s *Service) List(ctx context.Context, input ListInput) (TransferPage, erro
 	return buildPage(found, owner, limit), nil
 }
 
-func (s *Service) execute(ctx context.Context, request transfer.Request) (TransferOutput, error) {
+func (s *Service) runPosting(ctx context.Context, request transfer.Request) (TransferOutput, error) {
 	var output TransferOutput
 	err := s.unitOfWork.Run(ctx, func(ctx context.Context, store Store) error {
 		posted, err := s.postRequest(ctx, store, request)
@@ -208,7 +208,7 @@ func parseFunding(input FundingInput) (transfer.Request, error) {
 	if err != nil {
 		return transfer.Request{}, err
 	}
-	settlement := settlementAccountFor(amount.Currency())
+	settlement := findSettlementAccountID(amount.Currency())
 	if customer == settlement {
 		return transfer.Request{}, fmt.Errorf("%w: %s", account.ErrAccountNotFound, customer)
 	}

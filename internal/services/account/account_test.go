@@ -105,9 +105,9 @@ func TestOpen_SaveFails_WrapsError(t *testing.T) {
 
 func TestFind_OwnAccount_ReturnsOutput(t *testing.T) {
 	repository := newFakeRepository(stored(accountID, account.StatusActive))
-	got, err := newService(repository, &fakeLedger{}).Get(context.Background(), own)
+	got, err := newService(repository, &fakeLedger{}).Find(context.Background(), own)
 	if err != nil {
-		t.Fatalf("Get: %v", err)
+		t.Fatalf("Find: %v", err)
 	}
 	if got.ID != accountID || got.Status != "active" {
 		t.Fatalf("got %+v", got)
@@ -129,7 +129,7 @@ func TestFind_Rejected_ReturnsExactError(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			repository := newFakeRepository(stored(accountID, account.StatusActive))
-			_, err := newService(repository, &fakeLedger{}).Get(context.Background(), testCase.query)
+			_, err := newService(repository, &fakeLedger{}).Find(context.Background(), testCase.query)
 			if !errors.Is(err, testCase.want) {
 				t.Fatalf("error = %v, want %v", err, testCase.want)
 			}

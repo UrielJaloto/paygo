@@ -55,8 +55,8 @@ func NewDeliveryRepository(pool *pgxpool.Pool) *DeliveryRepository {
 
 func (r *DeliveryRepository) FindByID(ctx context.Context, id webhook.DeliveryID) (webhook.Delivery, error) {
 	var snapshot webhook.DeliverySnapshot
-	err := r.database.QueryRow(ctx, selectDelivery, id).Scan(deliveryDestinations(&snapshot)...)
-	return webhook.RestoreDelivery(snapshot), notFound(err, webhook.ErrDeliveryNotFound)
+	err := r.database.QueryRow(ctx, selectDelivery, id).Scan(scanDeliveryTargets(&snapshot)...)
+	return webhook.RestoreDelivery(snapshot), mapNotFound(err, webhook.ErrDeliveryNotFound)
 }
 
 func (r *DeliveryRepository) ListByOwner(ctx context.Context, filter webhookservice.DeliveryFilter, cursor page.Cursor, limit page.Limit) ([]webhook.Delivery, error) {
@@ -115,18 +115,18 @@ type claimRow struct {
 
 func scanClaimRow(row pgx.CollectableRow) (claimRow, error) {
 	var claimed claimRow
-	destinations := slices.Concat(deliveryDestinations(&claimed.delivery), endpointDestinations(&claimed.endpoint), claimed.event.scanEventTargets())
+	destinations := slices.Concat(scanDeliveryTargets(&claimed.delivery), scanEndpointTargets(&claimed.endpoint), claimed.event.scanEventTargets())
 	err := row.Scan(destinations...)
 	return claimed, err
 }
 
 func scanDeliveryRow(row pgx.CollectableRow) (webhook.Delivery, error) {
 	var snapshot webhook.DeliverySnapshot
-	err := row.Scan(deliveryDestinations(&snapshot)...)
+	err := row.Scan(scanDeliveryTargets(&snapshot)...)
 	return webhook.RestoreDelivery(snapshot), err
 }
 
-func deliveryDestinations(snapshot *webhook.DeliverySnapshot) []any {
+func scanDeliveryTargets(snapshot *webhook.DeliverySnapshot) []any {
 	return []any{&snapshot.ID, &snapshot.EventID, &snapshot.EndpointID, &snapshot.OwnerID, &snapshot.Status,
 		&snapshot.Attempts, &snapshot.NextAttemptAt, &snapshot.LastError, &snapshot.UpdatedAt}
 }

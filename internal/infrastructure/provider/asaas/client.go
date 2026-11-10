@@ -69,7 +69,7 @@ func (p *Provider) sendCall(ctx context.Context, call apiCall) error {
 	if err != nil {
 		return fmt.Errorf("%w: reading %s: %v", payment.ErrProviderUnavailable, call.path, err)
 	}
-	if err := statusError(response.StatusCode, body); err != nil {
+	if err := mapStatusError(response.StatusCode, body); err != nil {
 		return fmt.Errorf("%s %s: %w", call.method, call.path, err)
 	}
 	if err := json.Unmarshal(body, call.out); err != nil {
@@ -104,7 +104,7 @@ func encodeBody(input any) (io.Reader, error) {
 	return bytes.NewReader(encoded), nil
 }
 
-func statusError(status int, body []byte) error {
+func mapStatusError(status int, body []byte) error {
 	if status >= http.StatusInternalServerError || status == http.StatusTooManyRequests {
 		return fmt.Errorf("%w: status %d", payment.ErrProviderUnavailable, status)
 	}

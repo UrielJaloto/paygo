@@ -44,7 +44,7 @@ type pixQRCodeResponse struct {
 }
 
 func (p *Provider) CreatePixCharge(ctx context.Context, request paymentservice.ChargeRequest) (paymentservice.ChargeResult, error) {
-	customerID, err := p.customerFor(ctx, request)
+	customerID, err := p.resolveCustomer(ctx, request)
 	if err != nil {
 		return paymentservice.ChargeResult{}, err
 	}
@@ -52,7 +52,7 @@ func (p *Provider) CreatePixCharge(ctx context.Context, request paymentservice.C
 	err = p.sendCall(ctx, apiCall{method: http.MethodPost, path: "/payments", input: paymentRequest{
 		Customer:          customerID,
 		BillingType:       billingTypePix,
-		Value:             decimalValue(request.AmountMinor),
+		Value:             formatDecimal(request.AmountMinor),
 		DueDate:           request.DueDate.Format(dueDateLayout),
 		ExternalReference: request.ExternalReference,
 	}, out: &created})
@@ -67,16 +67,16 @@ func (p *Provider) CreatePixCharge(ctx context.Context, request paymentservice.C
 	return paymentservice.ChargeResult{ProviderID: created.ID, PixCopyPaste: code.Payload, PixQRBase64: code.EncodedImage}, nil
 }
 
-func (p *Provider) GetCharge(ctx context.Context, providerID string) (payment.EventKind, error) {
+func (p *Provider) FetchCharge(ctx context.Context, providerID string) (payment.EventKind, error) {
 	var found paymentResponse
 	path := "/payments/" + url.PathEscape(providerID)
 	if err := p.sendCall(ctx, apiCall{method: http.MethodGet, path: path, out: &found}); err != nil {
 		return "", err
 	}
-	return chargeKind(found.Status), nil
+	return parseChargeKind(found.Status), nil
 }
 
-func (p *Provider) customerFor(ctx context.Context, request paymentservice.ChargeRequest) (string, error) {
+func (p *Provider) resolveCustomer(ctx context.Context, request paymentservice.ChargeRequest) (string, error) {
 	cached, err := p.customers.Find(ctx, providerName, request.PayerDocument)
 	if err != nil {
 		return "", fmt.Errorf("finding asaas customer: %w", err)
@@ -95,7 +95,7 @@ func (p *Provider) customerFor(ctx context.Context, request paymentservice.Charg
 	return created.ID, nil
 }
 
-func chargeKind(status string) payment.EventKind {
+func parseChargeKind(status string) payment.EventKind {
 	switch status {
 	case "RECEIVED", "CONFIRMED":
 		return payment.EventChargePaid
@@ -105,6 +105,6 @@ func chargeKind(status string) payment.EventKind {
 	return payment.EventIgnored
 }
 
-func decimalValue(amountMinor int64) json.Number {
+func formatDecimal(amountMinor int64) json.Number {
 	return json.Number(fmt.Sprintf("%d.%02d", amountMinor/100, amountMinor%100))
 }

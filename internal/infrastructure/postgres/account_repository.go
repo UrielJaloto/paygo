@@ -37,7 +37,7 @@ func (r *AccountRepository) Save(ctx context.Context, acc account.Account) error
 
 func (r *AccountRepository) FindByID(ctx context.Context, id account.ID) (account.Account, error) {
 	found, err := scanAccount(r.database.QueryRow(ctx, selectAccount, id))
-	return found, notFound(err, account.ErrAccountNotFound)
+	return found, mapNotFound(err, account.ErrAccountNotFound)
 }
 
 func (r *AccountRepository) ListByOwner(ctx context.Context, owner apikey.OwnerID, cursor page.Cursor, limit page.Limit) ([]account.Account, error) {
@@ -57,7 +57,7 @@ func (r *AccountRepository) Update(ctx context.Context, acc account.Account, exp
 }
 
 func (r *AccountRepository) LockByIDs(ctx context.Context, ids []account.ID) ([]account.Account, error) {
-	rows, _ := r.database.Query(ctx, lockAccounts, accountIDStrings(ids))
+	rows, _ := r.database.Query(ctx, lockAccounts, formatAccountIDs(ids))
 	locked, err := pgx.CollectRows(rows, scanAccountRow)
 	if err != nil {
 		return nil, err
@@ -68,7 +68,7 @@ func (r *AccountRepository) LockByIDs(ctx context.Context, ids []account.ID) ([]
 	return locked, nil
 }
 
-func accountIDStrings(ids []account.ID) []string {
+func formatAccountIDs(ids []account.ID) []string {
 	texts := make([]string, 0, len(ids))
 	for _, id := range ids {
 		texts = append(texts, string(id))

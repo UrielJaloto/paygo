@@ -35,10 +35,10 @@ func (p *Provider) ParseWebhook(_ context.Context, header http.Header, body []by
 	if providerID == "" {
 		providerID = parsed.Transfer.ID
 	}
-	return payment.ProviderEvent{Provider: providerName, EventID: parsed.ID, ProviderID: providerID, Kind: webhookKind(parsed.Event)}, nil
+	return payment.ProviderEvent{Provider: providerName, EventID: parsed.ID, ProviderID: providerID, Kind: parseWebhookKind(parsed.Event)}, nil
 }
 
-func webhookKind(event string) payment.EventKind {
+func parseWebhookKind(event string) payment.EventKind {
 	switch event {
 	case "PAYMENT_RECEIVED", "PAYMENT_CONFIRMED":
 		return payment.EventChargePaid
