@@ -1,6 +1,5 @@
 # paygo
 
-[![CI](https://github.com/UrielJaloto/paygo/actions/workflows/ci.yml/badge.svg)](https://github.com/UrielJaloto/paygo/actions/workflows/ci.yml)
 ![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)
 ![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
@@ -11,7 +10,7 @@ paygo is a digital wallet and double-entry payments ledger written in Go. It exp
 
 - **5,000 transfers per second with zero errors.** 200,000 concurrent transfers over HTTP, durable commits, and every balance matches the journal at the end.
 - **No lost or duplicated money under concurrency.** Integration tests run 50 workers moving money at random, 200 opposite transfers racing for the same pair of accounts, and 100 requests sharing one idempotency key. The invariants hold every time.
-- **100% test coverage, enforced in CI.** Unit, integration and end-to-end suites run against real PostgreSQL and the real binaries.
+- **100% test coverage, checked before every push.** Unit, integration and end-to-end suites run against real PostgreSQL and the real binaries.
 - **Architecture checked by a test.** The build fails when a layer imports one it must not.
 - **Contract-first API.** Every route is documented in OpenAPI, and the end-to-end suite calls every operation and checks the responses against it.
 
@@ -116,7 +115,7 @@ docker compose -f env/compose.yaml up -d postgres
 go test -race -tags integration ./...
 ```
 
-CI runs formatting, vet, govulncheck, race tests on Linux, Windows and macOS, the integration and end-to-end suites, a 100% coverage gate and the image build.
+Every push is verified locally first: formatting, vet, govulncheck, race tests on Linux and Windows, the integration and end-to-end suites, a 100% coverage gate and the image build.
 
 ## Quickstart
 
