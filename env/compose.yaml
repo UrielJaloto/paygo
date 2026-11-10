@@ -4,17 +4,12 @@ x-paygo-build: &paygo-build
   context: ..
 
 x-paygo-environment: &paygo-environment
-  PAYGO_DATABASE_URL: postgres://paygo:paygo@postgres:5432/paygo?sslmode=disable
-  PAYGO_FAKE_WEBHOOK_TOKEN: local-webhook-token-change-me-0123456789
   PAYGO_OTLP_ENDPOINT: jaeger:4318
 
 services:
   postgres:
     image: postgres:18-alpine
-    environment:
-      POSTGRES_USER: paygo
-      POSTGRES_PASSWORD: paygo
-      POSTGRES_DB: paygo
+    env_file: local.env.example
     ports:
       - "${PAYGO_POSTGRES_PORT:-5432}:5432"
     healthcheck:
@@ -26,17 +21,15 @@ services:
   migrate:
     build: *paygo-build
     entrypoint: ["/usr/local/bin/paygo-migrate"]
-    environment:
-      PAYGO_DATABASE_URL: postgres://paygo:paygo@postgres:5432/paygo?sslmode=disable
+    env_file: local.env.example
     depends_on:
       postgres:
         condition: service_healthy
 
   api:
     build: *paygo-build
-    environment:
-      <<: *paygo-environment
-      PAYGO_ADMIN_TOKEN: local-admin-token-change-me-0123456789
+    env_file: local.env.example
+    environment: *paygo-environment
     ports:
       - "${PAYGO_API_PORT:-8080}:8080"
     depends_on:
@@ -46,6 +39,7 @@ services:
   worker:
     build: *paygo-build
     entrypoint: ["/usr/local/bin/paygo-worker"]
+    env_file: local.env.example
     environment:
       <<: *paygo-environment
       PAYGO_HTTP_ADDR: ":9091"

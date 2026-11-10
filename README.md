@@ -86,8 +86,10 @@ Measured on an Intel Core i7-13700F with Docker Desktop on Windows (4 GB VM), Po
 ```bash
 docker compose -f env/load.compose.yaml up -d --build --wait
 cd packages/loadgen
-PAYGO_ADMIN_TOKEN=bench-admin-token-0123456789abcdef go run . -scenario uniform
+PAYGO_ADMIN_TOKEN=example-bench-admin-token-0123456789 go run . -scenario uniform
 ```
+
+The JSON report (throughput, latency percentiles, WAL per transfer, hardware and versions) is printed to stdout; `-out <file>` saves it to a file instead.
 
 ## Testing
 
@@ -125,12 +127,14 @@ Requires Docker, `curl` and `jq`.
 docker compose -f env/compose.yaml up -d --build
 ```
 
+The credentials in `env/local.env.example` and `env/load.env.example` are placeholders for local stacks only; real deployments pass their own values through the environment.
+
 If host port 8080 or 5432 is taken, set `PAYGO_API_PORT` or `PAYGO_POSTGRES_PORT` before starting, and adjust `API` below.
 
 ```bash
 API=http://localhost:8080
-ADMIN="Authorization: Bearer local-admin-token-change-me-0123456789"
-FAKE="Paygo-Fake-Token: local-webhook-token-change-me-0123456789"
+ADMIN="Authorization: Bearer example-admin-token-0123456789abcdef"
+FAKE="Paygo-Fake-Token: example-webhook-token-0123456789abcd"
 OWNER=01890000-0000-7000-8000-000000000001
 JSON="Content-Type: application/json"
 

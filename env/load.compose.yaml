@@ -11,10 +11,7 @@ services:
       - synchronous_commit=on
       - -c
       - max_connections=200
-    environment:
-      POSTGRES_USER: paygo
-      POSTGRES_PASSWORD: paygo
-      POSTGRES_DB: paygo
+    env_file: load.env.example
     ports:
       - "55433:5432"
     healthcheck:
@@ -27,18 +24,15 @@ services:
     build: &paygo-build
       context: ..
     entrypoint: ["/usr/local/bin/paygo-migrate"]
-    environment:
-      PAYGO_DATABASE_URL: postgres://paygo:paygo@postgres:5432/paygo?sslmode=disable
+    env_file: load.env.example
     depends_on:
       postgres:
         condition: service_healthy
 
   api:
     build: *paygo-build
+    env_file: load.env.example
     environment:
-      PAYGO_DATABASE_URL: postgres://paygo:paygo@postgres:5432/paygo?sslmode=disable
-      PAYGO_ADMIN_TOKEN: bench-admin-token-0123456789abcdef
-      PAYGO_FAKE_WEBHOOK_TOKEN: bench-webhook-token-0123456789abcd
       PAYGO_DB_MAX_CONNS: "64"
       PAYGO_RATE_LIMIT_RPS: "10000"
       PAYGO_RATE_LIMIT_BURST: "10000"
