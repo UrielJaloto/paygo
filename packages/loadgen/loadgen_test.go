@@ -16,7 +16,7 @@ type ledgerStub struct {
 	failKey  string
 }
 
-func (l *ledgerStub) Setup(context.Context, int) ([]string, error) { return nil, nil }
+func (l *ledgerStub) CreateAccounts(context.Context, int) ([]string, error) { return nil, nil }
 
 func (l *ledgerStub) Transfer(_ context.Context, move movement) error {
 	l.mutex.Lock()
@@ -29,31 +29,31 @@ func (l *ledgerStub) Transfer(_ context.Context, move movement) error {
 	return nil
 }
 
-func (l *ledgerStub) Balances(context.Context) (map[string]int64, error) { return l.balances, nil }
+func (l *ledgerStub) FetchBalances(context.Context) (map[string]int64, error) { return l.balances, nil }
 
-func TestSummarize_KnownSamples_ReturnsNearestRank(t *testing.T) {
+func TestSummarizeLatencies_KnownSamples_ReturnsNearestRank(t *testing.T) {
 	samples := make([]time.Duration, 0, 100)
 	for value := 100; value >= 1; value-- {
 		samples = append(samples, time.Duration(value))
 	}
-	want := latencies{P50: 50, P95: 95, P99: 99, P100: 100}
-	if got := summarize(samples); got != want {
+	want := latencies{Median: 50, Percentile95: 95, Percentile99: 99, Maximum: 100}
+	if got := summarizeLatencies(samples); got != want {
 		t.Errorf("summarize = %+v, want %+v", got, want)
 	}
 }
 
-func TestSummarize_EdgeSizes_ReturnsExpected(t *testing.T) {
+func TestSummarizeLatencies_EdgeSizes_ReturnsExpected(t *testing.T) {
 	tests := []struct {
 		name    string
 		samples []time.Duration
 		want    latencies
 	}{
 		{name: "empty", samples: nil, want: latencies{}},
-		{name: "single", samples: []time.Duration{7}, want: latencies{P50: 7, P95: 7, P99: 7, P100: 7}},
+		{name: "single", samples: []time.Duration{7}, want: latencies{Median: 7, Percentile95: 7, Percentile99: 7, Maximum: 7}},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := summarize(testCase.samples); got != testCase.want {
+			if got := summarizeLatencies(testCase.samples); got != testCase.want {
 				t.Errorf("summarize = %+v, want %+v", got, testCase.want)
 			}
 		})
@@ -68,7 +68,7 @@ func TestPicker_Contention_PicksHotAccountsNinetyPercent(t *testing.T) {
 	const draws = 100000
 	hot := 0
 	for range draws {
-		from, to := chosen.next()
+		from, to := chosen.pickPair()
 		if from == to {
 			t.Fatalf("from equals to: %d", from)
 		}
@@ -90,7 +90,7 @@ func TestPicker_Uniform_SpreadsAcrossAccounts(t *testing.T) {
 	const draws = 100000
 	hot := 0
 	for range draws {
-		if from, _ := chosen.next(); from < 10 {
+		if from, _ := chosen.pickPair(); from < 10 {
 			hot++
 		}
 	}
@@ -105,37 +105,37 @@ func TestNewPicker_UnknownScenario_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestDrive_AllAccepted_ExpectedMatchesBalances(t *testing.T) {
+func TestDriveLoad_AllAccepted_ExpectedMatchesBalances(t *testing.T) {
 	accounts := make([]string, 10)
 	stub := &ledgerStub{balances: make(map[string]int64)}
 	for index := range accounts {
 		accounts[index] = "account-" + strconv.Itoa(index)
-		stub.balances[accounts[index]] = fundingFor(1000)
+		stub.balances[accounts[index]] = calculateFunding(1000)
 	}
-	result, err := drive(context.Background(), stub, workload{scenarioContention, accounts, 1000, 8, 1, "run"})
+	result, err := driveLoad(context.Background(), stub, workload{scenarioContention, accounts, 1000, 8, 1, "run"})
 	if err != nil {
 		t.Fatalf("drive: %v", err)
 	}
 	if len(result.samples) != 1000 || result.failures != 0 {
 		t.Errorf("samples = %d, failures = %d", len(result.samples), result.failures)
 	}
-	if !correct(result.expected, stub.balances) {
+	if !matchesBalances(result.expected, stub.balances) {
 		t.Errorf("expected %v, balances %v", result.expected, stub.balances)
 	}
 }
 
-func TestDrive_RejectedTransfer_IsCountedAndNotApplied(t *testing.T) {
-	stub := &ledgerStub{balances: map[string]int64{"a": fundingFor(5), "b": fundingFor(5)}, failKey: "run-0-3"}
-	result, err := drive(context.Background(), stub, workload{scenarioUniform, []string{"a", "b"}, 5, 1, 1, "run"})
+func TestDriveLoad_RejectedTransfer_IsCountedAndNotApplied(t *testing.T) {
+	stub := &ledgerStub{balances: map[string]int64{"a": calculateFunding(5), "b": calculateFunding(5)}, failKey: "run-0-3"}
+	result, err := driveLoad(context.Background(), stub, workload{scenarioUniform, []string{"a", "b"}, 5, 1, 1, "run"})
 	if err != nil {
 		t.Fatalf("drive: %v", err)
 	}
-	if result.failures != 1 || !correct(result.expected, stub.balances) {
+	if result.failures != 1 || !matchesBalances(result.expected, stub.balances) {
 		t.Errorf("failures = %d, expected %v, balances %v", result.failures, result.expected, stub.balances)
 	}
 }
 
-func TestCorrect_Mismatches_ReturnFalse(t *testing.T) {
+func TestMatchesBalances_Mismatches_ReturnFalse(t *testing.T) {
 	tests := []struct {
 		name   string
 		actual map[string]int64
@@ -148,7 +148,7 @@ func TestCorrect_Mismatches_ReturnFalse(t *testing.T) {
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := correct(map[string]int64{"a": 1, "b": 2}, testCase.actual); got != testCase.want {
+			if got := matchesBalances(map[string]int64{"a": 1, "b": 2}, testCase.actual); got != testCase.want {
 				t.Errorf("correct = %t, want %t", got, testCase.want)
 			}
 		})

@@ -27,14 +27,14 @@ func openWALProbe(ctx context.Context, databaseURL string) (*walProbe, string, e
 	return &walProbe{connection: connection}, version, nil
 }
 
-func (w *walProbe) mark(ctx context.Context) error {
+func (w *walProbe) markPosition(ctx context.Context) error {
 	if w == nil {
 		return nil
 	}
 	return w.connection.QueryRow(ctx, "SELECT pg_current_wal_lsn()::text").Scan(&w.start)
 }
 
-func (w *walProbe) bytesSinceMark(ctx context.Context) (int64, error) {
+func (w *walProbe) measureWALSinceMark(ctx context.Context) (int64, error) {
 	if w == nil {
 		return 0, nil
 	}

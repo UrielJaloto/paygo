@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -11,6 +12,18 @@ import (
 	"time"
 )
 
+const (
+	defaultAccounts    = 1000
+	defaultTransfers   = 200000
+	defaultClients     = 64
+	defaultSeed        = 1
+	defaultAPIURL      = "http://localhost:18080"
+	defaultDatabaseURL = "postgres://paygo:example-postgres-password@localhost:55433/paygo?sslmode=disable"
+	adminTokenVariable = "PAYGO_ADMIN_TOKEN"
+)
+
+var errMissingAdminToken = errors.NewMoney(adminTokenVariable + " is required")
+
 type options struct {
 	scenario    string
 	accounts    int
@@ -19,108 +32,128 @@ type options struct {
 	seed        uint64
 	apiURL      string
 	databaseURL string
-	resultsDir  string
+	out         string
+	adminToken  string
 }
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	if err := run(ctx, os.Args[1:], os.Stdout); err != nil {
+	if err := run(ctx, os.Args[1:], os.LookupEnv, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		stop()
 		os.Exit(1)
 	}
 }
 
-func parseOptions(args []string) (options, error) {
+func run(ctx context.Context, arguments []string, lookup func(string) (string, bool), output io.Writer) error {
+	chosen, err := parseOptions(arguments, lookup)
+	if err != nil {
+		return err
+	}
+	measured, err := measureRun(ctx, newClient(chosen), chosen)
+	if err != nil {
+		return err
+	}
+	if chosen.out == "" {
+		return writeReport(output, measured)
+	}
+	if err := saveReport(chosen.out, measured); err != nil {
+		return err
+	}
+	_, err = io.WriteString(output, formatSummary(chosen.out, measured))
+	return err
+}
+
+func parseOptions(arguments []string, lookup func(string) (string, bool)) (options, error) {
 	var chosen options
 	flags := flag.NewFlagSet("loadgen", flag.ContinueOnError)
 	flags.StringVar(&chosen.scenario, "scenario", scenarioUniform, "uniform or contention")
-	flags.IntVar(&chosen.accounts, "accounts", 1000, "accounts to create")
-	flags.IntVar(&chosen.transfers, "transfers", 200000, "transfers to run")
-	flags.IntVar(&chosen.clients, "clients", 64, "concurrent clients")
-	flags.Uint64Var(&chosen.seed, "seed", 1, "random seed")
-	flags.StringVar(&chosen.apiURL, "api-url", "http://localhost:18080", "paygo api base url")
-	flags.StringVar(&chosen.databaseURL, "database-url", "postgres://paygo:paygo@localhost:55433/paygo?sslmode=disable", "postgres url for wal measurement, empty to skip")
-	flags.StringVar(&chosen.resultsDir, "results", "results", "results directory")
-	if err := flags.Parse(args); err != nil {
+	flags.IntVar(&chosen.accounts, "accounts", defaultAccounts, "accounts to create")
+	flags.IntVar(&chosen.transfers, "transfers", defaultTransfers, "transfers to run")
+	flags.IntVar(&chosen.clients, "clients", defaultClients, "concurrent clients")
+	flags.Uint64Var(&chosen.seed, "seed", defaultSeed, "random seed")
+	flags.StringVar(&chosen.apiURL, "api-url", defaultAPIURL, "paygo api base url")
+	flags.StringVar(&chosen.databaseURL, "database-url", defaultDatabaseURL, "postgres url for wal measurement, empty to skip")
+	flags.StringVar(&chosen.out, "out", "", "file for the json report, empty to print it")
+	if err := flags.Parse(arguments); err != nil {
 		return options{}, fmt.Errorf("parsing flags: %w", err)
 	}
+	token, found := lookup(adminTokenVariable)
+	if !found || token == "" {
+		return options{}, errMissingAdminToken
+	}
+	chosen.adminToken = token
 	return chosen, nil
 }
 
 func newClient(chosen options) *apiClient {
 	return newAPIClient(clientConfig{
 		baseURL:     chosen.apiURL,
-		adminToken:  os.Getenv("PAYGO_ADMIN_TOKEN"),
-		fundedMinor: fundingFor(chosen.transfers),
+		adminToken:  chosen.adminToken,
+		fundedMinor: calculateFunding(chosen.transfers),
 		connections: chosen.clients,
 	})
 }
 
-func run(ctx context.Context, args []string, output io.Writer) error {
-	chosen, err := parseOptions(args)
+func measureRun(ctx context.Context, target wallet, chosen options) (report, error) {
+	machine, err := readHardware()
 	if err != nil {
-		return err
+		return report{}, err
 	}
-	measured, err := measure(ctx, newClient(chosen), chosen)
-	if err != nil {
-		return err
-	}
-	path := resultPath(chosen.resultsDir, measured, time.Now())
-	if err := writeReport(path, measured); err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(output, "%s: %.0f transfers/s, p99 %s, errors %.4f, correct %t\n", path, measured.TransfersPerSec, measured.Latency.P99, measured.ErrorRate, measured.Correct)
-	return err
-}
-
-func measure(ctx context.Context, target wallet, chosen options) (report, error) {
 	probe, postgres, err := openWALProbe(ctx, chosen.databaseURL)
 	if err != nil {
 		return report{}, err
 	}
 	defer probe.close(ctx)
-	accounts, err := target.Setup(ctx, chosen.accounts)
-	if err != nil {
-		return report{}, fmt.Errorf("setting up accounts: %w", err)
-	}
-	if err := probe.mark(ctx); err != nil {
-		return report{}, fmt.Errorf("marking wal: %w", err)
-	}
-	run := fmt.Sprintf("loadgen-%d", time.Now().UnixNano())
-	load := workload{chosen.scenario, accounts, chosen.transfers, chosen.clients, chosen.seed, run}
-	result, err := drive(ctx, target, load)
+	result, written, err := runMeasuredLoad(ctx, target, probe, chosen)
 	if err != nil {
 		return report{}, err
 	}
-	written, err := probe.bytesSinceMark(ctx)
-	if err != nil {
-		return report{}, err
-	}
-	balances, err := target.Balances(ctx)
+	balances, err := target.FetchBalances(ctx)
 	if err != nil {
 		return report{}, fmt.Errorf("reading balances: %w", err)
 	}
-	measured := buildReport(chosen, result, written)
+	measured := chosen.buildReport(result, written)
+	measured.Hardware = machine
 	measured.Versions.Postgres = postgres
-	measured.Correct = correct(result.expected, balances)
+	measured.Correct = matchesBalances(result.expected, balances)
 	return measured, nil
 }
 
-func buildReport(chosen options, result outcome, walBytes int64) report {
-	transfers := float64(chosen.transfers)
+func runMeasuredLoad(ctx context.Context, target wallet, probe *walProbe, chosen options) (outcome, int64, error) {
+	accounts, err := target.CreateAccounts(ctx, chosen.accounts)
+	if err != nil {
+		return outcome{}, 0, fmt.Errorf("setting up accounts: %w", err)
+	}
+	if err := probe.markPosition(ctx); err != nil {
+		return outcome{}, 0, fmt.Errorf("marking wal: %w", err)
+	}
+	run := fmt.Sprintf("loadgen-%d", time.Now().UnixNano())
+	result, err := driveLoad(ctx, target, workload{chosen.scenario, accounts, chosen.transfers, chosen.clients, chosen.seed, run})
+	if err != nil {
+		return outcome{}, 0, err
+	}
+	written, err := probe.measureWALSinceMark(ctx)
+	return result, written, err
+}
+
+func (o options) buildReport(result outcome, walBytes int64) report {
+	transfers := float64(o.transfers)
 	return report{
-		Scenario:         chosen.scenario,
-		Accounts:         chosen.accounts,
-		Transfers:        chosen.transfers,
-		Clients:          chosen.clients,
-		Seed:             chosen.seed,
-		Hardware:         readHardware(),
-		Versions:         versions{Go: runtime.Version()},
-		TransfersPerSec:  transfers / result.elapsed.Seconds(),
-		Latency:          summarize(result.samples),
-		ErrorRate:        float64(result.failures) / transfers,
-		WALBytesTransfer: float64(walBytes) / transfers,
+		workloadSettings: workloadSettings{
+			Scenario:  o.scenario,
+			Accounts:  o.accounts,
+			Transfers: o.transfers,
+			Clients:   o.clients,
+			Seed:      o.seed,
+		},
+		Versions: versions{Go: runtime.Version()},
+		measurements: measurements{
+			TransfersPerSecond:  transfers / result.elapsed.Seconds(),
+			Latency:             summarizeLatencies(result.samples),
+			ErrorRate:           float64(result.failures) / transfers,
+			WALBytesPerTransfer: float64(walBytes) / transfers,
+		},
 	}
 }

@@ -18,9 +18,9 @@ type movement struct {
 }
 
 type wallet interface {
-	Setup(ctx context.Context, accounts int) ([]string, error)
+	CreateAccounts(ctx context.Context, accounts int) ([]string, error)
 	Transfer(ctx context.Context, move movement) error
-	Balances(ctx context.Context) (map[string]int64, error)
+	FetchBalances(ctx context.Context) (map[string]int64, error)
 }
 
 type workload struct {
@@ -45,7 +45,7 @@ type clientResult struct {
 	deltas   map[string]int64
 }
 
-func drive(ctx context.Context, target wallet, load workload) (outcome, error) {
+func driveLoad(ctx context.Context, target wallet, load workload) (outcome, error) {
 	pickers := make([]*picker, load.clients)
 	for client := range pickers {
 		chosen, err := newPicker(load.scenario, len(load.accounts), load.seed+uint64(client))
@@ -64,7 +64,7 @@ func drive(ctx context.Context, target wallet, load workload) (outcome, error) {
 		})
 	}
 	clients.Wait()
-	return merge(results, load, time.Since(started)), nil
+	return mergeResults(results, load, time.Since(started)), nil
 }
 
 type clientState struct {
@@ -76,7 +76,7 @@ type clientState struct {
 func runClient(ctx context.Context, target wallet, load workload, state clientState) clientResult {
 	result := clientResult{deltas: make(map[string]int64)}
 	for sequence := state.issued.Add(1); sequence <= int64(load.transfers); sequence = state.issued.Add(1) {
-		from, to := state.picker.next()
+		from, to := state.picker.pickPair()
 		key := fmt.Sprintf("%s-%d-%d", load.run, state.index, sequence)
 		started := time.Now()
 		err := target.Transfer(ctx, movement{from: load.accounts[from], to: load.accounts[to], amountMinor: transferMinor, key: key})
@@ -91,26 +91,30 @@ func runClient(ctx context.Context, target wallet, load workload, state clientSt
 	return result
 }
 
-func merge(results []clientResult, load workload, elapsed time.Duration) outcome {
+func mergeResults(results []clientResult, load workload, elapsed time.Duration) outcome {
 	merged := outcome{expected: make(map[string]int64, len(load.accounts)), elapsed: elapsed}
 	for _, account := range load.accounts {
-		merged.expected[account] = fundingFor(load.transfers)
+		merged.expected[account] = calculateFunding(load.transfers)
 	}
 	for _, result := range results {
 		merged.samples = append(merged.samples, result.samples...)
 		merged.failures += result.failures
-		for account, delta := range result.deltas {
-			merged.expected[account] += delta
-		}
+		addDeltas(merged.expected, result.deltas)
 	}
 	return merged
 }
 
-func fundingFor(transfers int) int64 {
+func addDeltas(balances, deltas map[string]int64) {
+	for account, delta := range deltas {
+		balances[account] += delta
+	}
+}
+
+func calculateFunding(transfers int) int64 {
 	return int64(transfers) * transferMinor
 }
 
-func correct(expected, actual map[string]int64) bool {
+func matchesBalances(expected, actual map[string]int64) bool {
 	if len(expected) != len(actual) {
 		return false
 	}

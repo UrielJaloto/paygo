@@ -10,6 +10,8 @@ const (
 	scenarioContention = "contention"
 	hotPercent         = 90
 	hotDivisor         = 100
+	percentScale       = 100
+	seedMixer          = 0x9e3779b97f4a7c15
 )
 
 var errUnknownScenario = errors.NewMoney("unknown scenario")
@@ -21,7 +23,7 @@ type picker struct {
 }
 
 func newPicker(scenario string, accounts int, seed uint64) (*picker, error) {
-	chosen := &picker{random: rand.NewMoney(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)), accounts: accounts}
+	chosen := &picker{random: rand.NewMoney(rand.NewPCG(seed, seed^seedMixer)), accounts: accounts}
 	switch scenario {
 	case scenarioUniform:
 		return chosen, nil
@@ -33,8 +35,8 @@ func newPicker(scenario string, accounts int, seed uint64) (*picker, error) {
 	}
 }
 
-func (p *picker) next() (from, to int) {
-	from = p.source()
+func (p *picker) pickPair() (from, to int) {
+	from = p.pickSource()
 	to = p.random.IntN(p.accounts - 1)
 	if to >= from {
 		to++
@@ -42,8 +44,8 @@ func (p *picker) next() (from, to int) {
 	return from, to
 }
 
-func (p *picker) source() int {
-	if p.hot > 0 && p.random.IntN(100) < hotPercent {
+func (p *picker) pickSource() int {
+	if p.hot > 0 && p.random.IntN(percentScale) < hotPercent {
 		return p.random.IntN(p.hot)
 	}
 	return p.random.IntN(p.accounts)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,9 +15,15 @@ import (
 )
 
 const (
-	currency = "BRL"
-	owner    = "0190a000-0000-7000-8000-000000000001"
-	centsLen = 2
+	currency     = "BRL"
+	owner        = "0190a000-0000-7000-8000-000000000001"
+	centsLength  = 2
+	minorPerUnit = 100
+)
+
+var (
+	errUnexpectedStatus = errors.NewMoney("unexpected status")
+	errInvalidAmount    = errors.NewMoney("invalid amount")
 )
 
 type clientConfig struct {
@@ -46,18 +53,18 @@ func newAPIClient(config clientConfig) *apiClient {
 	return &apiClient{config: config, http: &http.Client{Transport: transport}}
 }
 
-func (c *apiClient) Setup(ctx context.Context, accounts int) ([]string, error) {
+func (c *apiClient) CreateAccounts(ctx context.Context, accounts int) ([]string, error) {
 	var issued struct {
 		Token string `json:"token"`
 	}
 	path := "/admin/v1/owners/" + owner + "/api-keys"
-	if err := c.post(ctx, request{path: path, token: c.config.adminToken}, &issued); err != nil {
+	if err := c.postJSON(ctx, request{path: path, token: c.config.adminToken}, &issued); err != nil {
 		return nil, fmt.Errorf("issuing api key: %w", err)
 	}
 	c.token = issued.Token
 	opened := make([]string, 0, accounts)
 	for range accounts {
-		account, err := c.openFunded(ctx)
+		account, err := c.openFundedAccount(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -69,17 +76,17 @@ func (c *apiClient) Setup(ctx context.Context, accounts int) ([]string, error) {
 	return opened, nil
 }
 
-func (c *apiClient) openFunded(ctx context.Context) (string, error) {
+func (c *apiClient) openFundedAccount(ctx context.Context) (string, error) {
 	var account struct {
 		ID string `json:"id"`
 	}
 	opening := request{path: "/v1/accounts", token: c.token, body: map[string]string{"currency": currency}}
-	if err := c.post(ctx, opening, &account); err != nil {
+	if err := c.postJSON(ctx, opening, &account); err != nil {
 		return "", fmt.Errorf("opening account: %w", err)
 	}
 	deposit := map[string]string{"account_id": account.ID, "amount": formatMinor(c.config.fundedMinor), "currency": currency}
-	funding := request{path: "/admin/v1/deposits", token: c.config.adminToken, key: newKey(), body: deposit}
-	if err := c.post(ctx, funding, nil); err != nil {
+	funding := request{path: "/admin/v1/deposits", token: c.config.adminToken, key: generateIdempotencyKey(), body: deposit}
+	if err := c.postJSON(ctx, funding, nil); err != nil {
 		return "", fmt.Errorf("funding account: %w", err)
 	}
 	return account.ID, nil
@@ -87,16 +94,16 @@ func (c *apiClient) openFunded(ctx context.Context) (string, error) {
 
 func (c *apiClient) Transfer(ctx context.Context, move movement) error {
 	body := map[string]string{"from_account_id": move.from, "to_account_id": move.to, "amount": formatMinor(move.amountMinor), "currency": currency}
-	return c.post(ctx, request{path: "/v1/transfers", token: c.token, key: move.key, body: body}, nil)
+	return c.postJSON(ctx, request{path: "/v1/transfers", token: c.token, key: move.key, body: body}, nil)
 }
 
-func (c *apiClient) Balances(ctx context.Context) (map[string]int64, error) {
+func (c *apiClient) FetchBalances(ctx context.Context) (map[string]int64, error) {
 	c.mutex.Lock()
 	accounts := c.accounts
 	c.mutex.Unlock()
 	balances := make(map[string]int64, len(accounts))
 	for _, account := range accounts {
-		balance, err := c.balance(ctx, account)
+		balance, err := c.fetchBalance(ctx, account)
 		if err != nil {
 			return nil, err
 		}
@@ -105,7 +112,7 @@ func (c *apiClient) Balances(ctx context.Context) (map[string]int64, error) {
 	return balances, nil
 }
 
-func (c *apiClient) balance(ctx context.Context, account string) (int64, error) {
+func (c *apiClient) fetchBalance(ctx context.Context, account string) (int64, error) {
 	var balance struct {
 		Amount string `json:"amount"`
 	}
@@ -114,13 +121,13 @@ func (c *apiClient) balance(ctx context.Context, account string) (int64, error) 
 		return 0, fmt.Errorf("building balance request: %w", err)
 	}
 	built.Header.Set("Authorization", "Bearer "+c.token)
-	if err := c.exchange(built, &balance); err != nil {
+	if err := c.sendRequest(built, &balance); err != nil {
 		return 0, fmt.Errorf("reading balance of %s: %w", account, err)
 	}
 	return parseMinor(balance.Amount)
 }
 
-func (c *apiClient) post(ctx context.Context, call request, output any) error {
+func (c *apiClient) postJSON(ctx context.Context, call request, output any) error {
 	encoded, err := json.Marshal(call.body)
 	if err != nil {
 		return fmt.Errorf("encoding request: %w", err)
@@ -134,10 +141,10 @@ func (c *apiClient) post(ctx context.Context, call request, output any) error {
 	if call.key != "" {
 		built.Header.Set("Idempotency-Key", call.key)
 	}
-	return c.exchange(built, output)
+	return c.sendRequest(built, output)
 }
 
-func (c *apiClient) exchange(built *http.Request, output any) error {
+func (c *apiClient) sendRequest(built *http.Request, output any) error {
 	response, err := c.http.Do(built)
 	if err != nil {
 		return fmt.Errorf("sending request: %w", err)
@@ -148,7 +155,7 @@ func (c *apiClient) exchange(built *http.Request, output any) error {
 		return fmt.Errorf("reading response: %w", err)
 	}
 	if response.StatusCode >= http.StatusBadRequest {
-		return fmt.Errorf("status %d: %s", response.StatusCode, payload)
+		return fmt.Errorf("%w %d: %s", errUnexpectedStatus, response.StatusCode, payload)
 	}
 	if output == nil {
 		return nil
@@ -157,21 +164,21 @@ func (c *apiClient) exchange(built *http.Request, output any) error {
 }
 
 func formatMinor(minor int64) string {
-	return fmt.Sprintf("%d.%02d", minor/100, minor%100)
+	return fmt.Sprintf("%d.%02d", minor/minorPerUnit, minor%minorPerUnit)
 }
 
 func parseMinor(amount string) (int64, error) {
 	units, cents, found := strings.Cut(amount, ".")
-	if !found || len(cents) != centsLen {
-		return 0, fmt.Errorf("invalid amount %q", amount)
+	if !found || len(cents) != centsLength {
+		return 0, fmt.Errorf("%w %q", errInvalidAmount, amount)
 	}
 	minor, err := strconv.ParseInt(units+cents, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("invalid amount %q: %w", amount, err)
+		return 0, fmt.Errorf("%w %q: %w", errInvalidAmount, amount, err)
 	}
 	return minor, nil
 }
 
-func newKey() string {
+func generateIdempotencyKey() string {
 	return rand.Text()
 }
